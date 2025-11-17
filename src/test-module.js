@@ -32,22 +32,25 @@ async function testAccountInfo() {
 
     // Přejdeme do hry
     console.log('\n🌐 Načítám hru...');
+    const domain = db.getDomainForAccount(account);
+    const server = db.getServerFromWorld(account.world);
+
     if (account.world) {
-      console.log(`🌍 Jdu rovnou na svět: ${account.world}`);
-      await page.goto(`https://${account.world}.divokekmeny.cz/game.php`, { 
+      console.log(`🌍 Jdu rovnou na svět: ${account.world} (Server: ${server}, ${domain})`);
+      await page.goto(`https://${account.world}.${domain}/game.php`, {
         waitUntil: 'domcontentloaded',
-        timeout: 30000 
+        timeout: 30000
       });
     } else {
-      await page.goto('https://www.divokekmeny.cz/', { 
+      await page.goto(`https://www.${domain}/`, {
         waitUntil: 'domcontentloaded',
-        timeout: 30000 
+        timeout: 30000
       });
     }
 
     // Pokud nejsme přihlášeni nebo je session expired
     const url = page.url();
-    if (!url.includes('.divokekmeny.cz/game.php')) {
+    if (!url.includes(`/game.php`)) {
       
       // Zkontrolujeme, jestli je session_expired
       if (url.includes('session_expired=1') && account.world) {
@@ -90,10 +93,10 @@ async function testAccountInfo() {
         console.log('⏳ Čekám 180 sekund na přihlášení...');
         
         await page.waitForTimeout(180000);
-        
+
         // Zkusíme znovu
         const newUrl = page.url();
-        if (!newUrl.includes('.divokekmeny.cz/game.php')) {
+        if (!newUrl.includes('/game.php')) {
           console.error('❌ Stále nejsi přihlášen. Ukončuji test.');
           return;
         }

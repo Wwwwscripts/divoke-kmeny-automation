@@ -20,6 +20,57 @@ app.get('/api/accounts', (req, res) => {
   }
 });
 
+app.post('/api/accounts/add', async (req, res) => {
+  try {
+    const { username, password, proxy, world } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username a heslo jsou povinné'
+      });
+    }
+
+    const accountId = db.addAccount(
+      username,
+      password,
+      proxy || null,
+      world || null
+    );
+
+    if (accountId) {
+      res.json({
+        success: true,
+        accountId,
+        message: `Účet ${username} přidán`
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Účet již existuje nebo nastala chyba'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.delete('/api/accounts/:id', async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    db.deactivateAccount(accountId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 app.put('/api/accounts/:id/recruit', async (req, res) => {
   try {
     const accountId = parseInt(req.params.id);
@@ -73,7 +124,7 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
   try {
     const accountId = parseInt(req.params.id);
     const account = db.getAccount(accountId);
-    
+
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -96,18 +147,45 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
     }
 
     const context = await browser.newContext(contextOptions);
-    
+
     if (account.cookies) {
       const cookies = JSON.parse(account.cookies);
       await context.addCookies(cookies);
     }
 
     const page = await context.newPage();
-    await page.goto(`https://${account.world}.divokekmeny.cz/game.php`);
+    const domain = db.getDomainForAccount(account);
+    await page.goto(`https://${account.world}.${domain}/game.php`);
 
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint pro získání účtů pod útokem
+app.get('/api/accounts/under-attack', (req, res) => {
+  try {
+    const allAccounts = db.getAllAccountsWithStats();
+
+    // Filtrujeme pouze účty které mají příchozí útoky (last_attack_count > 0)
+    const accountsUnderAttack = allAccounts.filter(acc => {
+      return acc.last_attack_count && acc.last_attack_count > 0;
+    }).map(acc => ({
+      ...acc,
+      attack_count: acc.last_attack_count
+    }));
+
+    res.json({
+      success: true,
+      accounts: accountsUnderAttack,
+      total: accountsUnderAttack.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
 

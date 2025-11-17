@@ -141,21 +141,22 @@ class BrowserManager {
     
     try {
       const page = await context.newPage();
-      
+      const domain = this.db.getDomainForAccount(account);
+
       if (account.world) {
-        console.log(`🌐 Načítám svět: ${account.world}`);
-        await page.goto(`https://${account.world}.divokekmeny.cz/game.php`, { 
+        console.log(`🌐 Načítám svět: ${account.world} (${domain})`);
+        await page.goto(`https://${account.world}.${domain}/game.php`, {
           waitUntil: 'domcontentloaded',
-          timeout: 30000 
+          timeout: 30000
         });
       } else {
-        console.log('🌐 Načítám hlavní stránku...');
-        await page.goto('https://www.divokekmeny.cz/', { 
+        console.log(`🌐 Načítám hlavní stránku (${domain})...`);
+        await page.goto(`https://www.${domain}/`, {
           waitUntil: 'domcontentloaded',
-          timeout: 30000 
+          timeout: 30000
         });
       }
-      
+
       console.log('🖥️  Prohlížeč otevřen - zavřete ho ručně');
       console.log('💾 Cookies budou automaticky uloženy při zavření');
 

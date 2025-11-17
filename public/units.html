@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Přehled jednotek - Divoké kmeny</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      color: #4ecca3;
+      font-size: 1.8em;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      background: #4ecca3;
+      color: #1a1a2e;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn:hover {
+      background: #3db88a;
+    }
+
+    table {
+      width: 100%;
+      background: #16213e;
+      border-radius: 10px;
+      overflow: hidden;
+      border-collapse: collapse;
+    }
+
+    th {
+      background: #0f3460;
+      color: #4ecca3;
+      padding: 15px;
+      text-align: left;
+      font-weight: bold;
+      font-size: 0.9em;
+    }
+
+    td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #0f3460;
+      font-size: 0.85em;
+    }
+
+    tr:hover {
+      background: #1a2942;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 50px;
+      color: #aaa;
+    }
+
+    .unit-count {
+      display: inline-block;
+      padding: 3px 8px;
+      background: #0f3460;
+      border-radius: 3px;
+      margin-right: 5px;
+      font-size: 0.9em;
+    }
+
+    .coord {
+      color: #4ecca3;
+      font-weight: bold;
+    }
+
+    .server-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background: rgba(78, 204, 163, 0.2);
+      border: 1px solid #4ecca3;
+      border-radius: 3px;
+      font-size: 0.8em;
+      margin-left: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>⚔️ Přehled jednotek</h1>
+    </header>
+
+    <div class="controls">
+      <a href="/" class="btn">← Dashboard</a>
+      <button class="btn" onclick="loadUnits()">🔄 Obnovit</button>
+    </div>
+
+    <table id="unitsTable">
+      <thead>
+        <tr>
+          <th>Účet</th>
+          <th>Server</th>
+          <th>Souřadnice</th>
+          <th>Kontinent</th>
+          <th>Vlastní jednotky</th>
+        </tr>
+      </thead>
+      <tbody id="unitsList">
+        <tr><td colspan="5" class="loading">Načítám...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    async function loadUnits() {
+      const tbody = document.getElementById('unitsList');
+      tbody.innerHTML = '<tr><td colspan="5" class="loading">Načítám...</td></tr>';
+
+      try {
+        const response = await fetch('/api/accounts');
+        const accounts = await response.json();
+
+        if (accounts.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#aaa;">Žádné účty</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = accounts.map(acc => {
+          const server = !acc.world ? 'CS' :
+                        acc.world.toLowerCase().startsWith('sk') ? 'SK' : 'CS';
+          const serverLabel = server === 'SK' ? '🇸🇰 SK' : '🇨🇿 CS';
+
+          const coord = (acc.coord_x && acc.coord_y) ? `${acc.coord_x}|${acc.coord_y}` : '-';
+          const continent = acc.continent || '-';
+
+          // Parsování jednotek
+          let unitsDisplay = '-';
+          if (acc.units_info) {
+            try {
+              const units = typeof acc.units_info === 'string' ? JSON.parse(acc.units_info) : acc.units_info;
+
+              if (units.own) {
+                const ownUnits = [];
+                if (units.own.spear) ownUnits.push(`🛡️ ${units.own.spear}`);
+                if (units.own.sword) ownUnits.push(`⚔️ ${units.own.sword}`);
+                if (units.own.axe) ownUnits.push(`🪓 ${units.own.axe}`);
+                if (units.own.archer) ownUnits.push(`🏹 ${units.own.archer}`);
+                if (units.own.spy) ownUnits.push(`👁️ ${units.own.spy}`);
+                if (units.own.light) ownUnits.push(`🐎 ${units.own.light}`);
+                if (units.own.marcher) ownUnits.push(`🏇 ${units.own.marcher}`);
+                if (units.own.heavy) ownUnits.push(`🐴 ${units.own.heavy}`);
+                if (units.own.ram) ownUnits.push(`🐏 ${units.own.ram}`);
+                if (units.own.catapult) ownUnits.push(`⚙️ ${units.own.catapult}`);
+                if (units.own.knight) ownUnits.push(`🤴 ${units.own.knight}`);
+                if (units.own.snob) ownUnits.push(`👑 ${units.own.snob}`);
+
+                unitsDisplay = ownUnits.map(u => `<span class="unit-count">${u}</span>`).join(' ');
+              }
+            } catch (e) {
+              unitsDisplay = '❌ Chyba parsování';
+            }
+          }
+
+          return `
+            <tr>
+              <td><strong>${acc.username}</strong></td>
+              <td>${serverLabel}</td>
+              <td class="coord">${coord}</td>
+              <td>${continent}</td>
+              <td>${unitsDisplay}</td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (error) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#ff6b6b;">❌ Chyba: ${error.message}</td></tr>`;
+      }
+    }
+
+    loadUnits();
+    setInterval(loadUnits, 30000);
+  </script>
+</body>
+</html>

@@ -58,7 +58,7 @@ class DatabaseManager {
   addAccount(username, password, proxy = null, world = null) {
     try {
       const data = this._loadAccounts();
-      
+
       // Kontrola, jestli účet už existuje
       const exists = data.accounts.find(a => a.username === username);
       if (exists) {
@@ -76,6 +76,12 @@ class DatabaseManager {
         premium: 0,
         units_info: null,
         wall_level: null,
+        // 🆕 COORDINATES - Souřadnice vesnice
+        village_id: null,
+        village_name: null,
+        coord_x: null,
+        coord_y: null,
+        continent: null,
         recruit_enabled: 0,
         recruit_template: 'FARM',
         building_enabled: 0,
@@ -93,12 +99,25 @@ class DatabaseManager {
       data.nextId++;
       this._saveAccounts(data);
 
-      console.log(`✅ Účet ${username} přidán (ID: ${newAccount.id})`);
+      const server = this.getServerFromWorld(world);
+      console.log(`✅ Účet ${username} přidán (ID: ${newAccount.id}, Server: ${server})`);
       return newAccount.id;
     } catch (error) {
       console.error(`❌ Chyba při přidávání účtu ${username}:`, error.message);
       return null;
     }
+  }
+
+  // Zjistit server ze světa (sk97 = SK, cs107 = CS)
+  getServerFromWorld(world) {
+    if (!world) return 'CS';
+    return world.toLowerCase().startsWith('sk') ? 'SK' : 'CS';
+  }
+
+  // Získat doménu pro účet
+  getDomainForAccount(account) {
+    const server = this.getServerFromWorld(account.world);
+    return server === 'SK' ? 'divoke-kmene.sk' : 'divokekmeny.cz';
   }
 
   // Získat účet podle ID
@@ -136,7 +155,7 @@ class DatabaseManager {
   updateAccountInfo(accountId, info) {
     const data = this._loadAccounts();
     const account = data.accounts.find(a => a.id === accountId);
-    
+
     if (account) {
       if (info.world !== undefined) account.world = info.world;
       if (info.premium !== undefined) account.premium = info.premium;
@@ -144,6 +163,12 @@ class DatabaseManager {
       if (info.wall_level !== undefined) account.wall_level = info.wall_level;
       // 🆕 RESEARCH - Ukládání research_status
       if (info.research_status !== undefined) account.research_status = info.research_status;
+      // 🆕 COORDINATES - Ukládání souřadnic
+      if (info.village_id !== undefined) account.village_id = info.village_id;
+      if (info.village_name !== undefined) account.village_name = info.village_name;
+      if (info.coord_x !== undefined) account.coord_x = info.coord_x;
+      if (info.coord_y !== undefined) account.coord_y = info.coord_y;
+      if (info.continent !== undefined) account.continent = info.continent;
       this._saveAccounts(data);
     }
   }

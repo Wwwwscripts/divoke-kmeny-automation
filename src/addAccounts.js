@@ -14,7 +14,7 @@ const accounts = [
     username: 'ucet1',
     password: 'heslo1',
     proxy: null, // nebo 'http://user:pass@host:port'
-    world: null  // automaticky se zjistí
+    world: 'cs120'  // cs* = Czech server, sk* = Slovak server
   },
   {
     username: 'ucet2',
@@ -26,7 +26,7 @@ const accounts = [
     username: 'ucet3',
     password: 'heslo3',
     proxy: 'http://user:pass@proxy.example.com:8080',
-    world: 'cs121'
+    world: 'sk97'  // SK server příklad
   },
   // Přidej další účty podle potřeby...
 ];
@@ -72,11 +72,14 @@ async function addMultipleAccounts() {
   // Zobraz všechny účty
   console.log('\n📋 Všechny účty v databázi:');
   const allAccounts = db.getAllActiveAccounts();
-  
+
   allAccounts.forEach((acc, index) => {
+    const server = db.getServerFromWorld(acc.world);
+    const domain = db.getDomainForAccount(acc);
     console.log(`\n${index + 1}. ${acc.username}`);
     console.log(`   ID: ${acc.id}`);
     console.log(`   Svět: ${acc.world || 'Neznámý'}`);
+    console.log(`   Server: ${server} (${domain})`);
     console.log(`   Proxy: ${acc.proxy || 'Žádná'}`);
     console.log(`   Přidán: ${acc.created_at}`);
   });
