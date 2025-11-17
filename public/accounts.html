@@ -38,24 +38,26 @@
       margin-bottom: 10px;
     }
 
-    .nav {
-      text-align: center;
+    .controls {
+      display: flex;
+      gap: 10px;
       margin-bottom: 20px;
+      flex-wrap: wrap;
     }
 
-    .nav a {
-      background: #4ecca3;
-      color: #1a1a2e;
-      text-decoration: none;
-      padding: 10px 20px;
+    #searchInput {
+      padding: 10px;
       border-radius: 5px;
-      font-weight: bold;
-      display: inline-block;
-      transition: background 0.3s;
+      border: 1px solid #4ecca3;
+      background: #0f3460;
+      color: #eee;
+      flex: 1;
+      max-width: 300px;
+      font-size: 14px;
     }
 
-    .nav a:hover {
-      background: #3db88a;
+    #searchInput::placeholder {
+      color: #888;
     }
 
     .card {
@@ -141,6 +143,21 @@
       background: #ee5a52;
     }
 
+    .btn-small {
+      background: #4ecca3;
+      color: #1a1a2e;
+      border: none;
+      padding: 5px 15px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.85em;
+      font-weight: bold;
+    }
+
+    .btn-small:hover {
+      background: #3db88a;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -213,8 +230,15 @@
       <h1>⚔️ Správa účtů</h1>
     </header>
 
-    <div class="nav">
-      <a href="/">← Zpět na Dashboard</a>
+    <div class="controls">
+      <button class="btn" onclick="window.location.href='/'">🏠 Dashboard</button>
+      <button class="btn" onclick="window.location.href='/accounts.html'">➕ Přidat účet</button>
+      <button class="btn" onclick="window.location.href='/units.html'">⚔️ Přehled jednotek</button>
+      <button class="btn" onclick="window.location.href='/attacks.html'" style="background: #ff6b6b;">🚨 Účty pod útokem</button>
+      <button class="btn" onclick="window.location.href='/recruit-templates.html'">📋 Šablony rekrutu</button>
+      <button class="btn" onclick="window.location.href='/research-templates.html'">🔬 Šablony výzkumu</button>
+      <button class="btn" onclick="window.location.href='/building-templates.html'">🏗️ Šablony výstavby</button>
+      <input type="text" id="searchInput" placeholder="🔍 Hledat účet..." oninput="filterAccounts()">
     </div>
 
     <div id="message"></div>
@@ -258,7 +282,6 @@
           <tr>
             <th>ID</th>
             <th>Username</th>
-            <th>Server</th>
             <th>Svět</th>
             <th>Proxy</th>
             <th>Body</th>
@@ -267,7 +290,7 @@
           </tr>
         </thead>
         <tbody id="accountsBody">
-          <tr><td colspan="8" class="empty-state">Načítám...</td></tr>
+          <tr><td colspan="7" class="empty-state">Načítám...</td></tr>
         </tbody>
       </table>
     </div>
@@ -284,39 +307,49 @@
         tbody.innerHTML = '';
 
         if (accounts.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Žádné účty</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Žádné účty</td></tr>';
           return;
         }
 
-        accounts.forEach(account => {
-          const row = document.createElement('tr');
-
-          // Detekce serveru ze světa
-          const server = !account.world ? 'CS' :
-                        account.world.toLowerCase().startsWith('sk') ? 'SK' : 'CS';
-          const serverLabel = server === 'SK' ? '🇸🇰 SK' : '🇨🇿 CS';
-
-          row.innerHTML = `
-            <td>${account.id}</td>
-            <td><strong>${account.username}</strong></td>
-            <td>${serverLabel}</td>
-            <td>${account.world || '-'}</td>
-            <td>${account.proxy ? '✅' : '❌'}</td>
-            <td>${(account.points || 0).toLocaleString('cs-CZ')}</td>
-            <td class="${account.active ? 'status-active' : 'status-inactive'}">
-              ${account.active ? '✅ Aktivní' : '❌ Neaktivní'}
-            </td>
-            <td>
-              ${account.active ?
-                `<button class="btn btn-danger" onclick="deleteAccount(${account.id})">🗑️ Smazat</button>` :
-                ''}
-            </td>
-          `;
-          tbody.appendChild(row);
-        });
+        renderAccounts(accounts);
       } catch (error) {
         console.error('Chyba při načítání účtů:', error);
       }
+    }
+
+    let allAccounts = [];
+
+    function renderAccounts(accounts) {
+      const tbody = document.getElementById('accountsBody');
+      allAccounts = accounts;
+
+      tbody.innerHTML = accounts.map(account => `
+        <tr>
+          <td>${account.id}</td>
+          <td><strong>${account.username}</strong></td>
+          <td>${account.world || '-'}</td>
+          <td>${account.proxy ? '✅' : '❌'}</td>
+          <td>${(account.points || 0).toLocaleString('cs-CZ')}</td>
+          <td class="${account.active ? 'status-active' : 'status-inactive'}">
+            ${account.active ? '✅ Aktivní' : '❌ Neaktivní'}
+          </td>
+          <td>
+            ${account.active ? `
+              <button class="btn-small" onclick="openBrowser(${account.id})">🖥️ Otevřít</button>
+              <button class="btn btn-danger" onclick="deleteAccount(${account.id})">🗑️ Smazat</button>
+            ` : ''}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function filterAccounts() {
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allAccounts.filter(acc =>
+        acc.username.toLowerCase().includes(searchTerm) ||
+        (acc.world && acc.world.toLowerCase().includes(searchTerm))
+      );
+      renderAccounts(filtered);
     }
 
     // Přidání účtu
@@ -383,6 +416,24 @@
         messageDiv.textContent = '';
         messageDiv.className = '';
       }, 5000);
+    }
+
+    // Otevření prohlížeče
+    async function openBrowser(accountId) {
+      try {
+        const response = await fetch(`/api/accounts/${accountId}/open-browser`, {
+          method: 'POST'
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          showMessage('✅ Prohlížeč otevřen!', 'success');
+        } else {
+          showMessage('❌ Chyba: ' + result.error, 'error');
+        }
+      } catch (error) {
+        showMessage('❌ Chyba: ' + error.message, 'error');
+      }
     }
 
     // Načtení při startu
