@@ -87,7 +87,7 @@ class RecruitModule {
         waitUntil: 'domcontentloaded'
       });
 
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
 
       const unitsData = await this.page.evaluate(() => {
         const units = {};
@@ -243,7 +243,7 @@ class RecruitModule {
         waitUntil: 'domcontentloaded'
       });
 
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
 
       // Najdeme input pro jednotku a nastavíme hodnotu 1
       const recruited = await this.page.evaluate((unitType) => {
@@ -269,7 +269,7 @@ class RecruitModule {
       }, unitType);
 
       if (recruited) {
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
         console.log(`✅ ${unitType} narekrutováno`);
         return true;
       }

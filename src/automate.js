@@ -13,7 +13,7 @@ class Automator {
     this.db = new DatabaseManager();
     this.browserManager = new BrowserManager();
     this.isRunning = false;
-    this.checkInterval = 2 * 60 * 1000; // 2 minuty
+    this.checkInterval = 5 * 60 * 1000; // 5 minut (optimalizováno pro CPU)
     this.accountWaitTimes = {}; // Uchovává časy pro další kontrolu každého modulu
     this.openBrowserWindows = new Set(); // Účty s otevřeným viditelným oknem
   }
@@ -21,7 +21,7 @@ class Automator {
   async start() {
     console.log('='.repeat(60));
     console.log('🤖 Spouštím automatizaci');
-    console.log('⏱️  Kontrola každé 2 minuty');
+    console.log('⏱️  Kontrola každých 5 minut (CPU optimalizováno)');
     console.log('='.repeat(60));
 
     this.isRunning = true;

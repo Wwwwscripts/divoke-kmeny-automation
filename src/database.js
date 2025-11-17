@@ -11,6 +11,8 @@ class DatabaseManager {
     this.accountsFile = join(dataPath, 'accounts.json');
     this.statsFile = join(dataPath, 'stats.json');
     this.templatesFile = join(dataPath, 'templates.json');
+    // In-memory cache pro templates (CPU optimalizace)
+    this._templatesCache = null;
     this.initDatabase();
   }
 
@@ -404,14 +406,19 @@ class DatabaseManager {
 
   // ============ ŠABLONY ============
 
-  // Načíst šablony ze souboru
+  // Načíst šablony ze souboru (s in-memory cache)
   _loadTemplates() {
+    if (this._templatesCache !== null) {
+      return this._templatesCache;
+    }
     const data = readFileSync(this.templatesFile, 'utf-8');
-    return JSON.parse(data);
+    this._templatesCache = JSON.parse(data);
+    return this._templatesCache;
   }
 
-  // Uložit šablony do souboru
+  // Uložit šablony do souboru (invaliduje cache)
   _saveTemplates(data) {
+    this._templatesCache = null; // Invalidate cache
     writeFileSync(this.templatesFile, JSON.stringify(data, null, 2));
   }
 
