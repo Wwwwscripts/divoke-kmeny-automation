@@ -21,7 +21,8 @@ class Automator {
     this.defaultIntervals = {
       research: 60 * 60 * 1000,  // 60 minut pro výzkum
       recruit: 4 * 60 * 1000,     // 4 minuty pro rekrutování
-      building: 5 * 60 * 1000     // 5 minut pro výstavbu (fallback)
+      building: 5 * 60 * 1000,    // 5 minut pro výstavbu (fallback)
+      accountInfo: 20 * 60 * 1000 // 20 minut pro sběr statistik (resources, population, body)
     };
   }
 
@@ -44,7 +45,7 @@ class Automator {
     console.log('='.repeat(60));
     console.log('🤖 Spouštím automatizaci');
     console.log('⏱️  Polling každé 2 minuty (moduly mají vlastní intervaly)');
-    console.log('🔬 Výzkum: 1x za hodinu | 🎯 Rekrut: každé 4 min | 🏗️  Build: dynamicky');
+    console.log('🔬 Výzkum: 1x/hod | 🎯 Rekrut: 4min | 🏗️  Build: dynamic | 📊 Stats: 20min');
     console.log('='.repeat(60));
 
     this.isRunning = true;
@@ -126,11 +127,21 @@ class Automator {
         return;
       }
 
-      // Aktualizujeme statistiky
-      const infoModule = new AccountInfoModule(page, this.db, account.id);
-      await infoModule.collectInfo();
+      // Sbíráme statistiky účtu (resources, population, body, hradby) - s vlastním intervalem
+      const infoKey = `accountInfo_${account.id}`;
+      const infoWaitUntil = this.accountWaitTimes[infoKey];
 
-      // Zkontrolujeme útoky a CAPTCHA
+      if (!infoWaitUntil || Date.now() >= infoWaitUntil) {
+        const infoModule = new AccountInfoModule(page, this.db, account.id);
+        await infoModule.collectInfo();
+        this.accountWaitTimes[infoKey] = Date.now() + this.defaultIntervals.accountInfo;
+        console.log(`⏰ Statistiky: Další sběr za 20 minut`);
+      } else {
+        const remainingMinutes = Math.ceil((infoWaitUntil - Date.now()) / 60000);
+        console.log(`⏭️  Statistiky: Přeskakuji (další sběr za ${remainingMinutes} minut)`);
+      }
+
+      // Zkontrolujeme útoky a CAPTCHA (VŽDY - důležité!)
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       await notificationsModule.detectAttacks();
       const hasCaptcha = await notificationsModule.detectCaptcha();
@@ -153,10 +164,6 @@ class Automator {
         }
         return;
       }
-
-      // Získáme informace o jednotkách
-      const recruitModule = new RecruitModule(page, this.db, account.id);
-      await recruitModule.collectUnitsInfo();
 
       // Zpracujeme VÝZKUM (před výstavbou a rekrutováním!)
       const researchSettings = this.db.getResearchSettings(account.id);
@@ -225,7 +232,11 @@ class Automator {
 
         if (!recruitWaitUntil || Date.now() >= recruitWaitUntil) {
           console.log(`🎯 Rekrutování zapnuto - šablona: ${recruitSettings.template}`);
-          
+
+          // Nejdřív získáme aktuální stav jednotek (jen když se bude rekrutovat)
+          const recruitModule = new RecruitModule(page, this.db, account.id);
+          await recruitModule.collectUnitsInfo();
+
           const recruitResult = await recruitModule.startRecruiting(recruitSettings.template);
 
           if (recruitResult && recruitResult.waitTime) {
