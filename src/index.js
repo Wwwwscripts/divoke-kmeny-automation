@@ -14,6 +14,7 @@ class Automator {
     this.checkInterval = 2 * 60 * 1000; // 2 minuty
     this.accountWaitTimes = {}; // Uchovává časy pro další kontrolu každého modulu
     this.maxConcurrentAccounts = 25; // Maximálně 25 účtů najednou
+    this.openWindows = new Set(); // Sleduje účty s otevřeným viditelným oknem
   }
 
   /**
@@ -100,14 +101,28 @@ class Automator {
       // Přihlásíme se
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        console.log(`❌ Přihlášení se nezdařilo - otevírám viditelný prohlížeč`);
+        console.log(`❌ Přihlášení se nezdařilo`);
 
         // Zavřeme headless browser
         await this.browserManager.close(browser, context);
 
-        // Otevřeme viditelný prohlížeč pro manuální přihlášení
-        await this.browserManager.testConnection(account.id);
-        console.log(`🖥️  Viditelný prohlížeč otevřen - vyřešte problém ručně`);
+        // Otevřeme viditelný prohlížeč pouze pokud ještě není otevřen
+        if (!this.openWindows.has(account.id)) {
+          console.log(`🖥️  Otevírám viditelný prohlížeč - vyřešte problém ručně`);
+          this.openWindows.add(account.id);
+
+          // Spustíme viditelný prohlížeč v pozadí
+          this.browserManager.testConnection(account.id).then(() => {
+            // Po zavření okna odstraníme z otevřených
+            this.openWindows.delete(account.id);
+            console.log(`✅ Viditelný prohlížeč pro ${account.username} byl zavřen`);
+          }).catch(err => {
+            this.openWindows.delete(account.id);
+            console.error(`❌ Chyba při otevírání viditelného prohlížeče: ${err.message}`);
+          });
+        } else {
+          console.log(`⏭️  Viditelný prohlížeč pro tento účet je již otevřen - přeskakuji`);
+        }
         return;
       }
 
@@ -122,14 +137,28 @@ class Automator {
 
       // Pokud je CAPTCHA, otevřeme viditelný prohlížeč
       if (hasCaptcha) {
-        console.log(`⚠️  CAPTCHA detekována - otevírám viditelný prohlížeč`);
+        console.log(`⚠️  CAPTCHA detekována`);
 
         // Zavřeme headless browser
         await this.browserManager.close(browser, context);
 
-        // Otevřeme viditelný prohlížeč pro vyřešení CAPTCHA
-        await this.browserManager.testConnection(account.id);
-        console.log(`🖥️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA ručně`);
+        // Otevřeme viditelný prohlížeč pouze pokud ještě není otevřen
+        if (!this.openWindows.has(account.id)) {
+          console.log(`🖥️  Otevírám viditelný prohlížeč - vyřešte CAPTCHA ručně`);
+          this.openWindows.add(account.id);
+
+          // Spustíme viditelný prohlížeč v pozadí
+          this.browserManager.testConnection(account.id).then(() => {
+            // Po zavření okna odstraníme z otevřených
+            this.openWindows.delete(account.id);
+            console.log(`✅ Viditelný prohlížeč pro ${account.username} byl zavřen`);
+          }).catch(err => {
+            this.openWindows.delete(account.id);
+            console.error(`❌ Chyba při otevírání viditelného prohlížeče: ${err.message}`);
+          });
+        } else {
+          console.log(`⏭️  Viditelný prohlížeč pro tento účet je již otevřen - přeskakuji`);
+        }
         return;
       }
 

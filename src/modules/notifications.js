@@ -2,6 +2,8 @@
  * Modul pro Discord notifikace
  */
 
+import fetch from 'node-fetch';
+
 class NotificationsModule {
   constructor(page, db, accountId) {
     this.page = page;
