@@ -109,11 +109,31 @@ class NotificationsModule {
 
             // Typ útoku - pokud najdeme ikonu
             let attackType = 'attack';
-            const attackIcon = row.querySelector('img[src*="attack"]');
+            let impact = 'Útok';
+
+            // DEBUG: Vypíšeme všechny ikony v řádku
+            const allImages = row.querySelectorAll('img');
+            console.log(`🔍 DEBUG - Počet ikon v řádku: ${allImages.length}`);
+            allImages.forEach(img => {
+              console.log(`   Ikona src: ${img.src}`);
+            });
+
+            // Hledáme ikonu příkazu (může být command, attack, support, spy, etc.)
+            const attackIcon = row.querySelector('img');
             if (attackIcon) {
-              const src = attackIcon.src;
-              if (src.includes('support')) attackType = 'support';
-              else if (src.includes('attack')) attackType = 'attack';
+              const src = attackIcon.src.toLowerCase();
+              console.log(`📋 DEBUG - První ikona: ${src}`);
+
+              if (src.includes('support')) {
+                attackType = 'support';
+                impact = 'Podpora';
+              } else if (src.includes('spy')) {
+                attackType = 'spy';
+                impact = 'Špionáž';
+              } else if (src.includes('attack')) {
+                attackType = 'attack';
+                impact = 'Útok';
+              }
             }
 
             // Souřadnice odkud útok přichází
@@ -133,7 +153,8 @@ class NotificationsModule {
                 origin: origin,
                 arrival_time: arrivalTime,
                 countdown: countdown,
-                type: attackType
+                type: attackType,
+                impact: impact
               });
             }
           } catch (e) {
