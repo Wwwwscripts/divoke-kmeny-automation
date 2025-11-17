@@ -28,17 +28,33 @@ class IncomingAttacksModule {
       const attacksData = await this.page.evaluate(() => {
         const attackElement = document.querySelector('#incomings_amount');
         if (!attackElement) {
-          return { count: 0, attacks: [] };
+          return { count: 0, attacks: [], debug: 'Nenalezen #incomings_amount' };
         }
 
         const count = parseInt(attackElement.textContent.trim(), 10) || 0;
+        console.log(`[DEBUG] Počet útoků z #incomings_amount: ${count}`);
+
         if (count === 0) {
-          return { count: 0, attacks: [] };
+          return { count: 0, attacks: [], debug: 'Počet útoků je 0' };
         }
 
         // Parsování detailů jednotlivých útoků
-        const attacks = [...document.querySelectorAll('.command-row')]
-          .filter(row => row.querySelector('img[src*="attack.webp"]'))  // jen příchozí útoky
+        const commandRows = document.querySelectorAll('.command-row');
+        console.log(`[DEBUG] Počet .command-row elementů: ${commandRows.length}`);
+
+        const attackRows = [...commandRows].filter(row => row.querySelector('img[src*="attack.webp"]'));
+        console.log(`[DEBUG] Počet řádků s attack.webp: ${attackRows.length}`);
+
+        // Debug: vypsat všechny ikony
+        commandRows.forEach((row, i) => {
+          const imgs = row.querySelectorAll('img');
+          console.log(`[DEBUG] Řádek ${i}: počet ikon = ${imgs.length}`);
+          imgs.forEach(img => {
+            console.log(`[DEBUG]   - src: ${img.src}`);
+          });
+        });
+
+        const attacks = attackRows
           .map(row => {
             try {
               // Název útoku
@@ -100,18 +116,28 @@ class IncomingAttacksModule {
       });
 
       console.log(`📊 Zjištěno útoků: ${attacksData.count}`);
+      console.log(`📋 DEBUG: attacksData.attacks.length = ${attacksData.attacks.length}`);
+      if (attacksData.debug) {
+        console.log(`🔍 DEBUG Info: ${attacksData.debug}`);
+      }
 
       // Uložíme data do databáze
       if (attacksData.count > 0) {
+        console.log(`💾 Ukládám ${attacksData.count} útoků, ${attacksData.attacks.length} detailů`);
         this.saveAttacksData(attacksData.count, attacksData.attacks);
-        console.log(`💾 Uloženo ${attacksData.attacks.length} detailů útoků`);
+        console.log(`✅ Uloženo do databáze`);
 
         // Výpis pro debug
-        attacksData.attacks.forEach((attack, index) => {
-          console.log(`   ${index + 1}. ${attack.name} | ${attack.attacker} | ${attack.arrival_date} | ${attack.countdown}`);
-        });
+        if (attacksData.attacks.length > 0) {
+          attacksData.attacks.forEach((attack, index) => {
+            console.log(`   ${index + 1}. ${attack.name} | ${attack.attacker} | ${attack.arrival_date} | ${attack.countdown}`);
+          });
+        } else {
+          console.log(`⚠️  WARNING: count=${attacksData.count} ale attacks.length=0 - parsování selhalo!`);
+        }
       } else {
         // Pokud nejsou útoky, vymažeme data
+        console.log(`💾 Ukládám prázdná data (0 útoků)`);
         this.saveAttacksData(0, []);
         console.log('✅ Žádné příchozí útoky');
       }
@@ -137,9 +163,17 @@ class IncomingAttacksModule {
       const account = data.accounts.find(a => a.id === this.accountId);
 
       if (account) {
+        console.log(`[saveAttacksData] Ukládám pro účet ${this.accountId}:`);
+        console.log(`  - last_attack_count: ${count}`);
+        console.log(`  - attacks_info: ${JSON.stringify(attacks).substring(0, 200)}...`);
+
         account.last_attack_count = count;
         account.attacks_info = JSON.stringify(attacks);
         this.db._saveAccounts(data);
+
+        console.log(`[saveAttacksData] ✅ Úspěšně uloženo`);
+      } else {
+        console.error(`[saveAttacksData] ❌ Účet ${this.accountId} nenalezen!`);
       }
     } catch (error) {
       console.error('❌ Chyba při ukládání dat útoků:', error.message);
