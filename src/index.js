@@ -106,7 +106,6 @@ class Automator {
 
         // Zavřeme headless browser
         await this.browserManager.close(browser, context);
-
         // Otevřeme viditelný prohlížeč POUZE pokud už není otevřený
         if (!this.openBrowserWindows.has(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro manuální přihlášení`);
