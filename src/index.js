@@ -276,14 +276,39 @@ class Automator {
     }
   }
 
-  stop() {
-    console.log('\n🛑 Zastavuji automatizaci...');
+  async stop() {
+    console.log('\n');
+    console.log('='.repeat(60));
+    console.log('🛑  UKONČOVÁNÍ APLIKACE');
+    console.log('='.repeat(60));
+
     this.isRunning = false;
+
     if (this.intervalId) {
       clearInterval(this.intervalId);
+      console.log('✅ Interval zastaven');
     }
-    this.db.close();
-    console.log('✅ Automatizace zastavena');
+
+    // Zavřít všechny prohlížeče
+    try {
+      await this.browserManager.closeAll();
+      console.log('✅ Všechny prohlížeče zavřeny');
+    } catch (error) {
+      console.error('⚠️  Chyba při zavírání prohlížečů:', error.message);
+    }
+
+    // Zavřít databázi
+    try {
+      this.db.close();
+      console.log('✅ Databáze uzavřena');
+    } catch (error) {
+      console.error('⚠️  Chyba při zavírání databáze:', error.message);
+    }
+
+    console.log('='.repeat(60));
+    console.log('✅  APLIKACE ÚSPĚŠNĚ UKONČENA');
+    console.log('='.repeat(60));
+    console.log('\n');
   }
 }
 
@@ -291,8 +316,16 @@ class Automator {
 const automator = new Automator();
 automator.start();
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  automator.stop();
+// Graceful shutdown - Ctrl+C
+process.on('SIGINT', async () => {
+  console.log('\n⚠️  Zachycen Ctrl+C, ukončuji...');
+  await automator.stop();
+  process.exit(0);
+});
+
+// Graceful shutdown - kill
+process.on('SIGTERM', async () => {
+  console.log('\n⚠️  Zachycen SIGTERM, ukončuji...');
+  await automator.stop();
   process.exit(0);
 });

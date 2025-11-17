@@ -1,287 +1,461 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Přehled jednotek - Divoké kmeny</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Přehled jednotek - Divoké kmeny</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    body {
-      font-family: Arial, sans-serif;
-      background: #1a1a2e;
-      color: #eee;
-      padding: 20px;
-    }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 0;
+            min-height: 100vh;
+        }
 
-    .container {
-      max-width: 1600px;
-      margin: 0 auto;
-    }
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
 
-    header {
-      background: #16213e;
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 20px;
-    }
+        /* Header s vyhledáváním */
+        .header {
+            background: linear-gradient(135deg, #161b22 0%, #1c2128 100%);
+            border-bottom: 1px solid #30363d;
+            padding: 15px 0;
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
 
-    h1 {
-      color: #4ecca3;
-      font-size: 1.8em;
-    }
+        .header-content {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
 
-    .controls {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
+        .logo {
+            font-size: 1.5em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #58a6ff, #79c0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            white-space: nowrap;
+        }
 
-    #searchInput {
-      padding: 10px;
-      border-radius: 5px;
-      border: 1px solid #4ecca3;
-      background: #0f3460;
-      color: #eee;
-      flex: 1;
-      max-width: 300px;
-      font-size: 14px;
-    }
+        /* Velké vyhledávací pole */
+        .search-container {
+            flex: 1;
+            max-width: 600px;
+            position: relative;
+        }
 
-    #searchInput::placeholder {
-      color: #888;
-    }
+        .search-input {
+            width: 100%;
+            padding: 12px 45px 12px 45px;
+            background: #0d1117;
+            border: 2px solid #30363d;
+            border-radius: 8px;
+            color: #c9d1d9;
+            font-size: 15px;
+            transition: all 0.2s;
+        }
 
-    .btn-small {
-      background: #4ecca3;
-      color: #1a1a2e;
-      border: none;
-      padding: 5px 15px;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 0.85em;
-      font-weight: bold;
-    }
+        .search-input:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        }
 
-    .btn-small:hover {
-      background: #3db88a;
-    }
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 18px;
+            color: #8b949e;
+        }
 
-    .btn {
-      background: #4ecca3;
-      color: #1a1a2e;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-weight: bold;
-      transition: background 0.3s;
-      text-decoration: none;
-      display: inline-block;
-    }
+        .search-clear {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 18px;
+            display: none;
+        }
 
-    .btn:hover {
-      background: #3db88a;
-    }
+        .search-input:not(:placeholder-shown) ~ .search-clear {
+            display: block;
+        }
 
-    table {
-      width: 100%;
-      background: #16213e;
-      border-radius: 10px;
-      overflow: hidden;
-      border-collapse: collapse;
-    }
+        /* Navigace */
+        .nav {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
 
-    th {
-      background: #0f3460;
-      color: #4ecca3;
-      padding: 15px;
-      text-align: left;
-      font-weight: bold;
-      font-size: 0.9em;
-    }
+        .nav-btn {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
 
-    td {
-      padding: 12px 15px;
-      border-bottom: 1px solid #0f3460;
-      font-size: 0.85em;
-    }
+        .nav-btn:hover {
+            background: #30363d;
+            border-color: #8b949e;
+        }
 
-    tr:hover {
-      background: #1a2942;
-    }
+        .nav-btn.danger {
+            background: #da3633;
+            border-color: #da3633;
+            color: white;
+        }
 
-    .loading {
-      text-align: center;
-      padding: 50px;
-      color: #aaa;
-    }
+        .nav-btn.danger:hover {
+            background: #f85149;
+        }
 
-    .unit-count {
-      display: inline-block;
-      padding: 3px 8px;
-      background: #0f3460;
-      border-radius: 3px;
-      margin-right: 5px;
-      font-size: 0.9em;
-    }
+        /* Dropdown menu */
+        .dropdown {
+            position: relative;
+        }
 
-    .coord {
-      color: #4ecca3;
-      font-weight: bold;
-    }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 5px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            min-width: 200px;
+            z-index: 1000;
+        }
 
-    .server-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      background: rgba(78, 204, 163, 0.2);
-      border: 1px solid #4ecca3;
-      border-radius: 3px;
-      font-size: 0.8em;
-      margin-left: 5px;
-    }
-  </style>
+        .dropdown.active .dropdown-content {
+            display: block;
+        }
+
+        .dropdown-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            color: #c9d1d9;
+            transition: background 0.2s;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background: #21262d;
+        }
+
+        /* Tabulka */
+        .table-container {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #0d1117;
+            color: #8b949e;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #30363d;
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #21262d;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background: #0d1117;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .account-name {
+            font-weight: 600;
+            color: #58a6ff;
+        }
+
+        .world-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #1f6feb;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .coord {
+            color: #f78166;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+
+        .unit-count {
+            display: inline-block;
+            padding: 3px 8px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            margin-right: 6px;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .btn-small {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .btn-small:hover {
+            background: #2ea043;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #8b949e;
+            font-size: 15px;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>⚔️ Přehled jednotek</h1>
-    </header>
+    <!-- Header s vyhledáváním -->
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">⚔️ Divoké kmeny</div>
 
-    <div class="controls">
-      <button class="btn" onclick="window.location.href='/'">🏠 Dashboard</button>
-      <button class="btn" onclick="window.location.href='/accounts.html'">➕ Přidat účet</button>
-      <button class="btn" onclick="window.location.href='/units.html'">⚔️ Přehled jednotek</button>
-      <button class="btn" onclick="window.location.href='/attacks.html'" style="background: #ff6b6b;">🚨 Účty pod útokem</button>
-      <button class="btn" onclick="window.location.href='/training-templates.html'">📋 Šablony tréninku</button>
-      <input type="text" id="searchInput" placeholder="🔍 Hledat účet..." oninput="filterAccounts()">
-      <button class="btn" onclick="loadUnits()">🔄 Obnovit</button>
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text"
+                       id="searchInput"
+                       class="search-input"
+                       placeholder="Hledat účet podle jména, světa..."
+                       oninput="filterAccounts()">
+                <button class="search-clear" onclick="clearSearch()">✕</button>
+            </div>
+
+            <div class="nav">
+                <button class="nav-btn danger" onclick="window.location.href='/attacks.html'">
+                    🚨 Útoky
+                </button>
+                <button class="nav-btn" onclick="window.location.href='/units.html'">
+                    ⚔️ Jednotky
+                </button>
+                <button class="nav-btn" onclick="loadUnits()">
+                    🔄
+                </button>
+
+                <div class="dropdown" id="moreMenu">
+                    <button class="nav-btn" onclick="toggleDropdown()">⋯</button>
+                    <div class="dropdown-content">
+                        <div class="dropdown-item" onclick="window.location.href='/accounts.html'">
+                            ➕ Přidat účet
+                        </div>
+                        <div class="dropdown-item" onclick="window.location.href='/training-templates.html'">
+                            📋 Šablony tréninku
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <table id="unitsTable">
-      <thead>
-        <tr>
-          <th>Účet</th>
-          <th>Svět</th>
-          <th>Souřadnice</th>
-          <th>Kontinent</th>
-          <th>Vlastní jednotky</th>
-          <th>Akce</th>
-        </tr>
-      </thead>
-      <tbody id="unitsList">
-        <tr><td colspan="6" class="loading">Načítám...</td></tr>
-      </tbody>
-    </table>
-  </div>
+    <div class="container">
+        <!-- Tabulka jednotek -->
+        <div class="table-container">
+            <table id="unitsTable">
+                <thead>
+                    <tr>
+                        <th>Účet</th>
+                        <th>Svět</th>
+                        <th>Souřadnice</th>
+                        <th>Kontinent</th>
+                        <th>Vlastní jednotky</th>
+                        <th>Akce</th>
+                    </tr>
+                </thead>
+                <tbody id="unitsList">
+                    <tr><td colspan="6" class="loading">⏳ Načítám...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-  <script>
-    let allAccounts = [];
+    <script>
+        let allAccounts = [];
 
-    async function loadUnits() {
-      const tbody = document.getElementById('unitsList');
-      tbody.innerHTML = '<tr><td colspan="6" class="loading">Načítám...</td></tr>';
-
-      try {
-        const response = await fetch('/api/accounts');
-        const accounts = await response.json();
-        allAccounts = accounts;
-
-        if (accounts.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#aaa;">Žádné účty</td></tr>';
-          return;
+        // Dropdown menu
+        function toggleDropdown() {
+            document.getElementById('moreMenu').classList.toggle('active');
         }
 
-        renderUnits(accounts);
-
-      } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#ff6b6b;">❌ Chyba: ${error.message}</td></tr>`;
-      }
-    }
-
-    function renderUnits(accounts) {
-      const tbody = document.getElementById('unitsList');
-
-      tbody.innerHTML = accounts.map(acc => {
-        const coord = (acc.coord_x && acc.coord_y) ? `${acc.coord_x}|${acc.coord_y}` : '-';
-        const continent = acc.continent || '-';
-
-        // Parsování jednotek
-        let unitsDisplay = '-';
-        if (acc.units_info) {
-          try {
-            const units = typeof acc.units_info === 'string' ? JSON.parse(acc.units_info) : acc.units_info;
-
-            const ownUnits = [];
-            if (units.spear?.total) ownUnits.push(`🛡️ ${units.spear.total}`);
-            if (units.sword?.total) ownUnits.push(`⚔️ ${units.sword.total}`);
-            if (units.axe?.total) ownUnits.push(`🪓 ${units.axe.total}`);
-            if (units.archer?.total) ownUnits.push(`🏹 ${units.archer.total}`);
-            if (units.spy?.total) ownUnits.push(`👁️ ${units.spy.total}`);
-            if (units.light?.total) ownUnits.push(`🐎 ${units.light.total}`);
-            if (units.marcher?.total) ownUnits.push(`🏇 ${units.marcher.total}`);
-            if (units.heavy?.total) ownUnits.push(`🐴 ${units.heavy.total}`);
-            if (units.ram?.total) ownUnits.push(`🐏 ${units.ram.total}`);
-            if (units.catapult?.total) ownUnits.push(`⚙️ ${units.catapult.total}`);
-            if (units.knight?.total) ownUnits.push(`🤴 ${units.knight.total}`);
-            if (units.snob?.total) ownUnits.push(`👑 ${units.snob.total}`);
-
-            if (ownUnits.length > 0) {
-              unitsDisplay = ownUnits.map(u => `<span class="unit-count">${u}</span>`).join(' ');
+        // Zavřít dropdown při kliku mimo
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('moreMenu');
+            if (!dropdown.contains(e.target)) {
+                dropdown.classList.remove('active');
             }
-          } catch (e) {
-            unitsDisplay = '❌ Chyba parsování';
-          }
-        }
-
-        return `
-          <tr>
-            <td><strong>${acc.username}</strong></td>
-            <td>${acc.world || '-'}</td>
-            <td class="coord">${coord}</td>
-            <td>${continent}</td>
-            <td>${unitsDisplay}</td>
-            <td>
-              <button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>
-            </td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    function filterAccounts() {
-      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-      const filtered = allAccounts.filter(acc =>
-        acc.username.toLowerCase().includes(searchTerm) ||
-        (acc.world && acc.world.toLowerCase().includes(searchTerm))
-      );
-      renderUnits(filtered);
-    }
-
-    async function openBrowser(accountId) {
-      try {
-        const response = await fetch(`/api/accounts/${accountId}/open-browser`, {
-          method: 'POST'
         });
 
-        const result = await response.json();
-        if (result.success) {
-          alert('✅ Prohlížeč otevřen!');
-        } else {
-          alert('❌ Chyba: ' + result.error);
+        // Vyčistit vyhledávání
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            filterAccounts();
         }
-      } catch (error) {
-        alert('❌ Chyba: ' + error.message);
-      }
-    }
 
-    loadUnits();
-    setInterval(loadUnits, 30000);
-  </script>
+        async function loadUnits() {
+            const tbody = document.getElementById('unitsList');
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">⏳ Načítám...</td></tr>';
+
+            try {
+                const response = await fetch('/api/accounts');
+                const accounts = await response.json();
+                allAccounts = accounts;
+
+                if (accounts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="loading">Žádné účty k zobrazení</td></tr>';
+                    return;
+                }
+
+                renderUnits(accounts);
+
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="6" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
+            }
+        }
+
+        function renderUnits(accounts) {
+            const tbody = document.getElementById('unitsList');
+
+            tbody.innerHTML = accounts.map(acc => {
+                const coord = (acc.coord_x && acc.coord_y) ? `${acc.coord_x}|${acc.coord_y}` : '-';
+                const continent = acc.continent || '-';
+
+                // Parsování jednotek
+                let unitsDisplay = '-';
+                if (acc.units_info) {
+                    try {
+                        const units = typeof acc.units_info === 'string' ? JSON.parse(acc.units_info) : acc.units_info;
+
+                        const ownUnits = [];
+                        if (units.spear?.total) ownUnits.push(`🛡️ ${units.spear.total}`);
+                        if (units.sword?.total) ownUnits.push(`⚔️ ${units.sword.total}`);
+                        if (units.axe?.total) ownUnits.push(`🪓 ${units.axe.total}`);
+                        if (units.archer?.total) ownUnits.push(`🏹 ${units.archer.total}`);
+                        if (units.spy?.total) ownUnits.push(`👁️ ${units.spy.total}`);
+                        if (units.light?.total) ownUnits.push(`🐎 ${units.light.total}`);
+                        if (units.marcher?.total) ownUnits.push(`🏇 ${units.marcher.total}`);
+                        if (units.heavy?.total) ownUnits.push(`🐴 ${units.heavy.total}`);
+                        if (units.ram?.total) ownUnits.push(`🐏 ${units.ram.total}`);
+                        if (units.catapult?.total) ownUnits.push(`⚙️ ${units.catapult.total}`);
+                        if (units.knight?.total) ownUnits.push(`🤴 ${units.knight.total}`);
+                        if (units.snob?.total) ownUnits.push(`👑 ${units.snob.total}`);
+
+                        if (ownUnits.length > 0) {
+                            unitsDisplay = ownUnits.map(u => `<span class="unit-count">${u}</span>`).join(' ');
+                        }
+                    } catch (e) {
+                        unitsDisplay = '<span style="color: #f85149;">❌ Chyba parsování</span>';
+                    }
+                }
+
+                return `
+                    <tr>
+                        <td><span class="account-name">${acc.username}</span></td>
+                        <td><span class="world-badge">${acc.world || '-'}</span></td>
+                        <td class="coord">${coord}</td>
+                        <td>${continent}</td>
+                        <td>${unitsDisplay}</td>
+                        <td>
+                            <button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filterAccounts() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allAccounts.filter(acc =>
+                acc.username.toLowerCase().includes(searchTerm) ||
+                (acc.world && acc.world.toLowerCase().includes(searchTerm))
+            );
+            renderUnits(filtered);
+        }
+
+        async function openBrowser(accountId) {
+            try {
+                const response = await fetch(`/api/accounts/${accountId}/open-browser`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+                if (!result.success) {
+                    alert('❌ Chyba: ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Chyba: ' + error.message);
+            }
+        }
+
+        // Načtení při startu - update každé 2 minuty
+        loadUnits();
+        setInterval(loadUnits, 120000);
+    </script>
 </body>
 </html>
