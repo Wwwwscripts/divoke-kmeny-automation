@@ -90,6 +90,31 @@ class AccountInfoModule {
   }
 
   /**
+   * Získá souřadnice vesnice a další detaily
+   */
+  async getVillageCoordinates() {
+    try {
+      const villageInfo = await this.page.evaluate(() => {
+        const v = game_data.village;
+        return {
+          id: v.id,
+          name: v.name,
+          x: v.x,
+          y: v.y,
+          coord: `${v.x}|${v.y}`,
+          continent: v.display_name.match(/K\d+/) ? v.display_name.match(/K\d+/)[0] : 'K??'
+        };
+      });
+
+      console.log(`📍 Souřadnice: ${villageInfo.coord} (${villageInfo.continent})`);
+      return villageInfo;
+    } catch (error) {
+      console.error('❌ Chyba při zjišťování souřadnic:', error.message);
+      return null;
+    }
+  }
+
+  /**
    * Získá úroveň hradeb z hlavní obrazovky
    */
   async getWallLevel() {
@@ -153,6 +178,8 @@ class AccountInfoModule {
     try {
       console.log('📊 Sbírám informace o účtu...');
 
+      const villageInfo = await this.getVillageCoordinates();
+
       const resources = await this.getResources();
       console.log('📦 Suroviny:', resources);
 
@@ -175,7 +202,12 @@ class AccountInfoModule {
       });
 
       this.db.updateAccountInfo(this.accountId, {
-        wall_level: wallLevel
+        wall_level: wallLevel,
+        village_id: villageInfo?.id,
+        village_name: villageInfo?.name,
+        coord_x: villageInfo?.x,
+        coord_y: villageInfo?.y,
+        continent: villageInfo?.continent
       });
 
       console.log('✅ Statistiky aktualizovány pro účet ID:', this.accountId);
@@ -184,7 +216,8 @@ class AccountInfoModule {
         resources,
         population,
         points,
-        wallLevel
+        wallLevel,
+        villageInfo
       };
     } catch (error) {
       console.error('❌ Chyba při sbírání informací:', error.message);

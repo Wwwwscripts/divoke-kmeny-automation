@@ -163,6 +163,32 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
   }
 });
 
+// Endpoint pro získání účtů pod útokem
+app.get('/api/accounts/under-attack', (req, res) => {
+  try {
+    const allAccounts = db.getAllAccountsWithStats();
+
+    // Filtrujeme pouze účty které mají příchozí útoky (last_attack_count > 0)
+    const accountsUnderAttack = allAccounts.filter(acc => {
+      return acc.last_attack_count && acc.last_attack_count > 0;
+    }).map(acc => ({
+      ...acc,
+      attack_count: acc.last_attack_count
+    }));
+
+    res.json({
+      success: true,
+      accounts: accountsUnderAttack,
+      total: accountsUnderAttack.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🌐 Control Panel běží na http://localhost:${PORT}`);

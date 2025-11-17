@@ -76,6 +76,12 @@ class DatabaseManager {
         premium: 0,
         units_info: null,
         wall_level: null,
+        // 🆕 COORDINATES - Souřadnice vesnice
+        village_id: null,
+        village_name: null,
+        coord_x: null,
+        coord_y: null,
+        continent: null,
         recruit_enabled: 0,
         recruit_template: 'FARM',
         building_enabled: 0,
@@ -149,7 +155,7 @@ class DatabaseManager {
   updateAccountInfo(accountId, info) {
     const data = this._loadAccounts();
     const account = data.accounts.find(a => a.id === accountId);
-    
+
     if (account) {
       if (info.world !== undefined) account.world = info.world;
       if (info.premium !== undefined) account.premium = info.premium;
@@ -157,6 +163,12 @@ class DatabaseManager {
       if (info.wall_level !== undefined) account.wall_level = info.wall_level;
       // 🆕 RESEARCH - Ukládání research_status
       if (info.research_status !== undefined) account.research_status = info.research_status;
+      // 🆕 COORDINATES - Ukládání souřadnic
+      if (info.village_id !== undefined) account.village_id = info.village_id;
+      if (info.village_name !== undefined) account.village_name = info.village_name;
+      if (info.coord_x !== undefined) account.coord_x = info.coord_x;
+      if (info.coord_y !== undefined) account.coord_y = info.coord_y;
+      if (info.continent !== undefined) account.continent = info.continent;
       this._saveAccounts(data);
     }
   }
