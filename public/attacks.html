@@ -264,33 +264,38 @@
 
             const allUnits = [];
 
-            // Vlastní jednotky
-            if (units.own) {
-              const ownTotal = Object.values(units.own).reduce((sum, val) => sum + (val || 0), 0);
-              allUnits.push(`<strong>Vlastní: ${ownTotal}</strong>`);
-            }
+            // Spočítáme celkový počet jednotek
+            let totalUnits = 0;
+            if (units.spear?.total) totalUnits += units.spear.total;
+            if (units.sword?.total) totalUnits += units.sword.total;
+            if (units.axe?.total) totalUnits += units.axe.total;
+            if (units.archer?.total) totalUnits += units.archer.total;
+            if (units.spy?.total) totalUnits += units.spy.total;
+            if (units.light?.total) totalUnits += units.light.total;
+            if (units.marcher?.total) totalUnits += units.marcher.total;
+            if (units.heavy?.total) totalUnits += units.heavy.total;
+            if (units.ram?.total) totalUnits += units.ram.total;
+            if (units.catapult?.total) totalUnits += units.catapult.total;
 
-            // Podpory
-            if (units.support) {
-              const supportTotal = Object.values(units.support).reduce((sum, val) => sum + (val || 0), 0);
-              allUnits.push(`<strong>Podpora: ${supportTotal}</strong>`);
-            }
+            if (totalUnits > 0) {
+              allUnits.push(`<strong>Celkem: ${totalUnits}</strong>`);
 
-            // Detail jednotek
-            const detailUnits = [];
-            if (units.own) {
-              if (units.own.spear) detailUnits.push(`🛡️${units.own.spear}`);
-              if (units.own.sword) detailUnits.push(`⚔️${units.own.sword}`);
-              if (units.own.axe) detailUnits.push(`🪓${units.own.axe}`);
-              if (units.own.archer) detailUnits.push(`🏹${units.own.archer}`);
-              if (units.own.heavy) detailUnits.push(`🐴${units.own.heavy}`);
-            }
+              // Detail důležitých jednotek
+              const detailUnits = [];
+              if (units.spear?.total) detailUnits.push(`🛡️${units.spear.total}`);
+              if (units.sword?.total) detailUnits.push(`⚔️${units.sword.total}`);
+              if (units.axe?.total) detailUnits.push(`🪓${units.axe.total}`);
+              if (units.archer?.total) detailUnits.push(`🏹${units.archer.total}`);
+              if (units.heavy?.total) detailUnits.push(`🐴${units.heavy.total}`);
 
-            if (detailUnits.length > 0) {
-              allUnits.push('<br>' + detailUnits.map(u => `<span class="unit-count">${u}</span>`).join(' '));
-            }
+              if (detailUnits.length > 0) {
+                allUnits.push('<br>' + detailUnits.map(u => `<span class="unit-count">${u}</span>`).join(' '));
+              }
 
-            unitsDisplay = allUnits.join(' | ');
+              unitsDisplay = allUnits.join(' | ');
+            } else {
+              unitsDisplay = '<span style="color: #ff6b6b;">⚠️ Žádné jednotky!</span>';
+            }
           } catch (e) {
             unitsDisplay = '❌ Chyba parsování';
           }
