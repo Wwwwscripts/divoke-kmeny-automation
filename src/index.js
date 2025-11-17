@@ -150,33 +150,33 @@ class Automator {
       // Získáme informace o jednotkách
       const recruitModule = new RecruitModule(page, this.db, account.id);
       await recruitModule.collectUnitsInfo();
-	  
-	  // Zpracujeme VÝZKUM (před výstavbou a rekrutováním!)
-		const researchSettings = this.db.getResearchSettings(account.id);
 
-		if (researchSettings && researchSettings.enabled) {
-		  const researchKey = `research_${account.id}`;
-		  const researchWaitUntil = this.accountWaitTimes[researchKey];
+      // Zpracujeme VÝZKUM (před výstavbou a rekrutováním!)
+      const researchSettings = this.db.getResearchSettings(account.id);
 
-		  if (!researchWaitUntil || Date.now() >= researchWaitUntil) {
-			console.log(`🔬 Výzkum zapnut - šablona: ${researchSettings.template}`);
-			
-			const researchModule = new ResearchModule(page, this.db, account.id);
-			const researchResult = await researchModule.autoResearch();
+      if (researchSettings && researchSettings.enabled) {
+        const researchKey = `research_${account.id}`;
+        const researchWaitUntil = this.accountWaitTimes[researchKey];
 
-			if (researchResult && researchResult.waitTime) {
-			  this.accountWaitTimes[researchKey] = Date.now() + researchResult.waitTime;
-			  console.log(`⏰ Výzkum: Další kontrola za ${Math.ceil(researchResult.waitTime / 60000)} minut`);
-			} else {
-			  this.accountWaitTimes[researchKey] = Date.now() + this.checkInterval;
-			}
-		  } else {
-			const remainingMinutes = Math.ceil((researchWaitUntil - Date.now()) / 60000);
-			console.log(`⏭️  Výzkum: Přeskakuji (další kontrola za ${remainingMinutes} minut)`);
-		  }
-		} else {
-		  console.log(`⏸️  Výzkum vypnut`);
-		}
+        if (!researchWaitUntil || Date.now() >= researchWaitUntil) {
+          console.log(`🔬 Výzkum zapnut - šablona: ${researchSettings.template}`);
+
+          const researchModule = new ResearchModule(page, this.db, account.id);
+          const researchResult = await researchModule.autoResearch();
+
+          if (researchResult && researchResult.waitTime) {
+            this.accountWaitTimes[researchKey] = Date.now() + researchResult.waitTime;
+            console.log(`⏰ Výzkum: Další kontrola za ${Math.ceil(researchResult.waitTime / 60000)} minut`);
+          } else {
+            this.accountWaitTimes[researchKey] = Date.now() + this.checkInterval;
+          }
+        } else {
+          const remainingMinutes = Math.ceil((researchWaitUntil - Date.now()) / 60000);
+          console.log(`⏭️  Výzkum: Přeskakuji (další kontrola za ${remainingMinutes} minut)`);
+        }
+      } else {
+        console.log(`⏸️  Výzkum vypnut`);
+      }
 
       // Zpracujeme VÝSTAVBU
       const buildingSettings = this.db.getBuildingSettings(account.id);
