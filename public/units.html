@@ -217,21 +217,21 @@
           try {
             const units = typeof acc.units_info === 'string' ? JSON.parse(acc.units_info) : acc.units_info;
 
-            if (units.own) {
-              const ownUnits = [];
-              if (units.own.spear) ownUnits.push(`🛡️ ${units.own.spear}`);
-              if (units.own.sword) ownUnits.push(`⚔️ ${units.own.sword}`);
-              if (units.own.axe) ownUnits.push(`🪓 ${units.own.axe}`);
-              if (units.own.archer) ownUnits.push(`🏹 ${units.own.archer}`);
-              if (units.own.spy) ownUnits.push(`👁️ ${units.own.spy}`);
-              if (units.own.light) ownUnits.push(`🐎 ${units.own.light}`);
-              if (units.own.marcher) ownUnits.push(`🏇 ${units.own.marcher}`);
-              if (units.own.heavy) ownUnits.push(`🐴 ${units.own.heavy}`);
-              if (units.own.ram) ownUnits.push(`🐏 ${units.own.ram}`);
-              if (units.own.catapult) ownUnits.push(`⚙️ ${units.own.catapult}`);
-              if (units.own.knight) ownUnits.push(`🤴 ${units.own.knight}`);
-              if (units.own.snob) ownUnits.push(`👑 ${units.own.snob}`);
+            const ownUnits = [];
+            if (units.spear?.total) ownUnits.push(`🛡️ ${units.spear.total}`);
+            if (units.sword?.total) ownUnits.push(`⚔️ ${units.sword.total}`);
+            if (units.axe?.total) ownUnits.push(`🪓 ${units.axe.total}`);
+            if (units.archer?.total) ownUnits.push(`🏹 ${units.archer.total}`);
+            if (units.spy?.total) ownUnits.push(`👁️ ${units.spy.total}`);
+            if (units.light?.total) ownUnits.push(`🐎 ${units.light.total}`);
+            if (units.marcher?.total) ownUnits.push(`🏇 ${units.marcher.total}`);
+            if (units.heavy?.total) ownUnits.push(`🐴 ${units.heavy.total}`);
+            if (units.ram?.total) ownUnits.push(`🐏 ${units.ram.total}`);
+            if (units.catapult?.total) ownUnits.push(`⚙️ ${units.catapult.total}`);
+            if (units.knight?.total) ownUnits.push(`🤴 ${units.knight.total}`);
+            if (units.snob?.total) ownUnits.push(`👑 ${units.snob.total}`);
 
+            if (ownUnits.length > 0) {
               unitsDisplay = ownUnits.map(u => `<span class="unit-count">${u}</span>`).join(' ');
             }
           } catch (e) {
