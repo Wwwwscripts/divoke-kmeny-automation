@@ -5,7 +5,8 @@ import AccountInfoModule from './modules/accountInfo.js';
 import RecruitModule from './modules/recruit.js';
 import BuildingModule from './modules/building.js';
 import ResearchModule from './modules/research.js';
-import NotificationsModule from './modules/notifications.js'; 
+import NotificationsModule from './modules/notifications.js';
+import IncomingAttacksModule from './modules/incomingAttacks.js'; 
 
 class Automator {
   constructor() {
@@ -87,9 +88,30 @@ class Automator {
       const recruitModule = new RecruitModule(page, this.db, account.id);
       await recruitModule.collectUnitsInfo();
 
-      // Zkontrolujeme útoky a CAPTCHA
+      // Zjistíme příchozí útoky (nový modul)
+      const incomingAttacksModule = new IncomingAttacksModule(page, this.db, account.id);
+      const attacksResult = await incomingAttacksModule.execute();
+
+      // Zkontrolujeme CAPTCHA
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
-      await notificationsModule.detectAttacks();
+
+      // Pokud byly zjištěny útoky, zkontrolujeme jestli poslat Discord notifikaci
+      if (attacksResult.success && attacksResult.count > 0) {
+        // Zkontrolujeme jestli počet útoků vzrostl (pro Discord notifikaci)
+        const lastCount = notificationsModule.getLastAttackCount();
+        if (attacksResult.count > lastCount) {
+          console.log(`⚔️  NOVÝ ÚTOK! Počet útoků vzrostl z ${lastCount} na ${attacksResult.count}`);
+          await notificationsModule.sendDiscordNotification('attack', {
+            count: attacksResult.count,
+            attacks: attacksResult.attacks
+          });
+        }
+        notificationsModule.saveLastAttackCount(attacksResult.count);
+      } else if (attacksResult.success && attacksResult.count === 0) {
+        // Žádné útoky - resetujeme počet
+        notificationsModule.saveLastAttackCount(0);
+      }
+
       const hasCaptcha = await notificationsModule.detectCaptcha();
 
       // Pokud je CAPTCHA, otevřeme viditelný prohlížeč
