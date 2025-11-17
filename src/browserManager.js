@@ -100,6 +100,13 @@ class BrowserManager {
     }
   }
 
+  async closeAll() {
+    // BrowserManager nesleduje otevřené prohlížeče globálně
+    // Prohlížeče se zavírají individuálně v processAccount()
+    // Tato metoda je zde pro kompatibilitu s graceful shutdown
+    console.log('ℹ️  Prohlížeče se zavírají automaticky po zpracování každého účtu');
+  }
+
   async testConnection(accountId) {
     const account = this.db.getAccount(accountId);
     

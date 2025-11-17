@@ -461,11 +461,11 @@
                         <th class="sortable" onclick="sortBy('world')">Svět</th>
                         <th class="sortable" onclick="sortBy('points')">Body</th>
                         <th>Suroviny</th>
-                        <th>Rekrut</th>
+                        <th class="sortable" onclick="sortBy('recruit_enabled')">Rekrut</th>
                         <th class="sortable" onclick="sortBy('recruit_template')">Šablona R</th>
-                        <th>Výzkum</th>
+                        <th class="sortable" onclick="sortBy('research_enabled')">Výzkum</th>
                         <th class="sortable" onclick="sortBy('research_template')">Šablona V</th>
-                        <th>Výstavba</th>
+                        <th class="sortable" onclick="sortBy('building_enabled')">Výstavba</th>
                         <th class="sortable" onclick="sortBy('building_template')">Šablona B</th>
                         <th>Akce</th>
                     </tr>
@@ -648,13 +648,23 @@
 
             // Seřadit
             const sorted = [...allAccounts].sort((a, b) => {
-                let aVal = a[column] || '';
-                let bVal = b[column] || '';
+                let aVal = a[column];
+                let bVal = b[column];
 
                 // Pro čísla
                 if (column === 'points') {
                     aVal = a[column] || 0;
                     bVal = b[column] || 0;
+                }
+                // Pro boolean hodnoty (zapnuto/vypnuto)
+                else if (column.endsWith('_enabled')) {
+                    aVal = a[column] ? 1 : 0;
+                    bVal = b[column] ? 1 : 0;
+                }
+                // Pro string hodnoty
+                else {
+                    aVal = aVal || '';
+                    bVal = bVal || '';
                 }
 
                 if (currentSort.ascending) {
