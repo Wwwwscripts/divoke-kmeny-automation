@@ -58,7 +58,7 @@ class DatabaseManager {
   addAccount(username, password, proxy = null, world = null) {
     try {
       const data = this._loadAccounts();
-      
+
       // Kontrola, jestli účet už existuje
       const exists = data.accounts.find(a => a.username === username);
       if (exists) {
@@ -93,12 +93,25 @@ class DatabaseManager {
       data.nextId++;
       this._saveAccounts(data);
 
-      console.log(`✅ Účet ${username} přidán (ID: ${newAccount.id})`);
+      const server = this.getServerFromWorld(world);
+      console.log(`✅ Účet ${username} přidán (ID: ${newAccount.id}, Server: ${server})`);
       return newAccount.id;
     } catch (error) {
       console.error(`❌ Chyba při přidávání účtu ${username}:`, error.message);
       return null;
     }
+  }
+
+  // Zjistit server ze světa (sk97 = SK, cs107 = CS)
+  getServerFromWorld(world) {
+    if (!world) return 'CS';
+    return world.toLowerCase().startsWith('sk') ? 'SK' : 'CS';
+  }
+
+  // Získat doménu pro účet
+  getDomainForAccount(account) {
+    const server = this.getServerFromWorld(account.world);
+    return server === 'SK' ? 'divoke-kmene.sk' : 'divokekmeny.cz';
   }
 
   // Získat účet podle ID

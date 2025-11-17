@@ -168,7 +168,8 @@ export class GameHelpers {
    */
   async isLoggedIn() {
     const url = this.page.url();
-    return url.includes('.divokekmeny.cz/game.php');
+    // Podporuje jak CS (divokekmeny.cz) tak SK (divoke-kmene.sk)
+    return url.includes('/game.php') && (url.includes('divokekmeny.cz') || url.includes('divoke-kmene.sk'));
   }
 
   /**

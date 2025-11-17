@@ -183,28 +183,32 @@ class Automator {
   async loginToGame(page, account) {
     try {
       console.log(`🌐 Načítám hru...`);
-      
+
+      const domain = this.db.getDomainForAccount(account);
+      const server = this.db.getServerFromWorld(account.world);
+
       if (account.world) {
-        console.log(`🌍 Jdu na svět: ${account.world}`);
-        await page.goto(`https://${account.world}.divokekmeny.cz/game.php`, { 
+        console.log(`🌍 Jdu na svět: ${account.world} (Server: ${server}, ${domain})`);
+        await page.goto(`https://${account.world}.${domain}/game.php`, {
           waitUntil: 'domcontentloaded',
-          timeout: 30000 
+          timeout: 30000
         });
       } else {
-        await page.goto('https://www.divokekmeny.cz/', { 
+        console.log(`🌍 Jdu na hlavní stránku (${domain})`);
+        await page.goto(`https://www.${domain}/`, {
           waitUntil: 'domcontentloaded',
-          timeout: 30000 
+          timeout: 30000
         });
       }
 
       // Zkontrolujeme, zda jsme přihlášeni
       const url = page.url();
-      if (!url.includes('.divokekmeny.cz/game.php')) {
-        
+      if (!url.includes(`.${domain}/game.php`)) {
+
         // Pokud je session expired, vybereme svět
         if (url.includes('session_expired=1') && account.world) {
           console.log(`⚠️  Session vypršela - vybírám svět...`);
-          
+
           const clicked = await page.evaluate((world) => {
             const link = document.querySelector(`a.world-select[href="/page/play/${world}"]`);
             if (link) {

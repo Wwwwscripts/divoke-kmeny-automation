@@ -95,12 +95,16 @@ class AccountInfoModule {
   async getWallLevel() {
     try {
       const currentUrl = this.page.url();
-      const worldMatch = currentUrl.match(/\/\/([^.]+)\.divokekmeny\.cz/);
+      // Podporuje CS i SK domény
+      const worldMatch = currentUrl.match(/\/\/([^.]+)\.(divokekmeny\.cz|divoke-kmene\.sk)/);
       if (!worldMatch) return 0;
+
+      const world = worldMatch[1];
+      const domain = worldMatch[2];
 
       if (!currentUrl.includes('screen=main')) {
         console.log('🌐 Přecházím na hlavní obrazovku pro zjištění hradeb...');
-        await this.page.goto(`https://${worldMatch[1]}.divokekmeny.cz/game.php?screen=main`, {
+        await this.page.goto(`https://${world}.${domain}/game.php?screen=main`, {
           waitUntil: 'domcontentloaded'
         });
         await this.page.waitForTimeout(2000);
