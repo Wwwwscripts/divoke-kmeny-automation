@@ -259,6 +259,7 @@ class NotificationsModule {
       const webhookUrl = this.getDiscordWebhook(type);
       if (!webhookUrl) {
         console.log(`⚠️  Discord webhook pro ${type} není nakonfigurován`);
+        console.log(`💡 Vytvořte .env soubor a nastavte DISCORD_WEBHOOK_${type.toUpperCase()}`);
         return;
       }
 
@@ -359,7 +360,10 @@ class NotificationsModule {
       if (response.ok) {
         console.log(`✅ Discord notifikace (${type}) odeslána`);
       } else {
+        const errorText = await response.text();
         console.log(`⚠️  Nepodařilo se odeslat Discord notifikaci (${type})`);
+        console.log(`   Status: ${response.status} ${response.statusText}`);
+        console.log(`   Chyba: ${errorText}`);
       }
 
     } catch (error) {

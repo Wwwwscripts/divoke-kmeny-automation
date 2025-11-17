@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
 import AccountInfoModule from './modules/accountInfo.js';
@@ -13,6 +14,7 @@ class Automator {
     this.isRunning = false;
     this.checkInterval = 2 * 60 * 1000; // 2 minuty
     this.accountWaitTimes = {}; // Uchovává časy pro další kontrolu každého modulu
+    this.openBrowserWindows = new Set(); // Účty s otevřeným viditelným oknem
   }
 
   async start() {
@@ -85,9 +87,29 @@ class Automator {
       const recruitModule = new RecruitModule(page, this.db, account.id);
       await recruitModule.collectUnitsInfo();
 
-      // Detekce příchozích útoků
+      // Zkontrolujeme útoky a CAPTCHA
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       await notificationsModule.detectAttacks();
+      const hasCaptcha = await notificationsModule.detectCaptcha();
+
+      // Pokud je CAPTCHA, otevřeme viditelný prohlížeč
+      if (hasCaptcha) {
+        console.log(`⚠️  CAPTCHA detekována`);
+
+        // Zavřeme headless browser
+        await this.browserManager.close(browser, context);
+
+        // Otevřeme viditelný prohlížeč POUZE pokud už není otevřený
+        if (!this.openBrowserWindows.has(account.id)) {
+          console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+          this.openBrowserWindows.add(account.id);
+          await this.browserManager.testConnection(account.id);
+          console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA a zavřete okno`);
+        } else {
+          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
+        }
+        return;
+      }
 
 	  // Zpracujeme VÝZKUM (před výstavbou a rekrutováním!)
 		const researchSettings = this.db.getResearchSettings(account.id);
@@ -172,6 +194,12 @@ class Automator {
       }
 
       console.log(`✅ Účet ${account.username} zpracován`);
+
+      // Odstraníme z otevřených oken (pokud tam byl)
+      if (this.openBrowserWindows.has(account.id)) {
+        this.openBrowserWindows.delete(account.id);
+        console.log(`🔓 Označen jako vyřešený - příště se otevře nové okno při problému`);
+      }
 
       // Zavřeme prohlížeč
       await this.browserManager.close(browser, context);
