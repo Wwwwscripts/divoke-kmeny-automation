@@ -189,6 +189,46 @@ app.get('/api/accounts/under-attack', (req, res) => {
   }
 });
 
+// ============ ŠABLONY ============
+
+// Získat všechny šablony pro daný typ
+app.get('/api/templates/:type', (req, res) => {
+  try {
+    const type = req.params.type;
+    const templates = db.getTemplates(type);
+    res.json(templates);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Uložit/aktualizovat šablonu
+app.put('/api/templates/:type/:id', (req, res) => {
+  try {
+    const type = req.params.type;
+    const id = req.params.id;
+    const template = { id, ...req.body };
+
+    db.saveTemplate(type, template);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Smazat šablonu
+app.delete('/api/templates/:type/:id', (req, res) => {
+  try {
+    const type = req.params.type;
+    const id = req.params.id;
+
+    db.deleteTemplate(type, id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🌐 Control Panel běží na http://localhost:${PORT}`);

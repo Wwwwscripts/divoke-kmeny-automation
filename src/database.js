@@ -10,6 +10,7 @@ class DatabaseManager {
     this.dataPath = dataPath;
     this.accountsFile = join(dataPath, 'accounts.json');
     this.statsFile = join(dataPath, 'stats.json');
+    this.templatesFile = join(dataPath, 'templates.json');
     this.initDatabase();
   }
 
@@ -27,6 +28,72 @@ class DatabaseManager {
     // Vytvoř stats.json, pokud neexistuje
     if (!existsSync(this.statsFile)) {
       writeFileSync(this.statsFile, JSON.stringify({ stats: [] }, null, 2));
+    }
+
+    // Vytvoř templates.json, pokud neexistuje
+    if (!existsSync(this.templatesFile)) {
+      const defaultTemplates = {
+        recruit: [
+          { id: 'FARM', name: 'FARM', units: { spear: 0, sword: 0, axe: 300, light: 0, marcher: 0, heavy: 0 } },
+          { id: 'DEF', name: 'DEF', units: { spear: 300, sword: 300, archer: 100, heavy: 50 } },
+          { id: 'OFF', name: 'OFF', units: { axe: 0, light: 500, marcher: 0, ram: 50, catapult: 20 } }
+        ],
+        research: [
+          {
+            id: 'FARM',
+            name: 'FARM',
+            levels: {
+              spear: 0, sword: 0, axe: 3, archer: 0, spy: 0,
+              light: 0, marcher: 0, heavy: 0, ram: 0, catapult: 0, knight: 0, snob: 0
+            }
+          },
+          {
+            id: 'DEF',
+            name: 'DEF',
+            levels: {
+              spear: 3, sword: 3, archer: 3, spy: 2,
+              light: 0, marcher: 0, heavy: 3, ram: 0, catapult: 0, knight: 0, snob: 0
+            }
+          },
+          {
+            id: 'OFF',
+            name: 'OFF',
+            levels: {
+              spear: 0, sword: 0, axe: 3, spy: 2,
+              light: 3, marcher: 3, heavy: 0, ram: 3, catapult: 3, knight: 0, snob: 0
+            }
+          }
+        ],
+        building: [
+          {
+            id: 'FULL_VILLAGE',
+            name: 'FULL VILLAGE',
+            levels: {
+              main: 30, barracks: 25, stable: 20, garage: 15, smith: 20,
+              place: 1, market: 25, wood: 30, stone: 30, iron: 30,
+              farm: 30, storage: 30, hide: 10, wall: 20
+            }
+          },
+          {
+            id: 'WAREHOUSE',
+            name: 'WAREHOUSE',
+            levels: {
+              main: 20, barracks: 1, stable: 1, garage: 1, smith: 1,
+              market: 20, wood: 30, stone: 30, iron: 30,
+              farm: 30, storage: 30, hide: 10, wall: 1
+            }
+          },
+          {
+            id: 'RESOURCES',
+            name: 'RESOURCES',
+            levels: {
+              main: 15, wood: 30, stone: 30, iron: 30,
+              farm: 30, storage: 30, hide: 5, wall: 5
+            }
+          }
+        ]
+      };
+      writeFileSync(this.templatesFile, JSON.stringify(defaultTemplates, null, 2));
     }
 
     console.log('✅ Databáze inicializována');
@@ -333,6 +400,57 @@ class DatabaseManager {
   // Zavřít databázi (pro kompatibilitu s SQLite verzí)
   close() {
     // JSON soubory nepotřebují zavírat
+  }
+
+  // ============ ŠABLONY ============
+
+  // Načíst šablony ze souboru
+  _loadTemplates() {
+    const data = readFileSync(this.templatesFile, 'utf-8');
+    return JSON.parse(data);
+  }
+
+  // Uložit šablony do souboru
+  _saveTemplates(data) {
+    writeFileSync(this.templatesFile, JSON.stringify(data, null, 2));
+  }
+
+  // Získat všechny šablony pro daný typ (recruit, research, building)
+  getTemplates(type) {
+    const templates = this._loadTemplates();
+    return templates[type] || [];
+  }
+
+  // Získat konkrétní šablonu
+  getTemplate(type, id) {
+    const templates = this._loadTemplates();
+    return templates[type]?.find(t => t.id === id);
+  }
+
+  // Uložit/aktualizovat šablonu
+  saveTemplate(type, template) {
+    const templates = this._loadTemplates();
+    if (!templates[type]) templates[type] = [];
+
+    const index = templates[type].findIndex(t => t.id === template.id);
+    if (index >= 0) {
+      templates[type][index] = template;
+    } else {
+      templates[type].push(template);
+    }
+
+    this._saveTemplates(templates);
+    return true;
+  }
+
+  // Smazat šablonu
+  deleteTemplate(type, id) {
+    const templates = this._loadTemplates();
+    if (!templates[type]) return false;
+
+    templates[type] = templates[type].filter(t => t.id !== id);
+    this._saveTemplates(templates);
+    return true;
   }
 }
 

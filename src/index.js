@@ -12,6 +12,7 @@ class Automator {
     this.isRunning = false;
     this.checkInterval = 2 * 60 * 1000; // 2 minuty
     this.accountWaitTimes = {}; // Uchovává časy pro další kontrolu každého modulu
+    this.maxConcurrentAccounts = 25; // Maximálně 25 účtů najednou
   }
 
   /**
@@ -60,12 +61,24 @@ class Automator {
       return;
     }
 
-    for (const account of accounts) {
-      try {
-        await this.processAccount(account);
-      } catch (error) {
-        console.error(`❌ Chyba při zpracování účtu ${account.username}:`, error.message);
-      }
+    console.log(`📊 Celkem účtů: ${accounts.length}`);
+    console.log(`⚡ Zpracovávám po ${this.maxConcurrentAccounts} účtech najednou`);
+
+    // Zpracuj účty po dávkách (max 25 najednou)
+    for (let i = 0; i < accounts.length; i += this.maxConcurrentAccounts) {
+      const batch = accounts.slice(i, i + this.maxConcurrentAccounts);
+      console.log(`\n🔸 Dávka ${Math.floor(i / this.maxConcurrentAccounts) + 1}/${Math.ceil(accounts.length / this.maxConcurrentAccounts)}: Zpracovávám ${batch.length} účtů`);
+
+      // Zpracuj všechny účty v dávce paralelně
+      await Promise.all(
+        batch.map(account =>
+          this.processAccount(account).catch(error => {
+            console.error(`❌ Chyba při zpracování účtu ${account.username}:`, error.message);
+          })
+        )
+      );
+
+      console.log(`✅ Dávka ${Math.floor(i / this.maxConcurrentAccounts) + 1} dokončena`);
     }
 
     console.log('\n✅ Cyklus dokončen');
