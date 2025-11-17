@@ -88,28 +88,22 @@ class Automator {
       const recruitModule = new RecruitModule(page, this.db, account.id);
       await recruitModule.collectUnitsInfo();
 
+      // Příprava pro detekci změn v útocích
+      const notificationsModule = new NotificationsModule(page, this.db, account.id);
+      const lastAttackCount = notificationsModule.getLastAttackCount(); // Starý počet PŘED detekcí
+
       // Zjistíme příchozí útoky (nový modul)
+      // Tento modul automaticky uloží last_attack_count a attacks_info do databáze
       const incomingAttacksModule = new IncomingAttacksModule(page, this.db, account.id);
       const attacksResult = await incomingAttacksModule.execute();
 
-      // Zkontrolujeme CAPTCHA
-      const notificationsModule = new NotificationsModule(page, this.db, account.id);
-
-      // Pokud byly zjištěny útoky, zkontrolujeme jestli poslat Discord notifikaci
-      if (attacksResult.success && attacksResult.count > 0) {
-        // Zkontrolujeme jestli počet útoků vzrostl (pro Discord notifikaci)
-        const lastCount = notificationsModule.getLastAttackCount();
-        if (attacksResult.count > lastCount) {
-          console.log(`⚔️  NOVÝ ÚTOK! Počet útoků vzrostl z ${lastCount} na ${attacksResult.count}`);
-          await notificationsModule.sendDiscordNotification('attack', {
-            count: attacksResult.count,
-            attacks: attacksResult.attacks
-          });
-        }
-        notificationsModule.saveLastAttackCount(attacksResult.count);
-      } else if (attacksResult.success && attacksResult.count === 0) {
-        // Žádné útoky - resetujeme počet
-        notificationsModule.saveLastAttackCount(0);
+      // Discord notifikace - pouze pokud počet útoků VZROSTL
+      if (attacksResult.success && attacksResult.count > lastAttackCount && attacksResult.count > 0) {
+        console.log(`⚔️  NOVÝ ÚTOK! Počet útoků vzrostl z ${lastAttackCount} na ${attacksResult.count}`);
+        await notificationsModule.sendDiscordNotification('attack', {
+          count: attacksResult.count,
+          attacks: attacksResult.attacks
+        });
       }
 
       const hasCaptcha = await notificationsModule.detectCaptcha();
