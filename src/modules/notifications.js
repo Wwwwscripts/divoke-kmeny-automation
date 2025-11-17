@@ -1,8 +1,8 @@
 /**
  * Modul pro Discord notifikace
+ *
+ * Note: V Node.js 18+ je fetch nativně dostupné jako globální funkce
  */
-
-import fetch from 'node-fetch';
 
 class NotificationsModule {
   constructor(page, db, accountId) {
