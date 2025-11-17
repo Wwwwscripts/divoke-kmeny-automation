@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Šablony výstavby - Divoké kmeny</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      color: #4ecca3;
+      font-size: 1.8em;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      background: #4ecca3;
+      color: #1a1a2e;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn:hover {
+      background: #3db88a;
+    }
+
+    #searchInput {
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #4ecca3;
+      background: #0f3460;
+      color: #eee;
+      flex: 1;
+      max-width: 300px;
+      font-size: 14px;
+    }
+
+    #searchInput::placeholder {
+      color: #888;
+    }
+
+    .templates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .template-card {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 20px;
+      border: 2px solid #0f3460;
+    }
+
+    .template-card:hover {
+      border-color: #4ecca3;
+    }
+
+    .template-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #0f3460;
+    }
+
+    .template-name {
+      background: #0f3460;
+      color: #4ecca3;
+      padding: 8px 15px;
+      border-radius: 5px;
+      border: 1px solid #4ecca3;
+      font-size: 1em;
+      font-weight: bold;
+      width: 200px;
+    }
+
+    .template-buildings {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .building-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #0f3460;
+      padding: 8px 12px;
+      border-radius: 5px;
+    }
+
+    .building-icon {
+      width: 30px;
+      height: 30px;
+      font-size: 20px;
+    }
+
+    .building-label {
+      flex: 1;
+      color: #4ecca3;
+      font-weight: bold;
+    }
+
+    .building-input {
+      width: 80px;
+      padding: 5px;
+      background: #1a1a2e;
+      border: 1px solid #4ecca3;
+      border-radius: 3px;
+      color: #eee;
+      text-align: right;
+    }
+
+    .btn-save {
+      background: #4ecca3;
+      color: #1a1a2e;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 0.9em;
+    }
+
+    .btn-save:hover {
+      background: #3db88a;
+    }
+
+    .btn-delete {
+      background: #ff6b6b;
+      color: white;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 0.9em;
+    }
+
+    .btn-delete:hover {
+      background: #ee5a52;
+    }
+
+    .message {
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .message-success {
+      background: rgba(78, 204, 163, 0.2);
+      color: #4ecca3;
+      border: 1px solid #4ecca3;
+    }
+
+    .message-error {
+      background: rgba(255, 107, 107, 0.2);
+      color: #ff6b6b;
+      border: 1px solid #ff6b6b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🏗️ Šablony výstavby</h1>
+    </header>
+
+    <div class="controls">
+      <button class="btn" onclick="window.location.href='/'">🏠 Dashboard</button>
+      <button class="btn" onclick="window.location.href='/accounts.html'">➕ Přidat účet</button>
+      <button class="btn" onclick="window.location.href='/units.html'">⚔️ Přehled jednotek</button>
+      <button class="btn" onclick="window.location.href='/attacks.html'" style="background: #ff6b6b;">🚨 Účty pod útokem</button>
+      <button class="btn" onclick="window.location.href='/recruit-templates.html'">📋 Šablony rekrutu</button>
+      <button class="btn" onclick="window.location.href='/research-templates.html'">🔬 Šablony výzkumu</button>
+      <button class="btn" onclick="window.location.href='/building-templates.html'">🏗️ Šablony výstavby</button>
+      <input type="text" id="searchInput" placeholder="🔍 Hledat šablonu...">
+      <button class="btn" onclick="loadTemplates()">🔄 Obnovit</button>
+    </div>
+
+    <div id="message"></div>
+
+    <div class="templates-grid" id="templatesGrid">
+      <!-- Šablony budou načteny dynamicky -->
+    </div>
+  </div>
+
+  <script>
+    const buildings = [
+      { id: 'main', name: 'Hlavní budova', icon: '🏛️' },
+      { id: 'barracks', name: 'Kasárna', icon: '⚔️' },
+      { id: 'stable', name: 'Stáj', icon: '🐴' },
+      { id: 'garage', name: 'Dílna', icon: '🔨' },
+      { id: 'church', name: 'Kostel', icon: '⛪' },
+      { id: 'church_f', name: 'První kostel', icon: '⛪' },
+      { id: 'watchtower', name: 'Rozhledna', icon: '🗼' },
+      { id: 'snob', name: 'Šlechtický dvůr', icon: '👑' },
+      { id: 'smith', name: 'Kovárna', icon: '⚒️' },
+      { id: 'place', name: 'Shromaždiště', icon: '🎪' },
+      { id: 'statue', name: 'Socha', icon: '🗿' },
+      { id: 'market', name: 'Trh', icon: '🏪' },
+      { id: 'wood', name: 'Dřevorubec', icon: '🪵' },
+      { id: 'stone', name: 'Hliněný důl', icon: '🧱' },
+      { id: 'iron', name: 'Železný důl', icon: '⛏️' },
+      { id: 'farm', name: 'Farma', icon: '🌾' },
+      { id: 'storage', name: 'Sklad', icon: '📦' },
+      { id: 'hide', name: 'Úkryt', icon: '🏠' },
+      { id: 'wall', name: 'Hradby', icon: '🏰' }
+    ];
+
+    const defaultTemplates = [
+      {
+        id: 'FULL_VILLAGE',
+        name: 'FULL VILLAGE',
+        levels: {
+          main: 30, barracks: 25, stable: 20, garage: 15, smith: 20,
+          place: 1, market: 25, wood: 30, stone: 30, iron: 30,
+          farm: 30, storage: 30, hide: 10, wall: 20
+        }
+      },
+      {
+        id: 'WAREHOUSE',
+        name: 'WAREHOUSE',
+        levels: {
+          main: 20, barracks: 1, stable: 1, garage: 1, smith: 1,
+          market: 20, wood: 30, stone: 30, iron: 30,
+          farm: 30, storage: 30, hide: 10, wall: 1
+        }
+      },
+      {
+        id: 'RESOURCES',
+        name: 'RESOURCES',
+        levels: {
+          main: 15, wood: 30, stone: 30, iron: 30,
+          farm: 30, storage: 30, hide: 5, wall: 5
+        }
+      }
+    ];
+
+    async function loadTemplates() {
+      const grid = document.getElementById('templatesGrid');
+      grid.innerHTML = '<div style="text-align: center; color: #aaa; padding: 40px;">Načítám...</div>';
+
+      try {
+        const response = await fetch('/api/templates/building');
+        let templates = await response.json();
+
+        // Pokud není odpověď úspěšná nebo jsou prázdné, použij defaultní
+        if (!templates || templates.length === 0) {
+          templates = defaultTemplates;
+        }
+
+        renderTemplates(templates);
+      } catch (error) {
+        console.error('Chyba při načítání šablon:', error);
+        renderTemplates(defaultTemplates);
+      }
+    }
+
+    function renderTemplates(templates) {
+      const grid = document.getElementById('templatesGrid');
+
+      grid.innerHTML = templates.map(template => `
+        <div class="template-card">
+          <div class="template-header">
+            <input type="text"
+                   class="template-name"
+                   value="${template.name}"
+                   id="name_${template.id}"
+                   placeholder="Název šablony">
+            <div>
+              <button class="btn-save" onclick="saveTemplate('${template.id}')">💾 Uložit</button>
+              <button class="btn-delete" onclick="deleteTemplate('${template.id}')">🗑️ Smazat</button>
+            </div>
+          </div>
+          <div class="template-buildings">
+            ${buildings.map(building => `
+              <div class="building-row">
+                <span class="building-icon">${building.icon}</span>
+                <span class="building-label">${building.name}</span>
+                <input type="number"
+                       class="building-input"
+                       value="${template.levels[building.id] || 0}"
+                       id="${template.id}_${building.id}"
+                       min="0"
+                       max="30"
+                       placeholder="Lvl">
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function saveTemplate(templateId) {
+      const name = document.getElementById(`name_${templateId}`).value;
+      const levels = {};
+
+      // Získej hodnoty úrovní
+      buildings.forEach(building => {
+        const input = document.getElementById(`${templateId}_${building.id}`);
+        if (input) {
+          levels[building.id] = parseInt(input.value) || 0;
+        }
+      });
+
+      try {
+        const response = await fetch(`/api/templates/building/${templateId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, levels })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          showMessage('✅ Šablona uložena!', 'success');
+        } else {
+          showMessage('❌ Chyba: ' + result.error, 'error');
+        }
+      } catch (error) {
+        showMessage('❌ Chyba: ' + error.message, 'error');
+      }
+    }
+
+    async function deleteTemplate(templateId) {
+      if (!confirm('Opravdu chcete smazat tuto šablonu?')) return;
+
+      try {
+        const response = await fetch(`/api/templates/building/${templateId}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          showMessage('✅ Šablona smazána!', 'success');
+          loadTemplates();
+        } else {
+          showMessage('❌ Chyba: ' + result.error, 'error');
+        }
+      } catch (error) {
+        showMessage('❌ Chyba: ' + error.message, 'error');
+      }
+    }
+
+    function showMessage(text, type) {
+      const messageDiv = document.getElementById('message');
+      messageDiv.className = `message message-${type}`;
+      messageDiv.textContent = text;
+
+      setTimeout(() => {
+        messageDiv.textContent = '';
+        messageDiv.className = '';
+      }, 5000);
+    }
+
+    loadTemplates();
+  </script>
+</body>
+</html>

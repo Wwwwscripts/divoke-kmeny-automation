@@ -42,6 +42,36 @@
       flex-wrap: wrap;
     }
 
+    #searchInput {
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #4ecca3;
+      background: #0f3460;
+      color: #eee;
+      flex: 1;
+      max-width: 300px;
+      font-size: 14px;
+    }
+
+    #searchInput::placeholder {
+      color: #888;
+    }
+
+    .btn-small {
+      background: #4ecca3;
+      color: #1a1a2e;
+      border: none;
+      padding: 5px 15px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.85em;
+      font-weight: bold;
+    }
+
+    .btn-small:hover {
+      background: #3db88a;
+    }
+
     .btn {
       background: #4ecca3;
       color: #1a1a2e;
@@ -124,7 +154,14 @@
     </header>
 
     <div class="controls">
-      <a href="/" class="btn">← Dashboard</a>
+      <button class="btn" onclick="window.location.href='/'">🏠 Dashboard</button>
+      <button class="btn" onclick="window.location.href='/accounts.html'">➕ Přidat účet</button>
+      <button class="btn" onclick="window.location.href='/units.html'">⚔️ Přehled jednotek</button>
+      <button class="btn" onclick="window.location.href='/attacks.html'" style="background: #ff6b6b;">🚨 Účty pod útokem</button>
+      <button class="btn" onclick="window.location.href='/recruit-templates.html'">📋 Šablony rekrutu</button>
+      <button class="btn" onclick="window.location.href='/research-templates.html'">🔬 Šablony výzkumu</button>
+      <button class="btn" onclick="window.location.href='/building-templates.html'">🏗️ Šablony výstavby</button>
+      <input type="text" id="searchInput" placeholder="🔍 Hledat účet..." oninput="filterAccounts()">
       <button class="btn" onclick="loadUnits()">🔄 Obnovit</button>
     </div>
 
@@ -132,81 +169,116 @@
       <thead>
         <tr>
           <th>Účet</th>
-          <th>Server</th>
+          <th>Svět</th>
           <th>Souřadnice</th>
           <th>Kontinent</th>
           <th>Vlastní jednotky</th>
+          <th>Akce</th>
         </tr>
       </thead>
       <tbody id="unitsList">
-        <tr><td colspan="5" class="loading">Načítám...</td></tr>
+        <tr><td colspan="6" class="loading">Načítám...</td></tr>
       </tbody>
     </table>
   </div>
 
   <script>
+    let allAccounts = [];
+
     async function loadUnits() {
       const tbody = document.getElementById('unitsList');
-      tbody.innerHTML = '<tr><td colspan="5" class="loading">Načítám...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="loading">Načítám...</td></tr>';
 
       try {
         const response = await fetch('/api/accounts');
         const accounts = await response.json();
+        allAccounts = accounts;
 
         if (accounts.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#aaa;">Žádné účty</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#aaa;">Žádné účty</td></tr>';
           return;
         }
 
-        tbody.innerHTML = accounts.map(acc => {
-          const server = !acc.world ? 'CS' :
-                        acc.world.toLowerCase().startsWith('sk') ? 'SK' : 'CS';
-          const serverLabel = server === 'SK' ? '🇸🇰 SK' : '🇨🇿 CS';
-
-          const coord = (acc.coord_x && acc.coord_y) ? `${acc.coord_x}|${acc.coord_y}` : '-';
-          const continent = acc.continent || '-';
-
-          // Parsování jednotek
-          let unitsDisplay = '-';
-          if (acc.units_info) {
-            try {
-              const units = typeof acc.units_info === 'string' ? JSON.parse(acc.units_info) : acc.units_info;
-
-              if (units.own) {
-                const ownUnits = [];
-                if (units.own.spear) ownUnits.push(`🛡️ ${units.own.spear}`);
-                if (units.own.sword) ownUnits.push(`⚔️ ${units.own.sword}`);
-                if (units.own.axe) ownUnits.push(`🪓 ${units.own.axe}`);
-                if (units.own.archer) ownUnits.push(`🏹 ${units.own.archer}`);
-                if (units.own.spy) ownUnits.push(`👁️ ${units.own.spy}`);
-                if (units.own.light) ownUnits.push(`🐎 ${units.own.light}`);
-                if (units.own.marcher) ownUnits.push(`🏇 ${units.own.marcher}`);
-                if (units.own.heavy) ownUnits.push(`🐴 ${units.own.heavy}`);
-                if (units.own.ram) ownUnits.push(`🐏 ${units.own.ram}`);
-                if (units.own.catapult) ownUnits.push(`⚙️ ${units.own.catapult}`);
-                if (units.own.knight) ownUnits.push(`🤴 ${units.own.knight}`);
-                if (units.own.snob) ownUnits.push(`👑 ${units.own.snob}`);
-
-                unitsDisplay = ownUnits.map(u => `<span class="unit-count">${u}</span>`).join(' ');
-              }
-            } catch (e) {
-              unitsDisplay = '❌ Chyba parsování';
-            }
-          }
-
-          return `
-            <tr>
-              <td><strong>${acc.username}</strong></td>
-              <td>${serverLabel}</td>
-              <td class="coord">${coord}</td>
-              <td>${continent}</td>
-              <td>${unitsDisplay}</td>
-            </tr>
-          `;
-        }).join('');
+        renderUnits(accounts);
 
       } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#ff6b6b;">❌ Chyba: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#ff6b6b;">❌ Chyba: ${error.message}</td></tr>`;
+      }
+    }
+
+    function renderUnits(accounts) {
+      const tbody = document.getElementById('unitsList');
+
+      tbody.innerHTML = accounts.map(acc => {
+        const coord = (acc.coord_x && acc.coord_y) ? `${acc.coord_x}|${acc.coord_y}` : '-';
+        const continent = acc.continent || '-';
+
+        // Parsování jednotek
+        let unitsDisplay = '-';
+        if (acc.units_info) {
+          try {
+            const units = typeof acc.units_info === 'string' ? JSON.parse(acc.units_info) : acc.units_info;
+
+            if (units.own) {
+              const ownUnits = [];
+              if (units.own.spear) ownUnits.push(`🛡️ ${units.own.spear}`);
+              if (units.own.sword) ownUnits.push(`⚔️ ${units.own.sword}`);
+              if (units.own.axe) ownUnits.push(`🪓 ${units.own.axe}`);
+              if (units.own.archer) ownUnits.push(`🏹 ${units.own.archer}`);
+              if (units.own.spy) ownUnits.push(`👁️ ${units.own.spy}`);
+              if (units.own.light) ownUnits.push(`🐎 ${units.own.light}`);
+              if (units.own.marcher) ownUnits.push(`🏇 ${units.own.marcher}`);
+              if (units.own.heavy) ownUnits.push(`🐴 ${units.own.heavy}`);
+              if (units.own.ram) ownUnits.push(`🐏 ${units.own.ram}`);
+              if (units.own.catapult) ownUnits.push(`⚙️ ${units.own.catapult}`);
+              if (units.own.knight) ownUnits.push(`🤴 ${units.own.knight}`);
+              if (units.own.snob) ownUnits.push(`👑 ${units.own.snob}`);
+
+              unitsDisplay = ownUnits.map(u => `<span class="unit-count">${u}</span>`).join(' ');
+            }
+          } catch (e) {
+            unitsDisplay = '❌ Chyba parsování';
+          }
+        }
+
+        return `
+          <tr>
+            <td><strong>${acc.username}</strong></td>
+            <td>${acc.world || '-'}</td>
+            <td class="coord">${coord}</td>
+            <td>${continent}</td>
+            <td>${unitsDisplay}</td>
+            <td>
+              <button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterAccounts() {
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allAccounts.filter(acc =>
+        acc.username.toLowerCase().includes(searchTerm) ||
+        (acc.world && acc.world.toLowerCase().includes(searchTerm))
+      );
+      renderUnits(filtered);
+    }
+
+    async function openBrowser(accountId) {
+      try {
+        const response = await fetch(`/api/accounts/${accountId}/open-browser`, {
+          method: 'POST'
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          alert('✅ Prohlížeč otevřen!');
+        } else {
+          alert('❌ Chyba: ' + result.error);
+        }
+      } catch (error) {
+        alert('❌ Chyba: ' + error.message);
       }
     }
 

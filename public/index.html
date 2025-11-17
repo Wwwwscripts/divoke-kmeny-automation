@@ -161,11 +161,15 @@
         </header>
 
         <div class="controls">
-            <button class="btn" onclick="loadAccounts()">🔄 Obnovit</button>
+            <button class="btn" onclick="window.location.href='/'">🏠 Dashboard</button>
             <button class="btn" onclick="window.location.href='/accounts.html'">➕ Přidat účet</button>
             <button class="btn" onclick="window.location.href='/units.html'">⚔️ Přehled jednotek</button>
             <button class="btn" onclick="window.location.href='/attacks.html'" style="background: #ff6b6b;">🚨 Účty pod útokem</button>
+            <button class="btn" onclick="window.location.href='/recruit-templates.html'">📋 Šablony rekrutu</button>
+            <button class="btn" onclick="window.location.href='/research-templates.html'">🔬 Šablony výzkumu</button>
+            <button class="btn" onclick="window.location.href='/building-templates.html'">🏗️ Šablony výstavby</button>
             <input type="text" id="searchInput" placeholder="🔍 Hledat účet..." oninput="filterAccounts()">
+            <button class="btn" onclick="loadAccounts()">🔄 Obnovit</button>
             <button class="btn" onclick="sortByPoints()">📊 Seřadit podle bodů</button>
         </div>
 
