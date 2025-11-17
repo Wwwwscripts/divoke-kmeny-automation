@@ -196,6 +196,28 @@
     <script>
         let allAccounts = [];
         let sortAscending = false;
+        let recruitTemplates = [];
+        let researchTemplates = [];
+
+        // Načíst šablony z databáze
+        async function loadTemplates() {
+            try {
+                const [recruitRes, researchRes] = await Promise.all([
+                    fetch('/api/templates/recruit'),
+                    fetch('/api/templates/research')
+                ]);
+
+                recruitTemplates = await recruitRes.json();
+                researchTemplates = await researchRes.json();
+
+                console.log('✅ Šablony načteny:', { recruitTemplates, researchTemplates });
+            } catch (error) {
+                console.error('❌ Chyba při načítání šablon:', error);
+                // Fallback na prázdné pole
+                recruitTemplates = [];
+                researchTemplates = [];
+            }
+        }
 
         async function loadAccounts() {
             const tbody = document.getElementById('accountsList');
@@ -236,13 +258,12 @@
                                onchange="toggleRecruit(${acc.id}, this.checked)">
                     </td>
                     <td>
-                        <select id="recruit_template_${acc.id}" 
+                        <select id="recruit_template_${acc.id}"
                                 ${!acc.recruit_enabled ? 'disabled' : ''}
                                 onchange="updateRecruitTemplate(${acc.id}, this.value)">
-                            <option value="FARM" ${acc.recruit_template === 'FARM' ? 'selected' : ''}>FARM</option>
-                            <option value="DEF" ${acc.recruit_template === 'DEF' ? 'selected' : ''}>DEF</option>
-                            <option value="OFF" ${acc.recruit_template === 'OFF' ? 'selected' : ''}>OFF</option>
-                            <option value="MULTY" ${acc.recruit_template === 'MULTY' ? 'selected' : ''}>MULTY</option>
+                            ${recruitTemplates.map(t => `
+                                <option value="${t.id}" ${acc.recruit_template === t.id ? 'selected' : ''}>${t.name}</option>
+                            `).join('')}
                         </select>
                     </td>
                     <td>
@@ -252,13 +273,12 @@
                                onchange="toggleResearch(${acc.id}, this.checked)">
                     </td>
                     <td>
-                        <select id="research_template_${acc.id}" 
+                        <select id="research_template_${acc.id}"
                                 ${!acc.research_enabled ? 'disabled' : ''}
                                 onchange="updateResearchTemplate(${acc.id}, this.value)">
-                            <option value="FARM" ${acc.research_template === 'FARM' ? 'selected' : ''}>FARM</option>
-                            <option value="DEF" ${acc.research_template === 'DEF' ? 'selected' : ''}>DEF</option>
-                            <option value="OFF" ${acc.research_template === 'OFF' ? 'selected' : ''}>OFF</option>
-                            <option value="FULL" ${acc.research_template === 'FULL' ? 'selected' : ''}>FULL</option>
+                            ${researchTemplates.map(t => `
+                                <option value="${t.id}" ${acc.research_template === t.id ? 'selected' : ''}>${t.name}</option>
+                            `).join('')}
                         </select>
                     </td>
                     <td>
@@ -432,8 +452,12 @@
             }
         }
 
-        loadAccounts();
-        setInterval(loadAccounts, 30000);
+        // Načíst šablony a pak účty při startu
+        (async () => {
+            await loadTemplates();
+            loadAccounts();
+            setInterval(loadAccounts, 30000);
+        })();
     </script>
 </body>
 </html>
