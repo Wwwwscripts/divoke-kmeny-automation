@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Divoké kmeny - Control Panel</title>
+    <title>Divoké kmeny - Dashboard</title>
     <style>
         * {
             margin: 0;
@@ -12,119 +12,323 @@
         }
 
         body {
-            font-family: Arial, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 0;
+            min-height: 100vh;
         }
 
         .container {
-            max-width: 1600px;
+            max-width: 1800px;
             margin: 0 auto;
-        }
-
-        header {
-            background: #16213e;
-            border-radius: 10px;
             padding: 20px;
+        }
+
+        /* Header s vyhledáváním */
+        .header {
+            background: linear-gradient(135deg, #161b22 0%, #1c2128 100%);
+            border-bottom: 1px solid #30363d;
+            padding: 15px 0;
             margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
-        h1 {
-            color: #4ecca3;
-            font-size: 1.8em;
+        .header-content {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
         }
 
-        .controls {
+        .logo {
+            font-size: 1.5em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #58a6ff, #79c0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            white-space: nowrap;
+        }
+
+        /* Velké vyhledávací pole */
+        .search-container {
+            flex: 1;
+            max-width: 600px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 45px 12px 45px;
+            background: #0d1117;
+            border: 2px solid #30363d;
+            border-radius: 8px;
+            color: #c9d1d9;
+            font-size: 15px;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 18px;
+            color: #8b949e;
+        }
+
+        .search-clear {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 18px;
+            display: none;
+        }
+
+        .search-input:not(:placeholder-shown) ~ .search-clear {
+            display: block;
+        }
+
+        /* Navigace */
+        .nav {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
+            align-items: center;
         }
 
-        .btn {
-            background: #4ecca3;
-            color: #1a1a2e;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
+        .nav-btn {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 8px 16px;
+            border-radius: 6px;
             cursor: pointer;
-            font-weight: bold;
-            transition: background 0.3s;
-        }
-
-        .btn:hover {
-            background: #3db88a;
-        }
-
-        #searchInput {
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #4ecca3;
-            background: #0f3460;
-            color: #eee;
-            flex: 1;
-            max-width: 300px;
             font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
         }
 
-        #searchInput::placeholder {
-            color: #888;
+        .nav-btn:hover {
+            background: #30363d;
+            border-color: #8b949e;
+        }
+
+        .nav-btn.primary {
+            background: #238636;
+            border-color: #238636;
+            color: white;
+        }
+
+        .nav-btn.primary:hover {
+            background: #2ea043;
+        }
+
+        .nav-btn.danger {
+            background: #da3633;
+            border-color: #da3633;
+            color: white;
+        }
+
+        .nav-btn.danger:hover {
+            background: #f85149;
+        }
+
+        /* Dropdown menu */
+        .dropdown {
+            position: relative;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 5px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            min-width: 200px;
+            z-index: 1000;
+        }
+
+        .dropdown.active .dropdown-content {
+            display: block;
+        }
+
+        .dropdown-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            color: #c9d1d9;
+            transition: background 0.2s;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background: #21262d;
+        }
+
+        /* Tabulka */
+        .table-container {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            overflow: hidden;
         }
 
         table {
             width: 100%;
-            background: #16213e;
-            border-radius: 10px;
-            overflow: hidden;
             border-collapse: collapse;
         }
 
         th {
-            background: #0f3460;
-            color: #4ecca3;
-            padding: 15px;
+            background: #0d1117;
+            color: #8b949e;
+            padding: 12px 16px;
             text-align: left;
-            font-weight: bold;
-            font-size: 0.9em;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #30363d;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        th:hover {
+            background: #161b22;
+            color: #58a6ff;
+        }
+
+        th.sortable::after {
+            content: ' ⇅';
+            opacity: 0.3;
+        }
+
+        th.sorted-asc::after {
+            content: ' ↑';
+            opacity: 1;
+            color: #58a6ff;
+        }
+
+        th.sorted-desc::after {
+            content: ' ↓';
+            opacity: 1;
+            color: #58a6ff;
         }
 
         td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #0f3460;
-            font-size: 0.85em;
+            padding: 12px 16px;
+            border-bottom: 1px solid #21262d;
+            font-size: 14px;
         }
 
         tr:hover {
-            background: #1a2942;
+            background: #0d1117;
         }
 
-        .status-ok {
-            color: #4ecca3;
+        tr:last-child td {
+            border-bottom: none;
         }
 
-        .status-warning {
-            color: #ffd700;
+        .account-name {
+            font-weight: 600;
+            color: #58a6ff;
         }
 
-        .status-error {
-            color: #ff6b6b;
+        .world-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #1f6feb;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
         }
 
-        input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
+        .resource-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-right: 8px;
+            font-size: 13px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
             cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #30363d;
+            transition: 0.3s;
+            border-radius: 20px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #238636;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
         }
 
         select {
-            padding: 5px 10px;
-            background: #0f3460;
-            color: #4ecca3;
-            border: 1px solid #4ecca3;
-            border-radius: 3px;
+            padding: 6px 10px;
+            background: #0d1117;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 0.85em;
+            font-size: 13px;
+            min-width: 120px;
         }
 
         select:disabled {
@@ -133,71 +337,170 @@
         }
 
         .btn-small {
-            background: #4ecca3;
-            color: #1a1a2e;
+            background: #238636;
+            color: white;
             border: none;
-            padding: 5px 15px;
-            border-radius: 3px;
+            padding: 6px 12px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 0.85em;
-            font-weight: bold;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.2s;
         }
 
         .btn-small:hover {
-            background: #3db88a;
+            background: #2ea043;
         }
 
         .loading {
             text-align: center;
-            padding: 50px;
-            color: #aaa;
+            padding: 60px;
+            color: #8b949e;
+            font-size: 15px;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            padding: 15px 20px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #58a6ff;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🎮Control Panel</h1>
-        </header>
+    <!-- Header s vyhledáváním -->
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">⚔️ Divoké kmeny</div>
 
-        <div class="controls">
-            <button class="btn" onclick="window.location.href='/'">🏠 Dashboard</button>
-            <button class="btn" onclick="window.location.href='/accounts.html'">➕ Přidat účet</button>
-            <button class="btn" onclick="window.location.href='/units.html'">⚔️ Přehled jednotek</button>
-            <button class="btn" onclick="window.location.href='/attacks.html'" style="background: #ff6b6b;">🚨 Účty pod útokem</button>
-            <button class="btn" onclick="window.location.href='/training-templates.html'">📋 Šablony tréninku</button>
-            <input type="text" id="searchInput" placeholder="🔍 Hledat účet..." oninput="filterAccounts()">
-            <button class="btn" onclick="loadAccounts()">🔄 Obnovit</button>
-            <button class="btn" onclick="sortByPoints()">📊 Seřadit podle bodů</button>
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text"
+                       id="searchInput"
+                       class="search-input"
+                       placeholder="Hledat účet podle jména, světa..."
+                       oninput="filterAccounts()">
+                <button class="search-clear" onclick="clearSearch()">✕</button>
+            </div>
+
+            <div class="nav">
+                <button class="nav-btn danger" onclick="window.location.href='/attacks.html'">
+                    🚨 Útoky
+                </button>
+                <button class="nav-btn" onclick="window.location.href='/units.html'">
+                    ⚔️ Jednotky
+                </button>
+                <button class="nav-btn" onclick="loadAccounts()">
+                    🔄
+                </button>
+
+                <div class="dropdown" id="moreMenu">
+                    <button class="nav-btn" onclick="toggleDropdown()">⋯</button>
+                    <div class="dropdown-content">
+                        <div class="dropdown-item" onclick="window.location.href='/accounts.html'">
+                            ➕ Přidat účet
+                        </div>
+                        <div class="dropdown-item" onclick="window.location.href='/training-templates.html'">
+                            📋 Šablony tréninku
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Statistiky -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="stat-label">Celkem účtů</div>
+                <div class="stat-value" id="totalAccounts">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Rekrutování zapnuto</div>
+                <div class="stat-value" id="recruitEnabled">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Výzkum zapnut</div>
+                <div class="stat-value" id="researchEnabled">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Výstavba zapnuta</div>
+                <div class="stat-value" id="buildingEnabled">0</div>
+            </div>
         </div>
 
-        <table id="accountsTable">
-            <thead>
-                <tr>
-                    <th>Účet</th>
-                    <th>Svět</th>
-                    <th>Body</th>
-                    <th>Suroviny</th>
-                    <th>Rekrut</th>
-                    <th>Šablona</th>
-                    <th>Výzkum</th>
-                    <th>Šablona</th>
-                    <th>Výstavba</th>
-                    <th>Šablona</th>
-                    <th>Akce</th>
-                </tr>
-            </thead>
-            <tbody id="accountsList">
-                <tr><td colspan="11" class="loading">Načítám...</td></tr>
-            </tbody>
-        </table>
+        <!-- Tabulka účtů -->
+        <div class="table-container">
+            <table id="accountsTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" onclick="sortBy('username')">Účet</th>
+                        <th class="sortable" onclick="sortBy('world')">Svět</th>
+                        <th class="sortable" onclick="sortBy('points')">Body</th>
+                        <th>Suroviny</th>
+                        <th>Rekrut</th>
+                        <th class="sortable" onclick="sortBy('recruit_template')">Šablona R</th>
+                        <th>Výzkum</th>
+                        <th class="sortable" onclick="sortBy('research_template')">Šablona V</th>
+                        <th>Výstavba</th>
+                        <th class="sortable" onclick="sortBy('building_template')">Šablona B</th>
+                        <th>Akce</th>
+                    </tr>
+                </thead>
+                <tbody id="accountsList">
+                    <tr><td colspan="11" class="loading">⏳ Načítám účty...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
         let allAccounts = [];
-        let sortAscending = false;
+        let currentSort = { column: null, ascending: true };
         let recruitTemplates = [];
         let researchTemplates = [];
+
+        // Dropdown menu
+        function toggleDropdown() {
+            document.getElementById('moreMenu').classList.toggle('active');
+        }
+
+        // Zavřít dropdown při kliku mimo
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('moreMenu');
+            if (!dropdown.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+
+        // Vyčistit vyhledávání
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            filterAccounts();
+        }
 
         // Načíst šablony z databáze
         async function loadTemplates() {
@@ -209,57 +512,66 @@
 
                 recruitTemplates = await recruitRes.json();
                 researchTemplates = await researchRes.json();
-
-                console.log('✅ Šablony načteny:', { recruitTemplates, researchTemplates });
             } catch (error) {
                 console.error('❌ Chyba při načítání šablon:', error);
-                // Fallback na prázdné pole
                 recruitTemplates = [];
                 researchTemplates = [];
             }
         }
 
+        // Načíst účty
         async function loadAccounts() {
             const tbody = document.getElementById('accountsList');
-            tbody.innerHTML = '<tr><td colspan="11" class="loading">Načítám...</td></tr>';
-            
+            tbody.innerHTML = '<tr><td colspan="11" class="loading">⏳ Načítám účty...</td></tr>';
+
             try {
                 const response = await fetch('/api/accounts');
                 allAccounts = await response.json();
 
                 if (allAccounts.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:#aaa;">Žádné účty</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="11" class="loading">Žádné účty k zobrazení</td></tr>';
                     return;
                 }
 
+                updateStats();
                 renderAccounts(allAccounts);
 
             } catch (error) {
-                tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:#ff6b6b;">❌ Chyba: ${error.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="11" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
             }
         }
 
+        // Aktualizovat statistiky
+        function updateStats() {
+            document.getElementById('totalAccounts').textContent = allAccounts.length;
+            document.getElementById('recruitEnabled').textContent = allAccounts.filter(a => a.recruit_enabled).length;
+            document.getElementById('researchEnabled').textContent = allAccounts.filter(a => a.research_enabled).length;
+            document.getElementById('buildingEnabled').textContent = allAccounts.filter(a => a.building_enabled).length;
+        }
+
+        // Vykreslit účty
         function renderAccounts(accounts) {
             const tbody = document.getElementById('accountsList');
             tbody.innerHTML = accounts.map(acc => `
                 <tr>
-                    <td><strong>${acc.username}</strong></td>
-                    <td>${acc.world || '-'}</td>
+                    <td><span class="account-name">${acc.username}</span></td>
+                    <td><span class="world-badge">${acc.world || '-'}</span></td>
                     <td>${(acc.points || 0).toLocaleString('cs-CZ')}</td>
-                    <td>
-                        <img src="/images/holz.png" alt="Dřevo" style="width:18px; vertical-align:middle;"> ${(acc.wood || 0).toLocaleString('cs-CZ')} | 
-                        <img src="/images/lehm.png" alt="Hlína" style="width:18px; vertical-align:middle;"> ${(acc.clay || 0).toLocaleString('cs-CZ')} | 
-                        <img src="/images/eisen.png" alt="Železo" style="width:18px; vertical-align:middle;"> ${(acc.iron || 0).toLocaleString('cs-CZ')}
+                    <td style="font-size: 12px;">
+                        <span class="resource-item">🪵 ${(acc.wood || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
+                        <span class="resource-item">🧱 ${(acc.clay || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
+                        <span class="resource-item">⚙️ ${(acc.iron || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
                     </td>
                     <td>
-                        <input type="checkbox" 
-                               id="recruit_${acc.id}" 
-                               ${acc.recruit_enabled ? 'checked' : ''}
-                               onchange="toggleRecruit(${acc.id}, this.checked)">
+                        <label class="toggle-switch">
+                            <input type="checkbox"
+                                   ${acc.recruit_enabled ? 'checked' : ''}
+                                   onchange="toggleRecruit(${acc.id}, this.checked)">
+                            <span class="slider"></span>
+                        </label>
                     </td>
                     <td>
-                        <select id="recruit_template_${acc.id}"
-                                ${!acc.recruit_enabled ? 'disabled' : ''}
+                        <select ${!acc.recruit_enabled ? 'disabled' : ''}
                                 onchange="updateRecruitTemplate(${acc.id}, this.value)">
                             ${recruitTemplates.map(t => `
                                 <option value="${t.id}" ${acc.recruit_template === t.id ? 'selected' : ''}>${t.name}</option>
@@ -267,14 +579,15 @@
                         </select>
                     </td>
                     <td>
-                        <input type="checkbox" 
-                               id="research_${acc.id}" 
-                               ${acc.research_enabled ? 'checked' : ''}
-                               onchange="toggleResearch(${acc.id}, this.checked)">
+                        <label class="toggle-switch">
+                            <input type="checkbox"
+                                   ${acc.research_enabled ? 'checked' : ''}
+                                   onchange="toggleResearch(${acc.id}, this.checked)">
+                            <span class="slider"></span>
+                        </label>
                     </td>
                     <td>
-                        <select id="research_template_${acc.id}"
-                                ${!acc.research_enabled ? 'disabled' : ''}
+                        <select ${!acc.research_enabled ? 'disabled' : ''}
                                 onchange="updateResearchTemplate(${acc.id}, this.value)">
                             ${researchTemplates.map(t => `
                                 <option value="${t.id}" ${acc.research_template === t.id ? 'selected' : ''}>${t.name}</option>
@@ -282,19 +595,20 @@
                         </select>
                     </td>
                     <td>
-                        <input type="checkbox" 
-                               id="building_${acc.id}" 
-                               ${acc.building_enabled ? 'checked' : ''}
-                               onchange="toggleBuilding(${acc.id}, this.checked)">
+                        <label class="toggle-switch">
+                            <input type="checkbox"
+                                   ${acc.building_enabled ? 'checked' : ''}
+                                   onchange="toggleBuilding(${acc.id}, this.checked)">
+                            <span class="slider"></span>
+                        </label>
                     </td>
                     <td>
-                        <select id="building_template_${acc.id}" 
-                                ${!acc.building_enabled ? 'disabled' : ''}
+                        <select ${!acc.building_enabled ? 'disabled' : ''}
                                 onchange="updateBuildingTemplate(${acc.id}, this.value)">
-                            <option value="FULL_VILLAGE" ${acc.building_template === 'FULL_VILLAGE' ? 'selected' : ''}>FULL VILLAGE</option>
-                            <option value="WAREHOUSE" ${acc.building_template === 'WAREHOUSE' ? 'selected' : ''}>WAREHOUSE</option>
-                            <option value="RESOURCES" ${acc.building_template === 'RESOURCES' ? 'selected' : ''}>RESOURCES</option>
-                            <option value="NOBLE" ${acc.building_template === 'NOBLE' ? 'selected' : ''}>NOBLE</option>
+                            <option value="FULL_VILLAGE" ${acc.building_template === 'FULL_VILLAGE' ? 'selected' : ''}>Full Village</option>
+                            <option value="WAREHOUSE" ${acc.building_template === 'WAREHOUSE' ? 'selected' : ''}>Warehouse</option>
+                            <option value="RESOURCES" ${acc.building_template === 'RESOURCES' ? 'selected' : ''}>Resources</option>
+                            <option value="NOBLE" ${acc.building_template === 'NOBLE' ? 'selected' : ''}>Noble</option>
                         </select>
                     </td>
                     <td>
@@ -304,37 +618,71 @@
             `).join('');
         }
 
+        // Filtrování účtů
         function filterAccounts() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allAccounts.filter(acc => 
-                acc.username.toLowerCase().includes(searchTerm)
+            const filtered = allAccounts.filter(acc =>
+                acc.username.toLowerCase().includes(searchTerm) ||
+                (acc.world && acc.world.toLowerCase().includes(searchTerm))
             );
             renderAccounts(filtered);
         }
 
-        function sortByPoints() {
-            sortAscending = !sortAscending;
-            const sorted = [...allAccounts].sort((a, b) => {
-                return sortAscending ? 
-                    (a.points || 0) - (b.points || 0) : 
-                    (b.points || 0) - (a.points || 0);
+        // Řazení
+        function sortBy(column) {
+            // Toggle direction pokud řadíme stejný sloupec
+            if (currentSort.column === column) {
+                currentSort.ascending = !currentSort.ascending;
+            } else {
+                currentSort.column = column;
+                currentSort.ascending = true;
+            }
+
+            // Aktualizovat vizuální indikátory
+            document.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sorted-asc', 'sorted-desc');
             });
+
+            const th = event.target;
+            th.classList.add(currentSort.ascending ? 'sorted-asc' : 'sorted-desc');
+
+            // Seřadit
+            const sorted = [...allAccounts].sort((a, b) => {
+                let aVal = a[column] || '';
+                let bVal = b[column] || '';
+
+                // Pro čísla
+                if (column === 'points') {
+                    aVal = a[column] || 0;
+                    bVal = b[column] || 0;
+                }
+
+                if (currentSort.ascending) {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+
             renderAccounts(sorted);
         }
 
+        // API volání
         async function toggleRecruit(accountId, enabled) {
             try {
-                const template = document.getElementById(`recruit_template_${accountId}`).value;
                 const response = await fetch(`/api/accounts/${accountId}/recruit`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled, template })
+                    body: JSON.stringify({
+                        enabled,
+                        template: allAccounts.find(a => a.id === accountId).recruit_template
+                    })
                 });
-                
-                const result = await response.json();
-                if (result.success) {
-                    document.getElementById(`recruit_template_${accountId}`).disabled = !enabled;
-                    console.log('✅ Rekrut aktualizován');
+
+                if ((await response.json()).success) {
+                    const acc = allAccounts.find(a => a.id === accountId);
+                    acc.recruit_enabled = enabled;
+                    updateStats();
                 }
             } catch (error) {
                 console.error('❌ Chyba:', error);
@@ -343,55 +691,57 @@
 
         async function updateRecruitTemplate(accountId, template) {
             try {
-                const enabled = document.getElementById(`recruit_${accountId}`).checked;
                 const response = await fetch(`/api/accounts/${accountId}/recruit`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled, template })
+                    body: JSON.stringify({
+                        enabled: allAccounts.find(a => a.id === accountId).recruit_enabled,
+                        template
+                    })
                 });
-                
-                const result = await response.json();
-                if (result.success) {
-                    console.log('✅ Šablona rekrutu aktualizována');
+
+                if ((await response.json()).success) {
+                    allAccounts.find(a => a.id === accountId).recruit_template = template;
                 }
             } catch (error) {
                 console.error('❌ Chyba:', error);
             }
         }
 
-        // 🆕 RESEARCH - Toggle výzkumu
         async function toggleResearch(accountId, enabled) {
             try {
-                const template = document.getElementById(`research_template_${accountId}`).value;
                 const response = await fetch(`/api/accounts/${accountId}/research`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled, template })
+                    body: JSON.stringify({
+                        enabled,
+                        template: allAccounts.find(a => a.id === accountId).research_template
+                    })
                 });
-                
-                const result = await response.json();
-                if (result.success) {
-                    document.getElementById(`research_template_${accountId}`).disabled = !enabled;
-                    console.log('✅ Výzkum aktualizován');
+
+                if ((await response.json()).success) {
+                    const acc = allAccounts.find(a => a.id === accountId);
+                    acc.research_enabled = enabled;
+                    updateStats();
                 }
             } catch (error) {
                 console.error('❌ Chyba:', error);
             }
         }
 
-        // 🆕 RESEARCH - Změna šablony výzkumu
         async function updateResearchTemplate(accountId, template) {
             try {
-                const enabled = document.getElementById(`research_${accountId}`).checked;
                 const response = await fetch(`/api/accounts/${accountId}/research`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled, template })
+                    body: JSON.stringify({
+                        enabled: allAccounts.find(a => a.id === accountId).research_enabled,
+                        template
+                    })
                 });
-                
-                const result = await response.json();
-                if (result.success) {
-                    console.log('✅ Šablona výzkumu aktualizována');
+
+                if ((await response.json()).success) {
+                    allAccounts.find(a => a.id === accountId).research_template = template;
                 }
             } catch (error) {
                 console.error('❌ Chyba:', error);
@@ -400,17 +750,19 @@
 
         async function toggleBuilding(accountId, enabled) {
             try {
-                const template = document.getElementById(`building_template_${accountId}`).value;
                 const response = await fetch(`/api/accounts/${accountId}/building`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled, template })
+                    body: JSON.stringify({
+                        enabled,
+                        template: allAccounts.find(a => a.id === accountId).building_template
+                    })
                 });
-                
-                const result = await response.json();
-                if (result.success) {
-                    document.getElementById(`building_template_${accountId}`).disabled = !enabled;
-                    console.log('✅ Výstavba aktualizována');
+
+                if ((await response.json()).success) {
+                    const acc = allAccounts.find(a => a.id === accountId);
+                    acc.building_enabled = enabled;
+                    updateStats();
                 }
             } catch (error) {
                 console.error('❌ Chyba:', error);
@@ -419,16 +771,17 @@
 
         async function updateBuildingTemplate(accountId, template) {
             try {
-                const enabled = document.getElementById(`building_${accountId}`).checked;
                 const response = await fetch(`/api/accounts/${accountId}/building`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled, template })
+                    body: JSON.stringify({
+                        enabled: allAccounts.find(a => a.id === accountId).building_enabled,
+                        template
+                    })
                 });
-                
-                const result = await response.json();
-                if (result.success) {
-                    console.log('✅ Šablona výstavby aktualizována');
+
+                if ((await response.json()).success) {
+                    allAccounts.find(a => a.id === accountId).building_template = template;
                 }
             } catch (error) {
                 console.error('❌ Chyba:', error);
@@ -440,11 +793,9 @@
                 const response = await fetch(`/api/accounts/${accountId}/open-browser`, {
                     method: 'POST'
                 });
-                
+
                 const result = await response.json();
-                if (result.success) {
-                    alert('✅ Prohlížeč otevřen!');
-                } else {
+                if (!result.success) {
                     alert('❌ Chyba: ' + result.error);
                 }
             } catch (error) {
@@ -452,11 +803,11 @@
             }
         }
 
-        // Načíst šablony a pak účty při startu
+        // Načíst při startu - update každé 2 minuty
         (async () => {
             await loadTemplates();
-            loadAccounts();
-            setInterval(loadAccounts, 30000);
+            await loadAccounts();
+            setInterval(loadAccounts, 120000); // 2 minuty
         })();
     </script>
 </body>
