@@ -8,46 +8,6 @@ class ResearchModule {
     this.page = page;
     this.db = db;
     this.accountId = accountId;
-    
-    // Předpřipravené šablony
-    this.templates = {
-      FARM: {
-        name: 'Farm',
-        description: 'Optimalizováno pro farmění',
-        levels: {
-          spear: 1, sword: 1, axe: 0, archer: 1,
-          spy: 1, light: 0, marcher: 0, heavy: 0,
-          ram: 0, catapult: 1
-        }
-      },
-      DEF: {
-        name: 'Obrana',
-        description: 'Obranná vesnice',
-        levels: {
-          spear: 3, sword: 3, axe: 0, archer: 0,
-          spy: 1, light: 0, marcher: 0, heavy: 0,
-          ram: 0, catapult: 0
-        }
-      },
-      OFF: {
-        name: 'Útok',
-        description: 'Útočná vesnice',
-        levels: {
-          spear: 0, sword: 0, axe: 3, archer: 0,
-          spy: 0, light: 3, marcher: 0, heavy: 0,
-          ram: 1, catapult: 1
-        }
-      },
-      FULL: {
-        name: 'Plný výzkum',
-        description: 'Vše na maximum',
-        levels: {
-          spear: 3, sword: 3, axe: 3, archer: 3,
-          spy: 1, light: 3, marcher: 3, heavy: 3,
-          ram: 1, catapult: 1
-        }
-      }
-    };
 
     // Aktuální šablona
     this.activeTemplate = this.loadTemplate();
@@ -61,32 +21,54 @@ class ResearchModule {
   }
 
   /**
-   * Načte šablonu z databáze (JSON kompatibilní)
+   * Načte šablonu z databáze
    */
   loadTemplate() {
     try {
       const account = this.db.getAccount(this.accountId);
-      
+
       if (account?.research_template) {
-        // Pokud je to název šablony, vrátíme šablonu
-        if (typeof account.research_template === 'string') {
-          const templateName = account.research_template;
-          if (this.templates[templateName]) {
-            return { ...this.templates[templateName] };
-          }
-        }
-        
-        // Pokud je to celý JSON objekt
-        if (typeof account.research_template === 'object') {
-          return account.research_template;
+        const templateName = typeof account.research_template === 'string'
+          ? account.research_template
+          : 'FARM';
+
+        // Načteme šablonu z databáze
+        const template = this.db.getTemplate('research', templateName);
+
+        if (template) {
+          return {
+            name: template.name,
+            levels: template.levels
+          };
         }
       }
 
-      // Výchozí FARM
-      return { ...this.templates.FARM };
+      // Výchozí FARM - načteme z databáze
+      const defaultTemplate = this.db.getTemplate('research', 'FARM');
+      if (defaultTemplate) {
+        return {
+          name: defaultTemplate.name,
+          levels: defaultTemplate.levels
+        };
+      }
+
+      // Fallback pokud databáze nemá šablony
+      return {
+        name: 'FARM',
+        levels: {
+          spear: 0, sword: 0, axe: 3, archer: 0, spy: 0,
+          light: 0, marcher: 0, heavy: 0, ram: 0, catapult: 0, knight: 0, snob: 0
+        }
+      };
     } catch (error) {
       console.error('❌ Chyba při načítání šablony:', error.message);
-      return { ...this.templates.FARM };
+      return {
+        name: 'FARM',
+        levels: {
+          spear: 0, sword: 0, axe: 3, archer: 0, spy: 0,
+          light: 0, marcher: 0, heavy: 0, ram: 0, catapult: 0, knight: 0, snob: 0
+        }
+      };
     }
   }
 
@@ -112,12 +94,15 @@ class ResearchModule {
    * Nastaví šablonu podle názvu
    */
   setTemplateByName(templateName) {
-    const template = this.templates[templateName];
+    const template = this.db.getTemplate('research', templateName);
     if (!template) {
-      console.error(`❌ Šablona ${templateName} neexistuje`);
+      console.error(`❌ Šablona ${templateName} neexistuje v databázi`);
       return false;
     }
-    return this.saveTemplate(template);
+    return this.saveTemplate({
+      name: template.name,
+      levels: template.levels
+    });
   }
 
   /**

@@ -37,31 +37,23 @@ class RecruitModule {
   }
 
   /**
-   * Dostupné šablony jednotek
+   * Načte šablonu z databáze
    */
-  getTemplates() {
-    return {
-      FARM: { 
-        spear: 1200, sword: 0, axe: 0, archer: 0, 
-        spy: 100, light: 500, marcher: 0, heavy: 0, 
-        ram: 0, catapult: 0 
-      },
-      DEF: { 
-        spear: 5000, sword: 5000, axe: 0, archer: 0, 
-        spy: 300, light: 0, marcher: 0, heavy: 0, 
-        ram: 0, catapult: 0 
-      },
-      OFF: { 
-        spear: 0, sword: 0, axe: 5600, archer: 0, 
-        spy: 0, light: 2300, marcher: 0, heavy: 0, 
-        ram: 400, catapult: 150 
-      },
-      MULTY: { 
-        spear: 1200, sword: 1200, axe: 0, archer: 0, 
-        spy: 500, light: 0, marcher: 0, heavy: 0, 
-        ram: 0, catapult: 0 
+  getTemplate(templateName) {
+    try {
+      const template = this.db.getTemplate('recruit', templateName);
+
+      if (!template) {
+        console.error(`❌ Šablona ${templateName} neexistuje v databázi`);
+        return null;
       }
-    };
+
+      // Vrátíme units z šablony
+      return template.units || {};
+    } catch (error) {
+      console.error('❌ Chyba při načítání šablony:', error.message);
+      return null;
+    }
   }
 
   /**
@@ -296,11 +288,10 @@ class RecruitModule {
     try {
       console.log(`🚀 Spouštím rekrutování podle šablony: ${templateName}`);
 
-      const templates = this.getTemplates();
-      const template = templates[templateName];
+      const template = this.getTemplate(templateName);
 
       if (!template) {
-        console.error(`❌ Šablona ${templateName} neexistuje`);
+        console.error(`❌ Šablona ${templateName} neexistuje v databázi`);
         return false;
       }
 
