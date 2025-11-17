@@ -100,8 +100,14 @@ class Automator {
       // Přihlásíme se
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        console.log(`❌ Přihlášení se nezdařilo`);
+        console.log(`❌ Přihlášení se nezdařilo - otevírám viditelný prohlížeč`);
+
+        // Zavřeme headless browser
         await this.browserManager.close(browser, context);
+
+        // Otevřeme viditelný prohlížeč pro manuální přihlášení
+        await this.browserManager.testConnection(account.id);
+        console.log(`🖥️  Viditelný prohlížeč otevřen - vyřešte problém ručně`);
         return;
       }
 
@@ -112,7 +118,20 @@ class Automator {
       // Zkontrolujeme útoky a CAPTCHA
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       await notificationsModule.detectAttacks();
-      await notificationsModule.detectCaptcha();
+      const hasCaptcha = await notificationsModule.detectCaptcha();
+
+      // Pokud je CAPTCHA, otevřeme viditelný prohlížeč
+      if (hasCaptcha) {
+        console.log(`⚠️  CAPTCHA detekována - otevírám viditelný prohlížeč`);
+
+        // Zavřeme headless browser
+        await this.browserManager.close(browser, context);
+
+        // Otevřeme viditelný prohlížeč pro vyřešení CAPTCHA
+        await this.browserManager.testConnection(account.id);
+        console.log(`🖥️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA ručně`);
+        return;
+      }
 
       // Získáme informace o jednotkách
       const recruitModule = new RecruitModule(page, this.db, account.id);
