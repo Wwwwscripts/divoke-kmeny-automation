@@ -66,101 +66,50 @@ class NotificationsModule {
         const count = parseInt(attackElement.textContent.trim(), 10) || 0;
         if (count === 0) return { count: 0, attacks: [] };
 
-        // Sbíráme detaily jednotlivých útoků
-        const attacks = [];
-        const rows = document.querySelectorAll('#commands_incomings tr.command-row, #commands_incomings tr');
+        // Parsování příchozích útoků z .command-row
+        const attacks = [...document.querySelectorAll('.command-row')]
+          .filter(row => row.querySelector('img[src*="attack.webp"]'))  // jen příchozí útoky
+          .map(row => {
+            try {
+              // Název útoku
+              const name = row.querySelector('.quickedit-label')?.textContent.trim() || 'Útok';
 
-        rows.forEach(row => {
-          try {
-            // Hledáme buňky s daty
-            const cells = row.querySelectorAll('td');
-            if (cells.length < 3) return;
+              // Čas dopadu
+              const arrivalSpan = row.querySelector('[data-endtime]');
+              const arrivalCountdown = arrivalSpan?.textContent.trim() || '-';
+              const arrivalTimestamp = arrivalSpan?.dataset.endtime || null;
 
-            // Útočník - hledáme link nebo text s jménem
-            let attacker = 'Neznámý';
-            const attackerLink = row.querySelector('a[href*="info_player"]');
-            if (attackerLink) {
-              attacker = attackerLink.textContent.trim();
-            }
-
-            // Čas dopadu
-            let arrivalTime = '-';
-            const timeSpan = row.querySelector('span.timer, span[class*="timer"]');
-            if (timeSpan) {
-              arrivalTime = timeSpan.textContent.trim();
-            }
-
-            // Countdown - může být v data-endtime atributu
-            let countdown = '-';
-            if (timeSpan && timeSpan.hasAttribute('data-endtime')) {
-              const endtime = parseInt(timeSpan.getAttribute('data-endtime'));
-              const now = Math.floor(Date.now() / 1000);
-              const diff = endtime - now;
-
-              if (diff > 0) {
-                const hours = Math.floor(diff / 3600);
-                const minutes = Math.floor((diff % 3600) / 60);
-                const seconds = diff % 60;
-                countdown = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+              // Útočník - hledáme link s jménem hráče
+              let attacker = 'Neznámý';
+              const attackerLink = row.querySelector('a[href*="info_player"]');
+              if (attackerLink) {
+                attacker = attackerLink.textContent.trim();
               }
-            } else if (timeSpan) {
-              countdown = timeSpan.textContent.trim();
-            }
 
-            // Typ útoku - pokud najdeme ikonu
-            let attackType = 'attack';
-            let impact = 'Útok';
-
-            // DEBUG: Vypíšeme všechny ikony v řádku
-            const allImages = row.querySelectorAll('img');
-            console.log(`🔍 DEBUG - Počet ikon v řádku: ${allImages.length}`);
-            allImages.forEach(img => {
-              console.log(`   Ikona src: ${img.src}`);
-            });
-
-            // Hledáme ikonu příkazu (může být command, attack, support, spy, etc.)
-            const attackIcon = row.querySelector('img');
-            if (attackIcon) {
-              const src = attackIcon.src.toLowerCase();
-              console.log(`📋 DEBUG - První ikona: ${src}`);
-
-              if (src.includes('support')) {
-                attackType = 'support';
-                impact = 'Podpora';
-              } else if (src.includes('spy')) {
-                attackType = 'spy';
-                impact = 'Špionáž';
-              } else if (src.includes('attack')) {
-                attackType = 'attack';
-                impact = 'Útok';
+              // Souřadnice odkud útok přichází
+              let origin = '-';
+              const coordLink = row.querySelector('a[href*="screen=info_village"]');
+              if (coordLink) {
+                const match = coordLink.textContent.match(/(\d+)\|(\d+)/);
+                if (match) {
+                  origin = `${match[1]}|${match[2]}`;
+                }
               }
-            }
 
-            // Souřadnice odkud útok přichází
-            let origin = '-';
-            const coordLink = row.querySelector('a[href*="screen=info_village"]');
-            if (coordLink) {
-              const match = coordLink.textContent.match(/(\d+)\|(\d+)/);
-              if (match) {
-                origin = `${match[1]}|${match[2]}`;
-              }
-            }
-
-            // Pokud máme aspoň útočníka, přidáme útok
-            if (attacker !== 'Neznámý' || origin !== '-') {
-              attacks.push({
+              return {
+                name: name,
                 attacker: attacker,
                 origin: origin,
-                arrival_time: arrivalTime,
-                countdown: countdown,
-                type: attackType,
-                impact: impact
-              });
+                arrival_countdown: arrivalCountdown,
+                arrival_timestamp: arrivalTimestamp,
+                impact: name  // Název útoku = dopad
+              };
+            } catch (e) {
+              console.error('Chyba při parsování řádku útoku:', e);
+              return null;
             }
-          } catch (e) {
-            console.error('Chyba při parsování řádku útoku:', e);
-          }
-        });
+          })
+          .filter(attack => attack !== null);  // Odfiltrujeme neúspěšné pokusy
 
         return { count, attacks };
       });

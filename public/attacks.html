@@ -516,26 +516,18 @@
                         if (attacks && attacks.length > 0) {
                             attacksDisplay = attacks.map(attack => {
                                 const attacker = attack.attacker || 'Neznámý';
-                                const arrival = attack.arrival_time || '-';
-                                const countdown = attack.countdown || '-';
-                                const impact = attack.impact || 'Útok';
+                                const name = attack.name || 'Útok';
+                                const countdown = attack.arrival_countdown || '-';
+                                const impact = attack.impact || name;
 
-                                // Ikona a barva podle typu dopadu
+                                // Ikona a barva podle názvu/dopadu útoku
                                 let impactIcon = '⚔️';
                                 let impactColor = '#f85149';
-                                if (impact === 'Podpora') {
-                                    impactIcon = '🛡️';
-                                    impactColor = '#3fb950';
-                                } else if (impact === 'Špionáž') {
-                                    impactIcon = '🔍';
-                                    impactColor = '#ffa657';
-                                }
 
                                 return `
                                     <div class="attack-box">
                                         👤 <span class="attack-attacker">${attacker}</span><br>
                                         ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
-                                        🕐 ${arrival}<br>
                                         ⏱️ <span class="attack-time">${countdown}</span>
                                     </div>
                                 `;
