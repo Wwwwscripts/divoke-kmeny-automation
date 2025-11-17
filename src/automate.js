@@ -13,15 +13,23 @@ class Automator {
     this.db = new DatabaseManager();
     this.browserManager = new BrowserManager();
     this.isRunning = false;
-    this.checkInterval = 2 * 60 * 1000; // 2 minuty
+    this.checkInterval = 2 * 60 * 1000; // 2 minuty (rychlý polling, skutečné timing je per-module)
     this.accountWaitTimes = {}; // Uchovává časy pro další kontrolu každého modulu
     this.openBrowserWindows = new Set(); // Účty s otevřeným viditelným oknem
+
+    // Defaultní intervaly pro moduly (pokud modul nevrátí vlastní waitTime)
+    this.defaultIntervals = {
+      research: 60 * 60 * 1000,  // 60 minut pro výzkum
+      recruit: 4 * 60 * 1000,     // 4 minuty pro rekrutování
+      building: 5 * 60 * 1000     // 5 minut pro výstavbu (fallback)
+    };
   }
 
   async start() {
     console.log('='.repeat(60));
     console.log('🤖 Spouštím automatizaci');
-    console.log('⏱️  Kontrola každé 2 minuty');
+    console.log('⏱️  Polling každé 2 minuty (moduly mají vlastní intervaly)');
+    console.log('🔬 Výzkum: 1x za hodinu | 🎯 Rekrut: každé 4 min | 🏗️  Build: dynamicky');
     console.log('='.repeat(60));
 
     this.isRunning = true;
@@ -144,7 +152,8 @@ class Automator {
             this.accountWaitTimes[researchKey] = Date.now() + researchResult.waitTime;
             console.log(`⏰ Výzkum: Další kontrola za ${Math.ceil(researchResult.waitTime / 60000)} minut`);
           } else {
-            this.accountWaitTimes[researchKey] = Date.now() + this.checkInterval;
+            this.accountWaitTimes[researchKey] = Date.now() + this.defaultIntervals.research;
+            console.log(`⏰ Výzkum: Další kontrola za 60 minut (default)`);
           }
         } else {
           const remainingMinutes = Math.ceil((researchWaitUntil - Date.now()) / 60000);
@@ -172,7 +181,8 @@ class Automator {
             this.accountWaitTimes[buildingKey] = Date.now() + buildResult.waitTime;
             console.log(`⏰ Výstavba: Další kontrola za ${Math.ceil(buildResult.waitTime / 60000)} minut`);
           } else {
-            this.accountWaitTimes[buildingKey] = Date.now() + this.checkInterval;
+            this.accountWaitTimes[buildingKey] = Date.now() + this.defaultIntervals.building;
+            console.log(`⏰ Výstavba: Další kontrola za 5 minut (default)`);
           }
         } else {
           const remainingMinutes = Math.ceil((buildingWaitUntil - Date.now()) / 60000);
@@ -199,7 +209,8 @@ class Automator {
             this.accountWaitTimes[recruitKey] = Date.now() + recruitResult.waitTime;
             console.log(`⏰ Rekrutování: Další kontrola za ${Math.ceil(recruitResult.waitTime / 60000)} minut`);
           } else {
-            this.accountWaitTimes[recruitKey] = Date.now() + this.checkInterval;
+            this.accountWaitTimes[recruitKey] = Date.now() + this.defaultIntervals.recruit;
+            console.log(`⏰ Rekrutování: Další kontrola za 4 minuty (default)`);
           }
         } else {
           const remainingMinutes = Math.ceil((recruitWaitUntil - Date.now()) / 60000);

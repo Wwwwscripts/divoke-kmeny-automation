@@ -135,7 +135,7 @@ class ResearchModule {
       await this.page.goto(`${worldUrl}/game.php?screen=smith`, {
         waitUntil: 'domcontentloaded'
       });
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
       return true;
     } catch (error) {
       console.error('❌ Chyba při přechodu do kovárny:', error.message);
@@ -257,7 +257,7 @@ class ResearchModule {
       }, unitType);
 
       if (success) {
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
         console.log(`✅ Výzkum ${unitType} spuštěn`);
         return true;
       }
@@ -413,7 +413,7 @@ class ResearchModule {
       const success = await this.research(next.unitType);
       
       if (success) {
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
         const updatedStatus = await this.getStatus();
         this.saveStatus(updatedStatus);
         

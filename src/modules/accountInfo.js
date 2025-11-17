@@ -132,11 +132,11 @@ class AccountInfoModule {
         await this.page.goto(`https://${world}.${domain}/game.php?screen=main`, {
           waitUntil: 'domcontentloaded'
         });
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1500); // Sníženo z 2000ms
       }
 
       await this.page.waitForSelector('#buildings', { timeout: 10000 });
-      await this.page.waitForTimeout(1000);
+      await this.page.waitForTimeout(500); // Sníženo z 1000ms
 
       const wallLevel = await this.page.evaluate(() => {
         const wallRow = document.querySelector('[id*="main_buildrow_wall"]');

@@ -334,11 +334,11 @@ class BuildingModule {
         await this.page.goto(`${worldUrl}/game.php?screen=main`, {
           waitUntil: 'domcontentloaded'
         });
-        await this.page.waitForTimeout(3000);
+        await this.page.waitForTimeout(1500); // Sníženo z 3000ms
       }
 
       await this.page.waitForSelector('#buildings', { timeout: 10000 });
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(1000); // Sníženo z 2000ms
 
       const buildings = await this.page.evaluate(() => {
         const buildingsList = [];
@@ -571,7 +571,7 @@ class BuildingModule {
       }
 
       await this.page.click('#new_quest');
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(1500); // Sníženo z 2000ms
 
       await this.page.evaluate(() => {
         const rewardTab = document.querySelector('a[data-tab="reward-tab"]');
@@ -581,7 +581,8 @@ class BuildingModule {
       await this.page.waitForTimeout(1000);
 
       let collected = 0;
-      while (true) {
+      const maxRewards = 50; // Limit to prevent infinite loop
+      while (collected < maxRewards) {
         const claimed = await this.page.evaluate(() => {
           const claimBtn = document.querySelector('a.reward-system-claim-button');
           if (claimBtn) {
@@ -594,7 +595,7 @@ class BuildingModule {
         if (!claimed) break;
 
         collected++;
-        await this.page.waitForTimeout(1500);
+        await this.page.waitForTimeout(1000); // Reduced from 1500ms
       }
 
       await this.page.evaluate(() => {
@@ -779,7 +780,7 @@ class BuildingModule {
       if (result.response && result.response.success) {
         console.log(`✅ ${buildingName} úroveň ${level} se staví`);
 
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(1500); // Sníženo z 2000ms
         const queueInfo = await this.checkBuildQueue();
 
         if (queueInfo.hasQueue && queueInfo.buildings.length > 0) {
