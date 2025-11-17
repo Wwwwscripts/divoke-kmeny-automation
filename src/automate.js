@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
 import AccountInfoModule from './modules/accountInfo.js';
@@ -13,6 +14,7 @@ class Automator {
     this.isRunning = false;
     this.checkInterval = 2 * 60 * 1000; // 2 minuty
     this.accountWaitTimes = {}; // Uchovává časy pro další kontrolu každého modulu
+    this.openBrowserWindows = new Set(); // Účty s otevřeným viditelným oknem
   }
 
   async start() {
@@ -85,36 +87,56 @@ class Automator {
       const recruitModule = new RecruitModule(page, this.db, account.id);
       await recruitModule.collectUnitsInfo();
 
-      // Detekce příchozích útoků
+      // Zkontrolujeme útoky a CAPTCHA
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       await notificationsModule.detectAttacks();
+      const hasCaptcha = await notificationsModule.detectCaptcha();
 
-	  // Zpracujeme VÝZKUM (před výstavbou a rekrutováním!)
-		const researchSettings = this.db.getResearchSettings(account.id);
+      // Pokud je CAPTCHA, otevřeme viditelný prohlížeč
+      if (hasCaptcha) {
+        console.log(`⚠️  CAPTCHA detekována`);
 
-		if (researchSettings && researchSettings.enabled) {
-		  const researchKey = `research_${account.id}`;
-		  const researchWaitUntil = this.accountWaitTimes[researchKey];
+        // Zavřeme headless browser
+        await this.browserManager.close(browser, context);
 
-		  if (!researchWaitUntil || Date.now() >= researchWaitUntil) {
-			console.log(`🔬 Výzkum zapnut - šablona: ${researchSettings.template}`);
-			
-			const researchModule = new ResearchModule(page, this.db, account.id);
-			const researchResult = await researchModule.autoResearch();
+        // Otevřeme viditelný prohlížeč POUZE pokud už není otevřený
+        if (!this.openBrowserWindows.has(account.id)) {
+          console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+          this.openBrowserWindows.add(account.id);
+          await this.browserManager.testConnection(account.id);
+          console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA a zavřete okno`);
+        } else {
+          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
+        }
+        return;
+      }
 
-			if (researchResult && researchResult.waitTime) {
-			  this.accountWaitTimes[researchKey] = Date.now() + researchResult.waitTime;
-			  console.log(`⏰ Výzkum: Další kontrola za ${Math.ceil(researchResult.waitTime / 60000)} minut`);
-			} else {
-			  this.accountWaitTimes[researchKey] = Date.now() + this.checkInterval;
-			}
-		  } else {
-			const remainingMinutes = Math.ceil((researchWaitUntil - Date.now()) / 60000);
-			console.log(`⏭️  Výzkum: Přeskakuji (další kontrola za ${remainingMinutes} minut)`);
-		  }
-		} else {
-		  console.log(`⏸️  Výzkum vypnut`);
-		}
+      // Zpracujeme VÝZKUM (před výstavbou a rekrutováním!)
+      const researchSettings = this.db.getResearchSettings(account.id);
+
+      if (researchSettings && researchSettings.enabled) {
+        const researchKey = `research_${account.id}`;
+        const researchWaitUntil = this.accountWaitTimes[researchKey];
+
+        if (!researchWaitUntil || Date.now() >= researchWaitUntil) {
+          console.log(`🔬 Výzkum zapnut - šablona: ${researchSettings.template}`);
+
+          const researchModule = new ResearchModule(page, this.db, account.id);
+          const researchResult = await researchModule.autoResearch();
+
+          if (researchResult && researchResult.waitTime) {
+            this.accountWaitTimes[researchKey] = Date.now() + researchResult.waitTime;
+            console.log(`⏰ Výzkum: Další kontrola za ${Math.ceil(researchResult.waitTime / 60000)} minut`);
+          } else {
+            this.accountWaitTimes[researchKey] = Date.now() + this.checkInterval;
+          }
+        } else {
+          const remainingMinutes = Math.ceil((researchWaitUntil - Date.now()) / 60000);
+          console.log(`⏭️  Výzkum: Přeskakuji (další kontrola za ${remainingMinutes} minut)`);
+        }
+      } else {
+        console.log(`⏸️  Výzkum vypnut`);
+      }
 
       // Zpracujeme VÝSTAVBU
       const buildingSettings = this.db.getBuildingSettings(account.id);
@@ -172,6 +194,12 @@ class Automator {
       }
 
       console.log(`✅ Účet ${account.username} zpracován`);
+
+      // Odstraníme z otevřených oken (pokud tam byl)
+      if (this.openBrowserWindows.has(account.id)) {
+        this.openBrowserWindows.delete(account.id);
+        console.log(`🔓 Označen jako vyřešený - příště se otevře nové okno při problému`);
+      }
 
       // Zavřeme prohlížeč
       await this.browserManager.close(browser, context);

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
 import AccountInfoModule from './modules/accountInfo.js';
@@ -13,8 +14,8 @@ class Automator {
     this.isRunning = false;
     this.checkInterval = 2 * 60 * 1000; // 2 minuty
     this.accountWaitTimes = {}; // Uchovává časy pro další kontrolu každého modulu
-    this.maxConcurrentAccounts = 25; // Maximálně 25 účtů najednou
-    this.openWindows = new Set(); // Sleduje účty s otevřeným viditelným oknem
+    this.maxConcurrentAccounts = 20; // Maximálně 20 účtů najednou
+    this.openBrowserWindows = new Set(); // Účty s otevřeným viditelným oknem
   }
 
   /**
@@ -105,23 +106,14 @@ class Automator {
 
         // Zavřeme headless browser
         await this.browserManager.close(browser, context);
-
-        // Otevřeme viditelný prohlížeč pouze pokud ještě není otevřen
-        if (!this.openWindows.has(account.id)) {
-          console.log(`🖥️  Otevírám viditelný prohlížeč - vyřešte problém ručně`);
-          this.openWindows.add(account.id);
-
-          // Spustíme viditelný prohlížeč v pozadí
-          this.browserManager.testConnection(account.id).then(() => {
-            // Po zavření okna odstraníme z otevřených
-            this.openWindows.delete(account.id);
-            console.log(`✅ Viditelný prohlížeč pro ${account.username} byl zavřen`);
-          }).catch(err => {
-            this.openWindows.delete(account.id);
-            console.error(`❌ Chyba při otevírání viditelného prohlížeče: ${err.message}`);
-          });
+        // Otevřeme viditelný prohlížeč POUZE pokud už není otevřený
+        if (!this.openBrowserWindows.has(account.id)) {
+          console.log(`🖥️  Otevírám viditelný prohlížeč pro manuální přihlášení`);
+          this.openBrowserWindows.add(account.id);
+          await this.browserManager.testConnection(account.id);
+          console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte problém a zavřete okno`);
         } else {
-          console.log(`⏭️  Viditelný prohlížeč pro tento účet je již otevřen - přeskakuji`);
+          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
         }
         return;
       }
@@ -142,22 +134,14 @@ class Automator {
         // Zavřeme headless browser
         await this.browserManager.close(browser, context);
 
-        // Otevřeme viditelný prohlížeč pouze pokud ještě není otevřen
-        if (!this.openWindows.has(account.id)) {
-          console.log(`🖥️  Otevírám viditelný prohlížeč - vyřešte CAPTCHA ručně`);
-          this.openWindows.add(account.id);
-
-          // Spustíme viditelný prohlížeč v pozadí
-          this.browserManager.testConnection(account.id).then(() => {
-            // Po zavření okna odstraníme z otevřených
-            this.openWindows.delete(account.id);
-            console.log(`✅ Viditelný prohlížeč pro ${account.username} byl zavřen`);
-          }).catch(err => {
-            this.openWindows.delete(account.id);
-            console.error(`❌ Chyba při otevírání viditelného prohlížeče: ${err.message}`);
-          });
+        // Otevřeme viditelný prohlížeč POUZE pokud už není otevřený
+        if (!this.openBrowserWindows.has(account.id)) {
+          console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+          this.openBrowserWindows.add(account.id);
+          await this.browserManager.testConnection(account.id);
+          console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA a zavřete okno`);
         } else {
-          console.log(`⏭️  Viditelný prohlížeč pro tento účet je již otevřen - přeskakuji`);
+          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
         }
         return;
       }
@@ -165,33 +149,33 @@ class Automator {
       // Získáme informace o jednotkách
       const recruitModule = new RecruitModule(page, this.db, account.id);
       await recruitModule.collectUnitsInfo();
-	  
-	  // Zpracujeme VÝZKUM (před výstavbou a rekrutováním!)
-		const researchSettings = this.db.getResearchSettings(account.id);
 
-		if (researchSettings && researchSettings.enabled) {
-		  const researchKey = `research_${account.id}`;
-		  const researchWaitUntil = this.accountWaitTimes[researchKey];
+      // Zpracujeme VÝZKUM (před výstavbou a rekrutováním!)
+      const researchSettings = this.db.getResearchSettings(account.id);
 
-		  if (!researchWaitUntil || Date.now() >= researchWaitUntil) {
-			console.log(`🔬 Výzkum zapnut - šablona: ${researchSettings.template}`);
-			
-			const researchModule = new ResearchModule(page, this.db, account.id);
-			const researchResult = await researchModule.autoResearch();
+      if (researchSettings && researchSettings.enabled) {
+        const researchKey = `research_${account.id}`;
+        const researchWaitUntil = this.accountWaitTimes[researchKey];
 
-			if (researchResult && researchResult.waitTime) {
-			  this.accountWaitTimes[researchKey] = Date.now() + researchResult.waitTime;
-			  console.log(`⏰ Výzkum: Další kontrola za ${Math.ceil(researchResult.waitTime / 60000)} minut`);
-			} else {
-			  this.accountWaitTimes[researchKey] = Date.now() + this.checkInterval;
-			}
-		  } else {
-			const remainingMinutes = Math.ceil((researchWaitUntil - Date.now()) / 60000);
-			console.log(`⏭️  Výzkum: Přeskakuji (další kontrola za ${remainingMinutes} minut)`);
-		  }
-		} else {
-		  console.log(`⏸️  Výzkum vypnut`);
-		}
+        if (!researchWaitUntil || Date.now() >= researchWaitUntil) {
+          console.log(`🔬 Výzkum zapnut - šablona: ${researchSettings.template}`);
+
+          const researchModule = new ResearchModule(page, this.db, account.id);
+          const researchResult = await researchModule.autoResearch();
+
+          if (researchResult && researchResult.waitTime) {
+            this.accountWaitTimes[researchKey] = Date.now() + researchResult.waitTime;
+            console.log(`⏰ Výzkum: Další kontrola za ${Math.ceil(researchResult.waitTime / 60000)} minut`);
+          } else {
+            this.accountWaitTimes[researchKey] = Date.now() + this.checkInterval;
+          }
+        } else {
+          const remainingMinutes = Math.ceil((researchWaitUntil - Date.now()) / 60000);
+          console.log(`⏭️  Výzkum: Přeskakuji (další kontrola za ${remainingMinutes} minut)`);
+        }
+      } else {
+        console.log(`⏸️  Výzkum vypnut`);
+      }
 
       // Zpracujeme VÝSTAVBU
       const buildingSettings = this.db.getBuildingSettings(account.id);
@@ -249,6 +233,12 @@ class Automator {
       }
 
       console.log(`✅ Účet ${account.username} zpracován`);
+
+      // Odstraníme z otevřených oken (pokud tam byl)
+      if (this.openBrowserWindows.has(account.id)) {
+        this.openBrowserWindows.delete(account.id);
+        console.log(`🔓 Označen jako vyřešený - příště se otevře nové okno při problému`);
+      }
 
       // Zavřeme prohlížeč
       await this.browserManager.close(browser, context);
