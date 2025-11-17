@@ -3,7 +3,8 @@ import BrowserManager from './browserManager.js';
 import AccountInfoModule from './modules/accountInfo.js';
 import RecruitModule from './modules/recruit.js';
 import BuildingModule from './modules/building.js';
-import ResearchModule from './modules/research.js'; 
+import ResearchModule from './modules/research.js';
+import NotificationsModule from './modules/notifications.js'; 
 
 class Automator {
   constructor() {
@@ -107,6 +108,11 @@ class Automator {
       // Aktualizujeme statistiky
       const infoModule = new AccountInfoModule(page, this.db, account.id);
       await infoModule.collectInfo();
+
+      // Zkontrolujeme útoky a CAPTCHA
+      const notificationsModule = new NotificationsModule(page, this.db, account.id);
+      await notificationsModule.detectAttacks();
+      await notificationsModule.detectCaptcha();
 
       // Získáme informace o jednotkách
       const recruitModule = new RecruitModule(page, this.db, account.id);
