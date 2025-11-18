@@ -116,7 +116,7 @@ class ScavengeModule {
       // Počkat na načtení elementů
       while (waited < maxWaitTime) {
         const spearLinkExists = await this.page.evaluate(() => {
-          return document.querySelector('a.unit_link[data-unit="spear"]') !== null;
+          return document.querySelector('a.units-entry-all[data-unit="spear"]') !== null;
         });
 
         if (spearLinkExists) {
@@ -129,11 +129,11 @@ class ScavengeModule {
 
       // Získat počet dostupných kopijníků
       const spearCount = await this.page.evaluate(() => {
-        const spearLink = document.querySelector('a.unit_link[data-unit="spear"]');
+        const spearLink = document.querySelector('a.units-entry-all[data-unit="spear"]');
         if (!spearLink) return 0;
 
-        // Link má obvykle strukturu jako: (1234)
-        const text = spearLink.textContent || spearLink.parentElement?.textContent || '';
+        // Link má strukturu: <a class="units-entry-all" data-unit="spear">(3681)</a>
+        const text = spearLink.textContent || '';
         const match = text.match(/\((\d+)\)/);
 
         if (match) {
