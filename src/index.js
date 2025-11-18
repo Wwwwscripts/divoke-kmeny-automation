@@ -166,7 +166,7 @@ class Automator {
   /**
    * SMYČKA 2: Výstavba
    * Každých 5 sekund projde účty - COOLDOWN režim (kontroluje hned jak vyprší čas)
-   * Zpracovává po 10 účtech paralelně
+   * Zpracovává po 5 účtech paralelně
    * Priorita: 1
    */
   async buildingLoop() {
@@ -187,9 +187,9 @@ class Automator {
         return !buildingWaitUntil || Date.now() >= buildingWaitUntil;
       });
 
-      // Zpracuj po 10 účtech paralelně
-      for (let i = 0; i < accountsToProcess.length; i += 10) {
-        const batch = accountsToProcess.slice(i, i + 10);
+      // Zpracuj po 5 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 5) {
+        const batch = accountsToProcess.slice(i, i + 5);
 
         await Promise.all(
           batch.map(account => {
@@ -203,7 +203,7 @@ class Automator {
         );
 
         // Malá pauza mezi dávkami (50ms)
-        if (i + 10 < accountsToProcess.length) {
+        if (i + 5 < accountsToProcess.length) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
@@ -216,7 +216,7 @@ class Automator {
   /**
    * SMYČKA 3: Rekrutování
    * Každé 4 minuty projde účty a zkontroluje timing
-   * Zpracovává po 10 účtech paralelně
+   * Zpracovává po 5 účtech paralelně
    * Priorita: 3
    */
   async recruitLoop() {
@@ -237,9 +237,9 @@ class Automator {
         return !recruitWaitUntil || Date.now() >= recruitWaitUntil;
       });
 
-      // Zpracuj po 10 účtech paralelně
-      for (let i = 0; i < accountsToProcess.length; i += 10) {
-        const batch = accountsToProcess.slice(i, i + 10);
+      // Zpracuj po 5 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 5) {
+        const batch = accountsToProcess.slice(i, i + 5);
 
         await Promise.all(
           batch.map(account => {
@@ -253,7 +253,7 @@ class Automator {
         );
 
         // Malá pauza mezi dávkami (50ms)
-        if (i + 10 < accountsToProcess.length) {
+        if (i + 5 < accountsToProcess.length) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
@@ -266,7 +266,7 @@ class Automator {
   /**
    * SMYČKA 4: Výzkum
    * Každé 2 hodiny projde účty a zkontroluje timing
-   * Zpracovává po 10 účtech paralelně
+   * Zpracovává po 5 účtech paralelně
    * Priorita: 4
    */
   async researchLoop() {
@@ -287,9 +287,9 @@ class Automator {
         return !researchWaitUntil || Date.now() >= researchWaitUntil;
       });
 
-      // Zpracuj po 10 účtech paralelně
-      for (let i = 0; i < accountsToProcess.length; i += 10) {
-        const batch = accountsToProcess.slice(i, i + 10);
+      // Zpracuj po 5 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 5) {
+        const batch = accountsToProcess.slice(i, i + 5);
 
         await Promise.all(
           batch.map(account => {
@@ -303,7 +303,7 @@ class Automator {
         );
 
         // Malá pauza mezi dávkami (50ms)
-        if (i + 10 < accountsToProcess.length) {
+        if (i + 5 < accountsToProcess.length) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
@@ -316,7 +316,7 @@ class Automator {
   /**
    * SMYČKA 5: Paladin
    * Každé 2 hodiny projde účty a zkontroluje paladina
-   * Zpracovává po 10 účtech paralelně
+   * Zpracovává po 5 účtech paralelně
    * Priorita: 5
    */
   async paladinLoop() {
@@ -332,9 +332,9 @@ class Automator {
         return !paladinWaitUntil || Date.now() >= paladinWaitUntil;
       });
 
-      // Zpracuj po 10 účtech paralelně
-      for (let i = 0; i < accountsToProcess.length; i += 10) {
-        const batch = accountsToProcess.slice(i, i + 10);
+      // Zpracuj po 5 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 5) {
+        const batch = accountsToProcess.slice(i, i + 5);
 
         await Promise.all(
           batch.map(account =>
@@ -347,7 +347,7 @@ class Automator {
         );
 
         // Malá pauza mezi dávkami (50ms)
-        if (i + 10 < accountsToProcess.length) {
+        if (i + 5 < accountsToProcess.length) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
