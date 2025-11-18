@@ -107,7 +107,7 @@ class BrowserManager {
     console.log('ℹ️  Prohlížeče se zavírají automaticky po zpracování každého účtu');
   }
 
-  async testConnection(accountId) {
+  async testConnection(accountId, autoSaveAndClose = false) {
     const account = this.db.getAccount(accountId);
 
     if (!account) {
@@ -197,11 +197,15 @@ class BrowserManager {
         });
       }
 
-      console.log('🖥️  Prohlížeč otevřen - přihlaste se');
-      console.log('💾 Systém automaticky uloží cookies a zavře okno po přihlášení');
+      if (autoSaveAndClose) {
+        console.log('🖥️  Prohlížeč otevřen - přihlaste se');
+        console.log('💾 Systém automaticky uloží cookies a zavře okno po přihlášení');
 
-      // Spusť sledování přihlášení na pozadí
-      this.startLoginWatcher(browser, context, page, account);
+        // Spusť sledování přihlášení na pozadí (JEN pro nové účty)
+        this.startLoginWatcher(browser, context, page, account);
+      } else {
+        console.log('🖥️  Prohlížeč otevřen - zavřete ho ručně po dokončení');
+      }
 
       // Vrať browser pro sledování zavření
       return { browser, context, accountId: account.id };
