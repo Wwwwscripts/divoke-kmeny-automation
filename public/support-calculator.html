@@ -545,6 +545,7 @@
                 const worldSettingsRes = await fetch(`/api/world-settings/${world}`);
                 const worldSettings = await worldSettingsRes.json();
                 const worldSpeed = worldSettings.speed || 1;
+                const unitSpeedModifier = worldSettings.unitSpeedModifier || 1;
 
                 // Získat účty na daném světě
                 const accountsRes = await fetch('/api/accounts');
@@ -579,7 +580,7 @@
                     for (const unit of UNIT_ORDER) {
                         const unitSpeed = UNIT_SPEEDS[unit];
                         const boostMultiplier = 1 + (supportBoost / 100);
-                        const requiredTime = (distance * unitSpeed) / (worldSpeed * boostMultiplier);
+                        const requiredTime = (distance * unitSpeed) / (worldSpeed * boostMultiplier * unitSpeedModifier);
 
                         // Zkontrolovat, jestli jednotka stihne a jestli ji máme
                         const unitCount = unitsInfo[unit]?.inVillages || 0;
