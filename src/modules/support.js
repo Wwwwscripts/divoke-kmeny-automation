@@ -54,10 +54,20 @@ class SupportModule {
 
       await this.page.goto(url, {
         waitUntil: 'domcontentloaded',
-        timeout: 30000
+        timeout: 45000  // Zvýšeno z 30s na 45s
       });
 
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(3000);  // Zvýšeno z 2s na 3s
+
+      // Zkontroluj jestli existuje tabulka před parsováním
+      const tableExists = await this.page.evaluate(() => {
+        return document.querySelector('#units_table') !== null;
+      });
+
+      if (!tableExists) {
+        console.log(`⚠️  [Support] Tabulka #units_table nenalezena pro účet ID ${this.accountId}`);
+        return null;
+      }
 
       // Zjistíme jednotky z tabulky
       const unitsData = await this.page.evaluate(() => {
@@ -165,7 +175,12 @@ class SupportModule {
       return unitsData;
 
     } catch (error) {
-      // Tichá chyba - nezobrazujeme
+      // Timeout je normální pro pomalá spojení nebo CAPTCHA
+      if (error.name === 'TimeoutError') {
+        console.log(`⏱️  [Support] Timeout při načítání overview pro účet ID ${this.accountId} (${error.message})`);
+      } else {
+        console.log(`⚠️  [Support] Chyba při parsování jednotek pro účet ID ${this.accountId}: ${error.message}`);
+      }
       return null;
     }
   }
@@ -250,16 +265,12 @@ class SupportModule {
    */
   async getAllUnitsInfo() {
     try {
-      console.log(`🔍 [Support] Zjišťuji jednotky pro účet ID ${this.accountId}`);
-
       // Získej vlastní jednotky z overview
       const ownUnits = await this.getUnitsFromOverview();
       if (!ownUnits) {
-        console.log(`⚠️  [Support] Nepodařilo se získat jednotky z overview pro účet ID ${this.accountId}`);
+        // Chyba už byla zalogována v getUnitsFromOverview()
         return null;
       }
-
-      console.log(`✅ [Support] Získány vlastní jednotky pro účet ID ${this.accountId}`);
 
       // Získej cizí podpory z place
       const foreignSupport = await this.getForeignSupport();
