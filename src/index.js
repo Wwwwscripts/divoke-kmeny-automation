@@ -20,7 +20,7 @@ import logger from './logger.js';
  * - 6 nezávislých smyček:
  *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
  *   2. Build - každých 5s po 5 účtech (COOLDOWN režim) [P1]
- *   3. Rekrut - každé 4 minuty po 5 účtech [P3]
+ *   3. Rekrut - každé 2 minuty po 5 účtech [P3]
  *   4. Výzkum - každých 120 minut po 5 účtech [P4]
  *   5. Paladin - každých 120 minut po 5 účtech [P5]
  *   6. Jednotky - každých 20 minut po 2 účtech [P6]
@@ -34,11 +34,12 @@ class Automator {
     this.isRunning = false;
     this.accountWaitTimes = {}; // Per-account per-module timing
     this.openBrowserWindows = new Map(); // Účty s otevřeným viditelným oknem (accountId => browserInfo)
+    this.captchaDetected = new Set(); // Účty s detekovanou CAPTCHA (aby se nespamovalo)
 
     // Intervaly pro smyčky
     this.intervals = {
       checks: 0,        // Kontroly běží neustále (žádný wait)
-      recruit: 4 * 60 * 1000,     // 4 minuty
+      recruit: 2 * 60 * 1000,     // 2 minuty
       building: 5 * 1000,         // 5 sekund - COOLDOWN režim (kontroluje hned jak vyprší)
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
       paladin: 120 * 60 * 1000,   // 120 minut (2 hodiny)
@@ -107,7 +108,7 @@ class Automator {
     console.log('🔄 6 nezávislých smyček:');
     console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P1] Build: každých 5s po 5 účtech - COOLDOWN režim (VYSOKÁ PRIORITA)');
-    console.log('   [P3] Rekrut: každé 4 min po 5 účtech');
+    console.log('   [P3] Rekrut: každé 2 min po 5 účtech');
     console.log('   [P4] Výzkum: každých 120 min po 5 účtech (2 hod)');
     console.log('   [P5] Paladin: každých 120 min po 5 účtech (2 hod)');
     console.log('   [P6] Jednotky: každých 20 min po 2 účtech (~10 min/cyklus pro 100 účtů)');
@@ -120,7 +121,7 @@ class Automator {
     await Promise.all([
       this.checksLoop(),      // P1: Neustále po 2 účtech
       this.buildingLoop(),    // P1: Každých 5s po 5 účtech (COOLDOWN režim)
-      this.recruitLoop(),     // P3: Každé 4 min po 5 účtech
+      this.recruitLoop(),     // P3: Každé 2 min po 5 účtech
       this.researchLoop(),    // P4: Každých 120 min po 5 účtech
       this.paladinLoop(),     // P5: Každých 120 min po 5 účtech
       this.unitsLoop(),       // P6: Každých 20 min po 2 účtech
@@ -215,7 +216,7 @@ class Automator {
 
   /**
    * SMYČKA 3: Rekrutování
-   * Každé 4 minuty projde účty a zkontroluje timing
+   * Každé 2 minuty projde účty a zkontroluje timing
    * Zpracovává po 5 účtech paralelně
    * Priorita: 3
    */
@@ -258,7 +259,7 @@ class Automator {
         }
       }
 
-      // Počkej 4 minuty
+      // Počkej 2 minuty
       await new Promise(resolve => setTimeout(resolve, this.intervals.recruit));
     }
   }
@@ -465,14 +466,22 @@ class Automator {
       const isConquered = await notificationsModule.detectConqueredVillage();
 
       if (hasCaptcha) {
-        console.log(`⚠️  [${account.username}] CAPTCHA detekována!`);
-
         // Zavři headless browser
         await this.browserPool.closeContext(context, browserKey);
 
+        // Loguj pouze pokud ještě není zaznamenaná CAPTCHA pro tento účet
+        const isNewCaptcha = !this.captchaDetected.has(account.id);
+
+        if (isNewCaptcha) {
+          console.log(`⚠️  [${account.username}] CAPTCHA detekována!`);
+          this.captchaDetected.add(account.id);
+        }
+
         // Otevři viditelný prohlížeč POUZE pokud už není otevřený (CAPTCHA)
         if (!this.isBrowserActive(account.id)) {
-          console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+          if (isNewCaptcha) {
+            console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+          }
 
           // autoSaveAndClose = false (uživatel musí ručně zavřít)
           const browserInfo = await this.browserManager.testConnection(account.id, false);
@@ -481,16 +490,19 @@ class Automator {
             this.openBrowserWindows.set(account.id, browserInfo);
 
             // Sleduj zavření browseru
+            const accountUsername = account.username;
+            const accountIdCopy = account.id;
             browserInfo.browser.on('disconnected', () => {
-              console.log(`🔒 Browser zavřen pro: ${account.username}`);
-              this.openBrowserWindows.delete(account.id);
-              console.log(`✅ Účet ${account.username} odebrán z otevřených oken`);
+              console.log(`🔒 Browser zavřen pro: ${accountUsername}`);
+              this.openBrowserWindows.delete(accountIdCopy);
+              this.captchaDetected.delete(accountIdCopy); // Odstraň z CAPTCHA tracku
+              console.log(`✅ Účet ${accountUsername} odebrán z otevřených oken - CAPTCHA vyřešena`);
             });
           }
 
-          console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA a zavřete okno`);
-        } else {
-          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
+          if (isNewCaptcha) {
+            console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA a zavřete okno`);
+          }
         }
         return;
       }
