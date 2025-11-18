@@ -179,6 +179,58 @@ class SupportSender {
   }
 
   /**
+   * Otevřít ruční odeslání podpory (vyplní formulář ale NEodešle)
+   * @param {Array<string>} unitTypes - Pole typů jednotek
+   * @param {number} targetX - Cílová X souřadnice
+   * @param {number} targetY - Cílová Y souřadnice
+   */
+  async openManualSupport(unitTypes, targetX, targetY) {
+    try {
+      const worldUrl = this.getWorldUrl();
+      const villageId = await this.getVillageId();
+
+      logger.info(`Otevírám ruční odeslání: ${unitTypes.join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
+
+      // Přejít na rally point
+      const placeUrl = `${worldUrl}/game.php?village=${villageId}&screen=place`;
+      await this.page.goto(placeUrl, { waitUntil: 'networkidle2' });
+      await this.page.waitForTimeout(1000);
+
+      // Vyplnit formulář pro všechny jednotky
+      await this.page.evaluate((units, x, y) => {
+        // Vyplnit všechny jednotky
+        units.forEach(unit => {
+          const unitInput = document.querySelector(`input[name="${unit}"]`);
+          if (unitInput) {
+            // Najít dostupný počet jednotek
+            const linkElement = unitInput.closest('td')?.nextElementSibling?.querySelector('a');
+            if (linkElement) {
+              const match = linkElement.textContent.match(/\((\d+)\)/);
+              if (match) {
+                const availableCount = parseInt(match[1]);
+                unitInput.value = availableCount; // Poslat všechny dostupné
+              }
+            }
+          }
+        });
+
+        // Vyplnit souřadnice
+        const xInput = document.querySelector('input[name="x"]');
+        const yInput = document.querySelector('input[name="y"]');
+        if (xInput) xInput.value = x;
+        if (yInput) yInput.value = y;
+      }, unitTypes, targetX, targetY);
+
+      logger.success(`✅ Formulář vyplněn: ${unitTypes.join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
+      return { success: true, unitTypes, targetX, targetY };
+
+    } catch (error) {
+      logger.error(`Chyba při otevírání ručního odeslání: ${error.message}`, this.getAccountName());
+      throw error;
+    }
+  }
+
+  /**
    * Odeslat více typů jednotek najednou na podporu
    * @param {Array<string>} unitTypes - Pole typů jednotek (např. ['knight', 'spear', 'sword'])
    * @param {number} targetX - Cílová X souřadnice
