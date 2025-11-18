@@ -163,6 +163,71 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
   }
 });
 
+// Endpoint pro smazání dokončeného útoku
+app.post('/api/accounts/:id/delete-attack', async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    const { timestamp } = req.body;
+
+    if (!timestamp) {
+      return res.status(400).json({ error: 'Missing timestamp' });
+    }
+
+    const account = db.getAccount(accountId);
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    // Načteme aktuální útoky
+    let attacks = [];
+    if (account.attacks_info) {
+      try {
+        attacks = JSON.parse(account.attacks_info);
+      } catch (e) {
+        attacks = [];
+      }
+    }
+
+    // Odfiltrujeme útok s daným timestampem
+    const filteredAttacks = attacks.filter(attack => attack.arrival_timestamp !== timestamp);
+
+    // Aktualizujeme databázi
+    const data = db._loadAccounts();
+    const acc = data.accounts.find(a => a.id === accountId);
+    if (acc) {
+      acc.attacks_info = JSON.stringify(filteredAttacks);
+      acc.last_attack_count = filteredAttacks.length;
+      db._saveAccounts(data);
+    }
+
+    res.json({ success: true, removed: attacks.length - filteredAttacks.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint pro reset dobytí vesnice
+app.post('/api/accounts/:id/reset-conquered', async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    const account = db.getAccount(accountId);
+
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    // Resetujeme příznaky dobytí vesnice
+    db.updateAccountInfo(accountId, {
+      village_conquered: false,
+      village_conquered_at: null
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Endpoint pro získání účtů pod útokem
 app.get('/api/accounts/under-attack', (req, res) => {
   try {

@@ -553,70 +553,95 @@
         // Vykreslit účty
         function renderAccounts(accounts) {
             const tbody = document.getElementById('accountsList');
-            tbody.innerHTML = accounts.map(acc => `
-                <tr>
-                    <td><span class="account-name">${acc.username}</span></td>
-                    <td><span class="world-badge">${acc.world || '-'}</span></td>
-                    <td>${(acc.points || 0).toLocaleString('cs-CZ')}</td>
-                    <td style="font-size: 12px;">
-                        <span class="resource-item">🪵 ${(acc.wood || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
-                        <span class="resource-item">🧱 ${(acc.clay || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
-                        <span class="resource-item">⚙️ ${(acc.iron || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
-                    </td>
-                    <td>
-                        <label class="toggle-switch">
-                            <input type="checkbox"
-                                   ${acc.recruit_enabled ? 'checked' : ''}
-                                   onchange="toggleRecruit(${acc.id}, this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </td>
-                    <td>
-                        <select ${!acc.recruit_enabled ? 'disabled' : ''}
-                                onchange="updateRecruitTemplate(${acc.id}, this.value)">
-                            ${recruitTemplates.map(t => `
-                                <option value="${t.id}" ${acc.recruit_template === t.id ? 'selected' : ''}>${t.name}</option>
-                            `).join('')}
-                        </select>
-                    </td>
-                    <td>
-                        <label class="toggle-switch">
-                            <input type="checkbox"
-                                   ${acc.research_enabled ? 'checked' : ''}
-                                   onchange="toggleResearch(${acc.id}, this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </td>
-                    <td>
-                        <select ${!acc.research_enabled ? 'disabled' : ''}
-                                onchange="updateResearchTemplate(${acc.id}, this.value)">
-                            ${researchTemplates.map(t => `
-                                <option value="${t.id}" ${acc.research_template === t.id ? 'selected' : ''}>${t.name}</option>
-                            `).join('')}
-                        </select>
-                    </td>
-                    <td>
-                        <label class="toggle-switch">
-                            <input type="checkbox"
-                                   ${acc.building_enabled ? 'checked' : ''}
-                                   onchange="toggleBuilding(${acc.id}, this.checked)">
-                            <span class="slider"></span>
-                        </label>
-                    </td>
-                    <td>
-                        <select ${!acc.building_enabled ? 'disabled' : ''}
-                                onchange="updateBuildingTemplate(${acc.id}, this.value)">
-                            <option value="FULL_VILLAGE" ${acc.building_template === 'FULL_VILLAGE' ? 'selected' : ''}>Full Village</option>
-                            <option value="WAREHOUSE" ${acc.building_template === 'WAREHOUSE' ? 'selected' : ''}>Warehouse</option>
-                            <option value="RESOURCES" ${acc.building_template === 'RESOURCES' ? 'selected' : ''}>Resources</option>
-                            <option value="NOBLE" ${acc.building_template === 'NOBLE' ? 'selected' : ''}>Noble</option>
-                        </select>
-                    </td>
-                    <td>
-                        <button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>
-                    </td>
-                </tr>
-            `).join('');
+            tbody.innerHTML = accounts.map(acc => {
+                // Pokud je vesnice dobyta, zobraz speciální řádek
+                if (acc.village_conquered) {
+                    return `
+                        <tr style="background: rgba(248, 81, 73, 0.1); border-left: 3px solid #f85149;">
+                            <td><span class="account-name">${acc.username}</span></td>
+                            <td><span class="world-badge">${acc.world || '-'}</span></td>
+                            <td colspan="8" style="text-align: center;">
+                                <span style="color: #f85149; font-weight: 600; font-size: 14px;">
+                                    ⚠️ VESNICE DOBYTA - ZAČÍT ZNOVU
+                                </span>
+                                <br>
+                                <button class="btn-small" onclick="openBrowser(${acc.id})" style="margin-top: 8px; background: #238636;">
+                                    🏗️ Vytvořit novou vesnici
+                                </button>
+                                <button class="btn-small" onclick="resetConqueredVillage(${acc.id})" style="margin-top: 8px; margin-left: 8px; background: #6e7681;">
+                                    🔄 Reset (po vytvoření)
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }
+
+                // Normální řádek
+                return `
+                    <tr>
+                        <td><span class="account-name">${acc.username}</span></td>
+                        <td><span class="world-badge">${acc.world || '-'}</span></td>
+                        <td>${(acc.points || 0).toLocaleString('cs-CZ')}</td>
+                        <td style="font-size: 12px;">
+                            <span class="resource-item">🪵 ${(acc.wood || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
+                            <span class="resource-item">🧱 ${(acc.clay || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
+                            <span class="resource-item">⚙️ ${(acc.iron || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
+                        </td>
+                        <td>
+                            <label class="toggle-switch">
+                                <input type="checkbox"
+                                       ${acc.recruit_enabled ? 'checked' : ''}
+                                       onchange="toggleRecruit(${acc.id}, this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </td>
+                        <td>
+                            <select ${!acc.recruit_enabled ? 'disabled' : ''}
+                                    onchange="updateRecruitTemplate(${acc.id}, this.value)">
+                                ${recruitTemplates.map(t => `
+                                    <option value="${t.id}" ${acc.recruit_template === t.id ? 'selected' : ''}>${t.name}</option>
+                                `).join('')}
+                            </select>
+                        </td>
+                        <td>
+                            <label class="toggle-switch">
+                                <input type="checkbox"
+                                       ${acc.research_enabled ? 'checked' : ''}
+                                       onchange="toggleResearch(${acc.id}, this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </td>
+                        <td>
+                            <select ${!acc.research_enabled ? 'disabled' : ''}
+                                    onchange="updateResearchTemplate(${acc.id}, this.value)">
+                                ${researchTemplates.map(t => `
+                                    <option value="${t.id}" ${acc.research_template === t.id ? 'selected' : ''}>${t.name}</option>
+                                `).join('')}
+                            </select>
+                        </td>
+                        <td>
+                            <label class="toggle-switch">
+                                <input type="checkbox"
+                                       ${acc.building_enabled ? 'checked' : ''}
+                                       onchange="toggleBuilding(${acc.id}, this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </td>
+                        <td>
+                            <select ${!acc.building_enabled ? 'disabled' : ''}
+                                    onchange="updateBuildingTemplate(${acc.id}, this.value)">
+                                <option value="FULL_VILLAGE" ${acc.building_template === 'FULL_VILLAGE' ? 'selected' : ''}>Full Village</option>
+                                <option value="WAREHOUSE" ${acc.building_template === 'WAREHOUSE' ? 'selected' : ''}>Warehouse</option>
+                                <option value="RESOURCES" ${acc.building_template === 'RESOURCES' ? 'selected' : ''}>Resources</option>
+                                <option value="NOBLE" ${acc.building_template === 'NOBLE' ? 'selected' : ''}>Noble</option>
+                            </select>
+                        </td>
+                        <td>
+                            <button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         // Filtrování účtů
@@ -807,6 +832,25 @@
 
                 const result = await response.json();
                 if (!result.success) {
+                    alert('❌ Chyba: ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Chyba: ' + error.message);
+            }
+        }
+
+        async function resetConqueredVillage(accountId) {
+            try {
+                const response = await fetch(`/api/accounts/${accountId}/reset-conquered`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    // Refresh data
+                    await loadAccounts();
+                    alert('✅ Účet resetován, můžete pokračovat v automatizaci');
+                } else {
                     alert('❌ Chyba: ' + result.error);
                 }
             } catch (error) {

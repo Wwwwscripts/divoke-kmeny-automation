@@ -112,6 +112,7 @@ class PaladinModule {
 
       const success = await this.page.evaluate(() => {
         const recruitButton = document.querySelector('a.knight_recruit_launch');
+        console.log('Found recruit button:', !!recruitButton);
         if (recruitButton) {
           recruitButton.click();
           return true;
@@ -124,8 +125,8 @@ class PaladinModule {
         return { success: false, action: 'recruit' };
       }
 
-      // Wait for confirmation popup
-      await this.page.waitForTimeout(1000);
+      console.log('⏳ Waiting for confirmation popup...');
+      await this.page.waitForTimeout(2000); // Increased wait time
 
       // Confirm recruitment
       const confirmed = await this.confirmPopup();
@@ -135,6 +136,7 @@ class PaladinModule {
         return { success: true, action: 'recruit', message: 'Recruitment started' };
       }
 
+      console.log('❌ Confirmation failed');
       return { success: false, action: 'recruit', message: 'Confirmation failed' };
 
     } catch (error) {
@@ -152,6 +154,7 @@ class PaladinModule {
 
       const success = await this.page.evaluate(() => {
         const reviveButton = document.querySelector('a.knight_revive_launch');
+        console.log('Found revive button:', !!reviveButton);
         if (reviveButton) {
           reviveButton.click();
           return true;
@@ -164,8 +167,8 @@ class PaladinModule {
         return { success: false, action: 'revive' };
       }
 
-      // Wait for confirmation popup
-      await this.page.waitForTimeout(1000);
+      console.log('⏳ Waiting for confirmation popup...');
+      await this.page.waitForTimeout(2000); // Increased wait time
 
       // Confirm revival
       const confirmed = await this.confirmPopup();
@@ -175,6 +178,7 @@ class PaladinModule {
         return { success: true, action: 'revive', message: 'Revival started' };
       }
 
+      console.log('❌ Confirmation failed');
       return { success: false, action: 'revive', message: 'Confirmation failed' };
 
     } catch (error) {
@@ -188,7 +192,12 @@ class PaladinModule {
    */
   async confirmPopup() {
     try {
-      const confirmed = await this.page.evaluate(() => {
+      // Wait for popup to appear
+      console.log('⏳ Waiting for popup to appear...');
+      await this.page.waitForSelector('.popup_box_container, .popup_box', { timeout: 5000 });
+      await this.page.waitForTimeout(500); // Extra wait for popup to fully load
+
+      const result = await this.page.evaluate(() => {
         // Try multiple selectors for recruit/revive confirmation
         const selectors = [
           '#knight_recruit_confirm',  // Recruit confirmation
@@ -197,21 +206,36 @@ class PaladinModule {
           '.evt-confirm-btn'          // Event confirm
         ];
 
+        console.log('🔍 Looking for confirmation button...');
+
         for (const selector of selectors) {
           const button = document.querySelector(selector);
+          console.log(`  ${selector}: ${button ? 'FOUND' : 'not found'}`);
           if (button) {
+            console.log(`  ✅ Clicking on ${selector}`);
             button.click();
-            return true;
+            return { success: true, selector: selector };
           }
         }
-        return false;
+
+        // Debug: Show all buttons in popup
+        const allButtons = document.querySelectorAll('.popup_box a, .popup_box button');
+        console.log(`  Found ${allButtons.length} buttons in popup`);
+        allButtons.forEach((btn, i) => {
+          console.log(`    Button ${i}: class="${btn.className}" id="${btn.id}" text="${btn.textContent.trim()}"`);
+        });
+
+        return { success: false, selector: null };
       });
 
-      if (confirmed) {
+      if (result.success) {
+        console.log(`✅ Confirmed via ${result.selector}`);
         await this.page.waitForTimeout(1500);
+        return true;
       }
 
-      return confirmed;
+      console.log('❌ No confirmation button found');
+      return false;
     } catch (error) {
       console.error('❌ Error confirming popup:', error.message);
       return false;
