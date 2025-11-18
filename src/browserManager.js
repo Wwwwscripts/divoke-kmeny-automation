@@ -197,8 +197,11 @@ class BrowserManager {
         });
       }
 
-      console.log('🖥️  Prohlížeč otevřen - zavřete ho ručně po přihlášení');
-      console.log('💾 Cookies se uloží automaticky při dalším zpracování účtu');
+      console.log('🖥️  Prohlížeč otevřen - přihlaste se');
+      console.log('💾 Systém automaticky uloží cookies a zavře okno po přihlášení');
+
+      // Spusť sledování přihlášení na pozadí
+      this.startLoginWatcher(browser, context, page, account);
 
       // Vrať browser pro sledování zavření
       return { browser, context, accountId: account.id };
@@ -208,6 +211,54 @@ class BrowserManager {
       await this.close(browser, context);
       return null;
     }
+  }
+
+  /**
+   * Sleduje přihlášení uživatele a automaticky ukládá cookies
+   */
+  async startLoginWatcher(browser, context, page, account) {
+    const checkInterval = 5000; // 5 sekund
+    let shouldStop = false;
+
+    // Sleduj zavření browseru uživatelem
+    browser.on('disconnected', () => {
+      shouldStop = true;
+    });
+
+    // Spusť watch loop na pozadí
+    (async () => {
+      while (!shouldStop) {
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+
+        if (shouldStop) break;
+
+        try {
+          // Zkontroluj jestli je přihlášen (detekuj #menu_row)
+          const isLoggedIn = await page.evaluate(() => {
+            return document.querySelector('#menu_row') !== null;
+          });
+
+          if (isLoggedIn) {
+            console.log(`✅ [${account.username}] Přihlášení detekováno - ukládám cookies`);
+
+            // Ulož cookies
+            const cookies = await context.cookies();
+            this.db.updateCookies(account.id, cookies);
+
+            console.log(`💾 [${account.username}] Cookies uloženy - zavírám browser`);
+
+            // Zavři browser (vyvolá 'disconnected' event)
+            await browser.close();
+            break;
+          }
+        } catch (error) {
+          // Browser byl pravděpodobně zavřen nebo page neexistuje
+          break;
+        }
+      }
+    })().catch(err => {
+      console.error(`❌ [${account.username}] Chyba v login watcher:`, err.message);
+    });
   }
 }
 
