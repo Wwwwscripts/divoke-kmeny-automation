@@ -171,6 +171,8 @@ class DatabaseManager {
         research_enabled: 0,
         research_template: 'FARM',
         research_status: null,
+        // 🆕 SCAVENGE - Nové pole pro sběr
+        scavenge_enabled: 0,
         last_login: null,
         active: 1,
         created_at: new Date().toISOString()
@@ -350,11 +352,33 @@ class DatabaseManager {
   getResearchSettings(accountId) {
     const account = this.getAccount(accountId);
     if (!account) return null;
-    
+
     return {
       enabled: account.research_enabled === 1,
       template: account.research_template || 'FARM',
       status: account.research_status ? JSON.parse(account.research_status) : null
+    };
+  }
+
+  // 🆕 SCAVENGE - Aktualizovat informace o sběru
+  updateScavengeSettings(accountId, settings) {
+    const data = this._loadAccounts();
+    const account = data.accounts.find(a => a.id === accountId);
+
+    if (account) {
+      if (settings.scavengeEnabled !== undefined) account.scavenge_enabled = settings.scavengeEnabled ? 1 : 0;
+      this._saveAccounts(data);
+      console.log(`✅ Nastavení sběru aktualizováno pro účet ID: ${accountId}`);
+    }
+  }
+
+  // 🆕 SCAVENGE - Získat nastavení sběru
+  getScavengeSettings(accountId) {
+    const account = this.getAccount(accountId);
+    if (!account) return null;
+
+    return {
+      enabled: account.scavenge_enabled === 1
     };
   }
 
@@ -398,7 +422,9 @@ class DatabaseManager {
           stats_updated_at: stats?.updated_at || null,
           // 🆕 RESEARCH - Přidáno do response
           research_enabled: account.research_enabled,
-          research_template: account.research_template
+          research_template: account.research_template,
+          // 🆕 SCAVENGE - Přidáno do response
+          scavenge_enabled: account.scavenge_enabled
         };
       });
   }
@@ -482,7 +508,7 @@ class DatabaseManager {
   getWorldSettings(world) {
     const templates = this._loadTemplates();
     if (!templates.worlds) templates.worlds = {};
-    return templates.worlds[world] || { speed: 1, unitSpeedModifier: 1, dailyRewardsEnabled: false }; // Výchozí rychlost 1x
+    return templates.worlds[world] || { speed: 1, unitSpeedModifier: 1, dailyRewardsEnabled: false, scavengeEnabled: false }; // Výchozí rychlost 1x
   }
 
   // Uložit/aktualizovat nastavení světa
@@ -493,7 +519,8 @@ class DatabaseManager {
     templates.worlds[world] = {
       speed: settings.speed || 1,
       unitSpeedModifier: settings.unitSpeedModifier || 1,
-      dailyRewardsEnabled: settings.dailyRewardsEnabled || false
+      dailyRewardsEnabled: settings.dailyRewardsEnabled || false,
+      scavengeEnabled: settings.scavengeEnabled || false
     };
 
     this._saveTemplates(templates);
