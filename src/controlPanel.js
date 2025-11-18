@@ -164,6 +164,15 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
     }
 
     const page = await context.newPage();
+
+    // Vyčisti localStorage/sessionStorage před načtením stránky
+    await page.goto(`https://${account.world}.${domain}/`);
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+
+    // Teď načti game.php
     await page.goto(`https://${account.world}.${domain}/game.php`);
 
     res.json({ success: true });
