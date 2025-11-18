@@ -93,7 +93,8 @@ class DatabaseManager {
               farm: 30, storage: 30, hide: 5, wall: 5
             }
           }
-        ]
+        ],
+        worlds: {}
       };
       writeFileSync(this.templatesFile, JSON.stringify(defaultTemplates, null, 2));
     }
@@ -471,6 +472,44 @@ class DatabaseManager {
     if (!templates[type]) return false;
 
     templates[type] = templates[type].filter(t => t.id !== id);
+    this._saveTemplates(templates);
+    return true;
+  }
+
+  // ============ SVĚTY ============
+
+  // Získat nastavení světa
+  getWorldSettings(world) {
+    const templates = this._loadTemplates();
+    if (!templates.worlds) templates.worlds = {};
+    return templates.worlds[world] || { speed: 1 }; // Výchozí rychlost 1x
+  }
+
+  // Uložit/aktualizovat nastavení světa
+  saveWorldSettings(world, settings) {
+    const templates = this._loadTemplates();
+    if (!templates.worlds) templates.worlds = {};
+
+    templates.worlds[world] = {
+      speed: settings.speed || 1
+    };
+
+    this._saveTemplates(templates);
+    return true;
+  }
+
+  // Získat všechna nastavení světů
+  getAllWorldSettings() {
+    const templates = this._loadTemplates();
+    return templates.worlds || {};
+  }
+
+  // Smazat nastavení světa
+  deleteWorldSettings(world) {
+    const templates = this._loadTemplates();
+    if (!templates.worlds) return false;
+
+    delete templates.worlds[world];
     this._saveTemplates(templates);
     return true;
   }

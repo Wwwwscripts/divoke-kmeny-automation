@@ -269,6 +269,92 @@ app.get('/api/accounts/under-attack', (req, res) => {
   }
 });
 
+// ============ NASTAVENÍ SVĚTŮ ============
+
+// Získat nastavení světa
+app.get('/api/world-settings/:world', (req, res) => {
+  try {
+    const world = req.params.world;
+    const settings = db.getWorldSettings(world);
+    res.json(settings);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Získat všechna nastavení světů
+app.get('/api/world-settings', (req, res) => {
+  try {
+    const settings = db.getAllWorldSettings();
+    res.json(settings);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Uložit/aktualizovat nastavení světa
+app.put('/api/world-settings/:world', (req, res) => {
+  try {
+    const world = req.params.world;
+    const { speed } = req.body;
+
+    if (!speed || speed <= 0) {
+      return res.status(400).json({ error: 'Neplatná rychlost světa' });
+    }
+
+    db.saveWorldSettings(world, { speed });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Smazat nastavení světa
+app.delete('/api/world-settings/:world', (req, res) => {
+  try {
+    const world = req.params.world;
+    db.deleteWorldSettings(world);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ PODPORA ============
+
+// Odeslat podporu do vesnice
+app.post('/api/support/send', async (req, res) => {
+  try {
+    const { accountId, unitType, targetX, targetY, count } = req.body;
+
+    if (!accountId || !unitType || !targetX || !targetY) {
+      return res.status(400).json({ error: 'Chybí povinné parametry' });
+    }
+
+    // Získat browser pro daný účet
+    const browser = browserManager.getBrowser(accountId);
+    if (!browser) {
+      return res.status(404).json({ error: 'Browser pro tento účet není aktivní' });
+    }
+
+    // Dynamicky importovat SupportSender
+    const { default: SupportSender } = await import('./modules/supportSender.js');
+    const supportSender = new SupportSender(browser.page, db, accountId);
+
+    // Odeslat podporu
+    const result = await supportSender.sendSupport(
+      unitType,
+      parseInt(targetX),
+      parseInt(targetY),
+      count || 1
+    );
+
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ ŠABLONY ============
 
 // Získat všechny šablony pro daný typ

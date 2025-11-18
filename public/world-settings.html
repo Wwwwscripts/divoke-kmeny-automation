@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nastavení světů - Divoké kmeny</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #161b22 0%, #1c2128 100%);
+            border-bottom: 1px solid #30363d;
+            padding: 15px 0;
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            font-size: 1.5em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #58a6ff, #79c0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-left: auto;
+        }
+
+        .nav-btn {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+
+        .nav-btn:hover {
+            background: #30363d;
+            border-color: #8b949e;
+        }
+
+        /* Zprávy */
+        #message {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            display: none;
+            font-weight: 500;
+        }
+
+        #message.success {
+            display: block;
+            background: #238636;
+            color: white;
+            border: 1px solid #2ea043;
+        }
+
+        #message.error {
+            display: block;
+            background: #da3633;
+            color: white;
+            border: 1px solid #f85149;
+        }
+
+        /* Hlavní sekce */
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            color: #58a6ff;
+        }
+
+        .description {
+            color: #8b949e;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        /* Tlačítko přidat */
+        .btn-add {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 20px;
+            transition: all 0.2s;
+            font-size: 15px;
+        }
+
+        .btn-add:hover {
+            background: #2ea043;
+        }
+
+        /* Tabulka světů */
+        .worlds-table {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #21262d;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            color: #8b949e;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        tbody tr {
+            border-top: 1px solid #30363d;
+            transition: background 0.2s;
+        }
+
+        tbody tr:hover {
+            background: #21262d;
+        }
+
+        td {
+            padding: 15px;
+            color: #c9d1d9;
+        }
+
+        /* Tlačítka akce */
+        .action-btn {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            margin-right: 5px;
+        }
+
+        .action-btn:hover {
+            background: #30363d;
+        }
+
+        .action-btn.delete {
+            background: #da3633;
+            border-color: #da3633;
+            color: white;
+        }
+
+        .action-btn.delete:hover {
+            background: #f85149;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            animation: fadeIn 0.2s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: #161b22;
+            margin: 10% auto;
+            padding: 30px;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            animation: slideDown 0.3s;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 1.5em;
+            color: #58a6ff;
+        }
+
+        .close {
+            color: #8b949e;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .close:hover {
+            color: #c9d1d9;
+        }
+
+        /* Formulář */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #c9d1d9;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 25px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: none;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: #238636;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2ea043;
+        }
+
+        .btn-secondary {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+        }
+
+        .btn-secondary:hover {
+            background: #30363d;
+        }
+
+        /* Prázdný stav */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8b949e;
+        }
+
+        .empty-state-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .empty-state-text {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .empty-state-subtext {
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <div class="logo" onclick="window.location.href='/'">🏰 Divoké kmeny</div>
+            <div class="nav">
+                <a href="/" class="nav-btn">🏠 Domů</a>
+                <a href="/training-templates.html" class="nav-btn">📋 Šablony</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h1>🌍 Nastavení světů</h1>
+        <p class="description">Nastavte rychlost světů pro přesný výpočet doby cesty jednotek.</p>
+
+        <div id="message"></div>
+
+        <button class="btn-add" onclick="openAddModal()">➕ Přidat svět</button>
+
+        <div class="worlds-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Svět</th>
+                        <th>Rychlost světa</th>
+                        <th>Akce</th>
+                    </tr>
+                </thead>
+                <tbody id="worlds-tbody">
+                    <!-- Načteno z API -->
+                </tbody>
+            </table>
+            <div id="empty-state" class="empty-state" style="display: none;">
+                <div class="empty-state-icon">🌍</div>
+                <div class="empty-state-text">Žádné světy</div>
+                <div class="empty-state-subtext">Klikněte na "Přidat svět" a nastavte rychlost světa</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal pro přidání/úpravu světa -->
+    <div id="worldModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modal-title">Přidat svět</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+
+            <div class="form-group">
+                <label for="world-name">Název světa</label>
+                <input type="text" id="world-name" placeholder="např. cs97, sk105" required>
+            </div>
+
+            <div class="form-group">
+                <label for="world-speed">Rychlost světa</label>
+                <input type="number" id="world-speed" placeholder="např. 1, 2, 10" min="0.1" step="0.1" value="1" required>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
+                <button class="btn btn-primary" onclick="saveWorld()">Uložit</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let editingWorld = null;
+
+        // Načíst světy při načtení stránky
+        window.addEventListener('DOMContentLoaded', loadWorlds);
+
+        async function loadWorlds() {
+            try {
+                const response = await fetch('/api/world-settings');
+                const worlds = await response.json();
+
+                const tbody = document.getElementById('worlds-tbody');
+                const emptyState = document.getElementById('empty-state');
+
+                if (Object.keys(worlds).length === 0) {
+                    tbody.innerHTML = '';
+                    emptyState.style.display = 'block';
+                    return;
+                }
+
+                emptyState.style.display = 'none';
+                tbody.innerHTML = Object.entries(worlds)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([world, settings]) => `
+                        <tr>
+                            <td><strong>${world}</strong></td>
+                            <td>${settings.speed}x</td>
+                            <td>
+                                <button class="action-btn" onclick="editWorld('${world}', ${settings.speed})">✏️ Upravit</button>
+                                <button class="action-btn delete" onclick="deleteWorld('${world}')">🗑️ Smazat</button>
+                            </td>
+                        </tr>
+                    `).join('');
+            } catch (error) {
+                showMessage('Chyba při načítání světů: ' + error.message, 'error');
+            }
+        }
+
+        function openAddModal() {
+            editingWorld = null;
+            document.getElementById('modal-title').textContent = 'Přidat svět';
+            document.getElementById('world-name').value = '';
+            document.getElementById('world-name').disabled = false;
+            document.getElementById('world-speed').value = '1';
+            document.getElementById('worldModal').style.display = 'block';
+        }
+
+        function editWorld(world, speed) {
+            editingWorld = world;
+            document.getElementById('modal-title').textContent = 'Upravit svět';
+            document.getElementById('world-name').value = world;
+            document.getElementById('world-name').disabled = true;
+            document.getElementById('world-speed').value = speed;
+            document.getElementById('worldModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('worldModal').style.display = 'none';
+            editingWorld = null;
+        }
+
+        async function saveWorld() {
+            const worldName = document.getElementById('world-name').value.trim();
+            const worldSpeed = parseFloat(document.getElementById('world-speed').value);
+
+            if (!worldName) {
+                showMessage('Vyplňte název světa', 'error');
+                return;
+            }
+
+            if (!worldSpeed || worldSpeed <= 0) {
+                showMessage('Zadejte platnou rychlost světa', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/world-settings/${worldName}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ speed: worldSpeed })
+                });
+
+                if (response.ok) {
+                    showMessage(`Svět ${worldName} byl úspěšně ${editingWorld ? 'upraven' : 'přidán'}`, 'success');
+                    closeModal();
+                    loadWorlds();
+                } else {
+                    const error = await response.json();
+                    showMessage('Chyba: ' + error.error, 'error');
+                }
+            } catch (error) {
+                showMessage('Chyba při ukládání: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteWorld(world) {
+            if (!confirm(`Opravdu chcete smazat nastavení světa ${world}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/world-settings/${world}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    showMessage(`Svět ${world} byl smazán`, 'success');
+                    loadWorlds();
+                } else {
+                    const error = await response.json();
+                    showMessage('Chyba: ' + error.error, 'error');
+                }
+            } catch (error) {
+                showMessage('Chyba při mazání: ' + error.message, 'error');
+            }
+        }
+
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            message.textContent = text;
+            message.className = type;
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 5000);
+        }
+
+        // Zavřít modal při kliknutí mimo něj
+        window.onclick = function(event) {
+            const modal = document.getElementById('worldModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>
