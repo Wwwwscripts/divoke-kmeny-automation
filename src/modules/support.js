@@ -46,15 +46,11 @@ class SupportModule {
    */
   async getUnitsFromOverview() {
     try {
-      console.log('📊 Zjišťuji jednotky přes overview_villages...');
-
       const worldUrl = this.getWorldUrl();
       const villageId = await this.getVillageId();
 
       // Sestavíme URL (stejně jako script "Přehled armády")
       const url = `${worldUrl}/game.php?village=${villageId}&type=complete&mode=units&group=0&page=-1&screen=overview_villages`;
-
-      console.log(`🌐 Načítám: ${url}`);
 
       await this.page.goto(url, {
         waitUntil: 'domcontentloaded',
@@ -69,32 +65,26 @@ class SupportModule {
         const table = document.querySelector('#units_table');
 
         if (!table || table.rows.length < 2) {
-          console.log('Tabulka #units_table nenalezena nebo je prázdná');
           return null;
         }
-
-        console.log(`Tabulka nalezena, počet řádků: ${table.rows.length}`);
 
         const firstRow = table.rows[0];
         const dataRow = table.rows[1];
 
         // Zjistíme offset (někdy je první buňka název vesnice)
         const offset = (firstRow.cells.length == dataRow.cells.length) ? 2 : 1;
-        console.log(`Offset: ${offset}`);
 
         // Typy jednotek
         let unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob'];
 
         // Kontrola jestli má archer (některá světa nemají lukostřelce)
         if (!firstRow.innerHTML.match("archer")) {
-          console.log('Svět nemá lukostřelce - odstraňuji archer a marcher');
           unitTypes.splice(unitTypes.indexOf("archer"), 1);
           unitTypes.splice(unitTypes.indexOf("marcher"), 1);
         }
 
         // Kontrola jestli má rytíře
         if (!firstRow.innerHTML.match("knight")) {
-          console.log('Svět nemá rytíře - odstraňuji knight');
           unitTypes.splice(unitTypes.indexOf("knight"), 1);
         }
 
@@ -169,52 +159,25 @@ class SupportModule {
               onWay: unitsOnWay[unitType]
             }
           };
-
-          console.log(`${unitType}: ve vesnicích=${unitsInVillages[unitType]}, podpora=${unitsSupport[unitType]}, odesláno=${unitsSent[unitType]}, na cestě=${unitsOnWay[unitType]}, TOTAL=${total}`);
         });
 
         return units;
       });
 
-      if (!unitsData) {
-        console.log('⚠️ Nepodařilo se zjistit jednotky z overview');
-        return null;
-      }
-
-      console.log('✅ Jednotky z overview získány');
       return unitsData;
 
     } catch (error) {
-      console.error('❌ Chyba při zjišťování jednotek z overview:', error.message);
+      // Tichá chyba - nezobrazujeme
       return null;
     }
   }
 
   /**
-   * Vytiskne tabulku jednotek
+   * Vytiskne tabulku jednotek (pouze v DEBUG módu)
    */
   printUnitsTable(units, source) {
-    console.log(`\n📋 Zdroj: ${source}`);
-    console.log('-'.repeat(80));
-    console.log('Jednotka    | Ve vesnici | Celkem | Mimo | Breakdown (V/S/O/C)');
-    console.log('-'.repeat(80));
-
-    Object.keys(units).forEach(unitType => {
-      const unit = units[unitType];
-      const name = unitType.padEnd(11);
-      const inVillage = String(unit.inVillage).padStart(10);
-      const total = String(unit.total).padStart(6);
-      const away = String(unit.away).padStart(5);
-
-      const breakdown = unit.breakdown
-        ? `${unit.breakdown.inVillages}/${unit.breakdown.support}/${unit.breakdown.sent}/${unit.breakdown.onWay}`
-        : 'N/A';
-
-      console.log(`${name} | ${inVillage} | ${total} | ${away} | ${breakdown}`);
-    });
-
-    console.log('-'.repeat(80));
-    console.log('V = ve vesnicích, S = vlastní podpora, O = odesláno, C = na cestě');
+    // Vypnuto - verbose logging
+    return;
   }
 
   /**
@@ -222,23 +185,16 @@ class SupportModule {
    */
   async getAllUnitsInfo() {
     try {
-      console.log('\n' + '='.repeat(60));
-      console.log('📊 ZJIŠŤOVÁNÍ JEDNOTEK - OVERVIEW METHOD');
-      console.log('='.repeat(60));
-
       const unitsData = await this.getUnitsFromOverview();
 
       if (unitsData) {
-        this.printUnitsTable(unitsData, 'Overview Villages');
         await this.saveUnitsToDatabase(unitsData);
       }
-
-      console.log('='.repeat(60));
 
       return unitsData;
 
     } catch (error) {
-      console.error('❌ Chyba při zjišťování jednotek:', error.message);
+      // Tichá chyba
       return null;
     }
   }
@@ -264,9 +220,9 @@ class SupportModule {
         units_info: JSON.stringify(cleanData)
       });
 
-      console.log('✅ Informace o jednotkách uloženy do databáze');
+      // Tichý úspěch
     } catch (error) {
-      console.error('❌ Chyba při ukládání jednotek:', error.message);
+      // Tichá chyba
     }
   }
 
@@ -275,15 +231,10 @@ class SupportModule {
    */
   async execute(params = {}) {
     try {
-      console.log('🚀 Spouštím modul: Support');
-
       const unitsData = await this.getAllUnitsInfo();
-
-      console.log('✅ Modul Support dokončen');
       return { success: true, data: unitsData };
 
     } catch (error) {
-      console.error('❌ Chyba v modulu Support:', error.message);
       return { success: false, error: error.message };
     }
   }
