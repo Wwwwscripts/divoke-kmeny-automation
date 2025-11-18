@@ -304,7 +304,17 @@ class Automator {
         if (!this.openBrowserWindows.has(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro přihlášení: ${account.username}`);
           this.openBrowserWindows.add(account.id);
-          await this.browserManager.testConnection(account.id);
+
+          const browserInfo = await this.browserManager.testConnection(account.id);
+          if (browserInfo) {
+            // Sleduj zavření browseru
+            browserInfo.browser.on('disconnected', () => {
+              console.log(`🔒 Browser zavřen pro: ${account.username}`);
+              this.openBrowserWindows.delete(account.id);
+              console.log(`✅ Účet ${account.username} odebrán z otevřených oken`);
+            });
+          }
+
           console.log(`⚠️  Viditelný prohlížeč otevřen - přihlaste se a zavřete okno`);
         } else {
           console.log(`⏭️  Viditelný prohlížeč už je otevřený pro ${account.username} - přeskakuji`);
@@ -348,7 +358,17 @@ class Automator {
         if (!this.openBrowserWindows.has(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
           this.openBrowserWindows.add(account.id);
-          await this.browserManager.testConnection(account.id);
+
+          const browserInfo = await this.browserManager.testConnection(account.id);
+          if (browserInfo) {
+            // Sleduj zavření browseru
+            browserInfo.browser.on('disconnected', () => {
+              console.log(`🔒 Browser zavřen pro: ${account.username}`);
+              this.openBrowserWindows.delete(account.id);
+              console.log(`✅ Účet ${account.username} odebrán z otevřených oken`);
+            });
+          }
+
           console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA a zavřete okno`);
         } else {
           console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
@@ -372,7 +392,17 @@ class Automator {
         if (!this.openBrowserWindows.has(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro vytvoření nové vesnice`);
           this.openBrowserWindows.add(account.id);
-          await this.browserManager.testConnection(account.id);
+
+          const browserInfo = await this.browserManager.testConnection(account.id);
+          if (browserInfo) {
+            // Sleduj zavření browseru
+            browserInfo.browser.on('disconnected', () => {
+              console.log(`🔒 Browser zavřen pro: ${account.username}`);
+              this.openBrowserWindows.delete(account.id);
+              console.log(`✅ Účet ${account.username} odebrán z otevřených oken`);
+            });
+          }
+
           console.log(`⚠️  Viditelný prohlížeč otevřen - vytvořte novou vesnici a zavřete okno`);
         } else {
           console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);

@@ -172,6 +172,23 @@ class BrowserManager {
           waitUntil: 'domcontentloaded',
           timeout: 30000
         });
+
+        // Vyplň username a heslo pokud je přihlašovací formulář
+        await page.waitForTimeout(1000);
+        const loginFormExists = await page.evaluate(() => {
+          return document.querySelector('input[name="username"]') !== null;
+        });
+
+        if (loginFormExists) {
+          console.log(`📝 Vyplňuji přihlašovací údaje pro: ${account.username}`);
+          await page.evaluate((username, password) => {
+            const usernameInput = document.querySelector('input[name="username"]');
+            const passwordInput = document.querySelector('input[name="password"]');
+            if (usernameInput) usernameInput.value = username;
+            if (passwordInput) passwordInput.value = password;
+          }, account.username, account.password);
+          console.log(`✅ Údaje vyplněny - stiskněte tlačítko přihlásit`);
+        }
       } else {
         console.log(`🌐 Načítám hlavní stránku (${domain})...`);
         await page.goto(`https://www.${domain}/`, {
@@ -180,12 +197,16 @@ class BrowserManager {
         });
       }
 
-      console.log('🖥️  Prohlížeč otevřen - zavřete ho ručně');
+      console.log('🖥️  Prohlížeč otevřen - zavřete ho ručně po přihlášení');
       console.log('💾 Cookies se uloží automaticky při dalším zpracování účtu');
+
+      // Vrať browser pro sledování zavření
+      return { browser, context, accountId: account.id };
 
     } catch (error) {
       console.error('❌ Chyba při otevírání prohlížeče:', error.message);
       await this.close(browser, context);
+      return null;
     }
   }
 }
