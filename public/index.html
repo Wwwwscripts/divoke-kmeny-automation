@@ -481,6 +481,13 @@
     <script>
         let allAccounts = [];
         let currentSort = { column: null, ascending: true };
+
+        // Helper funkce pro ikony surovin z Tribal Wars
+        function getResourceIcon(resourceType) {
+            const resourceMap = { wood: 'holz', clay: 'lehm', iron: 'eisen' };
+            const graphicName = resourceMap[resourceType] || resourceType;
+            return `<img src="https://cs107.divokekmeny.cz/graphic/${graphicName}.png" style="width: 18px; height: 18px; vertical-align: middle; margin-right: 2px;" alt="${resourceType}">`;
+        }
         let recruitTemplates = [];
         let researchTemplates = [];
 
@@ -593,9 +600,9 @@
                         <td><span class="world-badge">${acc.world || '-'}</span></td>
                         <td>${(acc.points || 0).toLocaleString('cs-CZ')}</td>
                         <td style="font-size: 12px;">
-                            <span class="resource-item">🪵 ${(acc.wood || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
-                            <span class="resource-item">🧱 ${(acc.clay || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
-                            <span class="resource-item">⚙️ ${(acc.iron || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
+                            <span class="resource-item">${getResourceIcon('wood')} ${(acc.wood || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
+                            <span class="resource-item">${getResourceIcon('clay')} ${(acc.clay || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
+                            <span class="resource-item">${getResourceIcon('iron')} ${(acc.iron || 0).toLocaleString('cs-CZ', { notation: 'compact' })}</span>
                         </td>
                         <td>
                             <label class="toggle-switch">
