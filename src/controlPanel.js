@@ -338,7 +338,9 @@ app.post('/api/support/open-manual', async (req, res) => {
     // Získat browser pro daný účet
     const browser = browserManager.getBrowser(accountId);
     if (!browser) {
-      return res.status(404).json({ error: 'Browser pro tento účet není aktivní' });
+      return res.status(400).json({
+        error: 'Browser pro tento účet není aktivní. Nejprve otevřete browser pro tento účet v hlavním menu.'
+      });
     }
 
     // Dynamicky importovat SupportSender
@@ -354,6 +356,7 @@ app.post('/api/support/open-manual', async (req, res) => {
 
     res.json({ success: true, message: 'Formulář vyplněn' });
   } catch (error) {
+    console.error('Error in /api/support/open-manual:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -370,7 +373,9 @@ app.post('/api/support/send', async (req, res) => {
     // Získat browser pro daný účet
     const browser = browserManager.getBrowser(accountId);
     if (!browser) {
-      return res.status(404).json({ error: 'Browser pro tento účet není aktivní' });
+      return res.status(400).json({
+        error: 'Browser pro tento účet není aktivní. Nejprve otevřete browser pro tento účet v hlavním menu.'
+      });
     }
 
     // Dynamicky importovat SupportSender
@@ -386,6 +391,7 @@ app.post('/api/support/send', async (req, res) => {
 
     res.json({ success: true, result });
   } catch (error) {
+    console.error('Error in /api/support/send:', error);
     res.status(500).json({ error: error.message });
   }
 });
