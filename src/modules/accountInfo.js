@@ -143,8 +143,8 @@ class AccountInfoModule {
         await this.page.waitForTimeout(1500); // Sníženo z 2000ms
       }
 
-      await this.page.waitForSelector('#buildings', { timeout: 10000 });
-      await this.page.waitForTimeout(500); // Sníženo z 1000ms
+      await this.page.waitForSelector('#buildings', { timeout: 20000 }); // Zvýšeno na 20s
+      await this.page.waitForTimeout(500);
 
       const wallLevel = await this.page.evaluate(() => {
         const wallRow = document.querySelector('[id*="main_buildrow_wall"]');
@@ -169,7 +169,12 @@ class AccountInfoModule {
 
       return wallLevel;
     } catch (error) {
-      logger.error('Chyba při zjišťování hradeb', this.getAccountName(), error);
+      // Timeout je normální - stránka se může načítat pomaleji
+      if (error.name === 'TimeoutError') {
+        logger.debug('Timeout při čekání na #buildings (stránka se načítá pomaleji)', this.getAccountName());
+      } else {
+        logger.error('Chyba při zjišťování hradeb', this.getAccountName(), error);
+      }
       return 0;
     }
   }
