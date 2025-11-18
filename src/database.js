@@ -217,12 +217,12 @@ class DatabaseManager {
   updateCookies(accountId, cookies) {
     const data = this._loadAccounts();
     const account = data.accounts.find(a => a.id === accountId);
-    
+
     if (account) {
       account.cookies = JSON.stringify(cookies);
       account.last_login = new Date().toISOString();
       this._saveAccounts(data);
-      console.log(`✅ Cookies aktualizovány pro účet ID: ${accountId}`);
+      // Cookies se ukládají potichu (po každé operaci)
     }
   }
 
