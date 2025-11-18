@@ -346,7 +346,7 @@
 
             <div class="nav">
                 <button class="nav-btn danger" onclick="window.location.href='/attacks.html'">
-                    🚨 Útoky
+                    🚨 Útoky <span id="attackCount"></span>
                 </button>
                 <button class="nav-btn" onclick="window.location.href='/units.html'">
                     ⚔️ Jednotky
@@ -438,15 +438,32 @@
                 if (accountsUnderAttack.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="8" class="loading" style="color: #3fb950;">✅ Žádné účty pod útokem!</td></tr>';
                     alertDiv.innerHTML = '<div class="alert success">✅ Všechny účty jsou v bezpečí!</div>';
+                    updateAttackCount();
                     return;
                 }
 
                 alertDiv.innerHTML = `<div class="alert">⚠️ <strong>${accountsUnderAttack.length}</strong> účtů je pod útokem!</div>`;
 
                 renderAttacks(accountsUnderAttack);
+                updateAttackCount();
 
             } catch (error) {
                 tbody.innerHTML = `<tr><td colspan="8" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
+            }
+        }
+
+        // Aktualizovat počet účtů s útoky
+        async function updateAttackCount() {
+            try {
+                const response = await fetch('/api/accounts');
+                const accounts = await response.json();
+                const accountsWithAttacks = accounts.filter(a => a.incoming_attacks > 0).length;
+                const attackCountEl = document.getElementById('attackCount');
+                if (attackCountEl) {
+                    attackCountEl.textContent = accountsWithAttacks > 0 ? `(${accountsWithAttacks})` : '';
+                }
+            } catch (error) {
+                console.error('❌ Chyba při načítání počtu útoků:', error);
             }
         }
 

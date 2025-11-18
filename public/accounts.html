@@ -399,7 +399,7 @@
 
             <div class="nav">
                 <button class="nav-btn danger" onclick="window.location.href='/attacks.html'">
-                    🚨 Útoky
+                    🚨 Útoky <span id="attackCount"></span>
                 </button>
                 <button class="nav-btn" onclick="window.location.href='/units.html'">
                     ⚔️ Jednotky
@@ -514,10 +514,20 @@
 
                 allAccounts = accounts;
                 renderAccounts(accounts);
+                updateAttackCount();
             } catch (error) {
                 console.error('Chyba při načítání účtů:', error);
                 const tbody = document.getElementById('accountsBody');
                 tbody.innerHTML = `<tr><td colspan="7" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
+            }
+        }
+
+        // Aktualizovat počet účtů s útoky
+        function updateAttackCount() {
+            const accountsWithAttacks = allAccounts.filter(a => a.incoming_attacks > 0).length;
+            const attackCountEl = document.getElementById('attackCount');
+            if (attackCountEl) {
+                attackCountEl.textContent = accountsWithAttacks > 0 ? `(${accountsWithAttacks})` : '';
             }
         }
 
