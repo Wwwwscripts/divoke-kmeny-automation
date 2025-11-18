@@ -37,9 +37,9 @@ class Automator {
     this.intervals = {
       checks: 0,        // Kontroly běží neustále (žádný wait)
       recruit: 4 * 60 * 1000,     // 4 minuty
-      building: 30 * 1000,        // 30 sekund - RYCHLÁ kontrola výstavby
-      research: 60 * 60 * 1000,   // 60 minut
-      paladin: 60 * 60 * 1000,    // 60 minut
+      building: 5 * 1000,         // 5 sekund - COOLDOWN režim (kontroluje hned jak vyprší)
+      research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
+      paladin: 120 * 60 * 1000,   // 120 minut (2 hodiny)
       accountInfo: 20 * 60 * 1000 // 20 minut (sběr statistik)
     };
 
@@ -133,8 +133,8 @@ class Automator {
 
   /**
    * SMYČKA 2: Výstavba
-   * Každé 2 minuty projde účty a zkontroluje dynamický timing
-   * Priorita: 2
+   * Každých 5 sekund projde účty - COOLDOWN režim (kontroluje hned jak vyprší čas)
+   * Priorita: 1
    */
   async buildingLoop() {
     console.log('🔄 [P2] Smyčka BUILD spuštěna');
@@ -166,7 +166,7 @@ class Automator {
         }
       }
 
-      // Počkej 30 sekund před další kontrolou (bylo 2 minuty)
+      // Počkej 5 sekund před další kontrolou (COOLDOWN režim)
       await new Promise(resolve => setTimeout(resolve, this.intervals.building));
     }
   }
@@ -206,7 +206,7 @@ class Automator {
 
   /**
    * SMYČKA 4: Výzkum
-   * Každých 60 minut projde účty a zkontroluje timing
+   * Každé 2 hodiny projde účty a zkontroluje timing
    * Priorita: 4
    */
   async researchLoop() {
@@ -232,14 +232,14 @@ class Automator {
         }
       }
 
-      // Počkej 60 minut
+      // Počkej 2 hodiny
       await new Promise(resolve => setTimeout(resolve, this.intervals.research));
     }
   }
 
   /**
    * SMYČKA 5: Paladin
-   * Každých 60 minut projde účty a zkontroluje paladina
+   * Každé 2 hodiny projde účty a zkontroluje paladina
    * Priorita: 5
    */
   async paladinLoop() {
@@ -262,7 +262,7 @@ class Automator {
         }
       }
 
-      // Počkej 60 minut
+      // Počkej 2 hodiny
       await new Promise(resolve => setTimeout(resolve, this.intervals.paladin));
     }
   }
