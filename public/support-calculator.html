@@ -746,8 +746,8 @@
 
                     actions = `
                         <div class="action-buttons">
-                            <button class="action-btn" onclick="openManual(${account.id}, ${JSON.stringify(result.unitsToSend)}, ${result.targetX}, ${result.targetY}, ${index})">📝 Ručně</button>
-                            <button class="action-btn auto" onclick="sendSupport(${account.id}, ${JSON.stringify(result.unitsToSend)}, ${result.targetX}, ${result.targetY}, ${index})">⚡ Auto</button>
+                            <button class="action-btn" onclick="openManual(${account.id}, '${result.unitsToSend.join(',')}', ${result.targetX}, ${result.targetY}, ${index})">📝 Ručně</button>
+                            <button class="action-btn auto" onclick="sendSupport(${account.id}, '${result.unitsToSend.join(',')}', ${result.targetX}, ${result.targetY}, ${index})">⚡ Auto</button>
                         </div>
                     `;
                 } else {
@@ -787,8 +787,11 @@
             return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
         }
 
-        function openManual(accountId, unitTypes, targetX, targetY, index) {
+        function openManual(accountId, unitTypesStr, targetX, targetY, index) {
             try {
+                // Převést string na pole
+                const unitTypes = unitTypesStr.split(',');
+
                 // Najít výsledek pro daný index
                 const result = calculationResults[index];
                 if (!result) {
@@ -848,8 +851,11 @@
             }
         }
 
-        async function sendSupport(accountId, unitTypes, targetX, targetY, index) {
+        async function sendSupport(accountId, unitTypesStr, targetX, targetY, index) {
             try {
+                // Převést string na pole
+                const unitTypes = unitTypesStr.split(',');
+
                 showMessage('Odesílám podporu...', 'info');
 
                 const response = await fetch('/api/support/send', {
