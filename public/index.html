@@ -459,6 +459,7 @@
                 <thead>
                     <tr>
                         <th class="sortable" onclick="sortBy('username')">Účet</th>
+                        <th class="sortable" onclick="sortBy('tribe_name')">Kmen</th>
                         <th class="sortable" onclick="sortBy('world')">Svět</th>
                         <th class="sortable" onclick="sortBy('points')">Body</th>
                         <th>Suroviny</th>
@@ -472,7 +473,7 @@
                     </tr>
                 </thead>
                 <tbody id="accountsList">
-                    <tr><td colspan="11" class="loading">⏳ Načítám účty...</td></tr>
+                    <tr><td colspan="12" class="loading">⏳ Načítám účty...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -530,14 +531,14 @@
         // Načíst účty
         async function loadAccounts() {
             const tbody = document.getElementById('accountsList');
-            tbody.innerHTML = '<tr><td colspan="11" class="loading">⏳ Načítám účty...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="loading">⏳ Načítám účty...</td></tr>';
 
             try {
                 const response = await fetch('/api/accounts');
                 allAccounts = await response.json();
 
                 if (allAccounts.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="11" class="loading">Žádné účty k zobrazení</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="12" class="loading">Žádné účty k zobrazení</td></tr>';
                     return;
                 }
 
@@ -545,7 +546,7 @@
                 renderAccounts(allAccounts);
 
             } catch (error) {
-                tbody.innerHTML = `<tr><td colspan="11" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
             }
         }
 
@@ -576,6 +577,7 @@
                     return `
                         <tr style="background: rgba(248, 81, 73, 0.1); border-left: 3px solid #f85149;">
                             <td><span class="account-name">${acc.username}</span></td>
+                            <td>${acc.tribe_name || '-'}</td>
                             <td><span class="world-badge">${acc.world || '-'}</span></td>
                             <td colspan="8" style="text-align: center;">
                                 <span style="color: #f85149; font-weight: 600; font-size: 14px;">
@@ -597,6 +599,7 @@
                 return `
                     <tr>
                         <td><span class="account-name">${acc.username}</span></td>
+                        <td>${acc.tribe_name || '-'}</td>
                         <td><span class="world-badge">${acc.world || '-'}</span></td>
                         <td>${(acc.points || 0).toLocaleString('cs-CZ')}</td>
                         <td style="font-size: 12px;">

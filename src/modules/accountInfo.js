@@ -131,6 +131,92 @@ class AccountInfoModule {
   }
 
   /**
+   * Získá název kmene (tribe)
+   */
+  async getTribeName() {
+    try {
+      const tribeInfo = await this.page.evaluate(() => {
+        // Získáme ally ID z game_data
+        const allyId = game_data?.player?.ally;
+
+        if (!allyId || allyId === '0') {
+          return { allyId: null, allyName: null };
+        }
+
+        return { allyId, allyName: null }; // Name získáme ze stránky kmene
+      });
+
+      // Pokud nemá kmen, vraťme null
+      if (!tribeInfo.allyId) {
+        return null;
+      }
+
+      // Načteme stránku kmene pro získání názvu
+      try {
+        const currentUrl = this.page.url();
+        const worldMatch = currentUrl.match(/\/\/([^.]+)\.(divokekmeny\.cz|divoke-kmene\.sk)/);
+        if (!worldMatch) return null;
+
+        const world = worldMatch[1];
+        const domain = worldMatch[2];
+
+        // Navštívíme stránku kmene
+        await this.page.goto(`https://${world}.${domain}/game.php?screen=ally&mode=overview&id=${tribeInfo.allyId}`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 10000
+        });
+
+        await this.page.waitForTimeout(500);
+
+        // Získáme název kmene z h2 elementu
+        const tribeName = await this.page.evaluate(() => {
+          const h2 = document.querySelector('h2');
+          if (!h2) return null;
+
+          // Text bude "Název kmene (Stupeň X)"
+          const fullText = h2.textContent.trim();
+          // Odstraníme "(Stupeň X)" na konci
+          const match = fullText.match(/^(.+?)\s*\(Stupeň\s+\d+\)$/i);
+          return match ? match[1].trim() : fullText;
+        });
+
+        return tribeName;
+      } catch (error) {
+        logger.debug('Nepodařilo se načíst název kmene', this.getAccountName());
+        return null;
+      }
+    } catch (error) {
+      logger.error('Chyba při zjišťování kmene', this.getAccountName(), error);
+      return null;
+    }
+  }
+
+  /**
+   * Získá Premium informace
+   */
+  async getPremiumInfo() {
+    try {
+      const premiumInfo = await this.page.evaluate(() => {
+        // Premium body
+        const premiumPoints = parseInt(game_data?.player?.pp) || 0;
+
+        // Premium aktivní?
+        const premiumActive = game_data?.features?.Premium?.active === true;
+
+        return {
+          premium_points: premiumPoints,
+          premium_active: premiumActive
+        };
+      });
+
+      return premiumInfo;
+    } catch (error) {
+      logger.error('Chyba při zjišťování Premium', this.getAccountName(), error);
+      return { premium_points: 0, premium_active: false };
+    }
+  }
+
+  /**
    * Získá úroveň hradeb z hlavní obrazovky
    */
   async getWallLevel() {
@@ -195,6 +281,8 @@ class AccountInfoModule {
       const resources = await this.getResources();
       const population = await this.getPopulation();
       const points = await this.getPoints();
+      const tribeName = await this.getTribeName();
+      const premiumInfo = await this.getPremiumInfo();
       const wallLevel = await this.getWallLevel();
 
       const [popCurrent, popMax] = population.split('/').map(p => parseInt(p.trim()) || 0);
@@ -214,7 +302,10 @@ class AccountInfoModule {
         village_name: villageInfo?.name,
         coord_x: villageInfo?.x,
         coord_y: villageInfo?.y,
-        continent: villageInfo?.continent
+        continent: villageInfo?.continent,
+        tribe_name: tribeName,
+        premium_active: premiumInfo.premium_active,
+        premium_points: premiumInfo.premium_points
       });
 
       return {
@@ -222,7 +313,9 @@ class AccountInfoModule {
         population,
         points,
         wallLevel,
-        villageInfo
+        villageInfo,
+        tribeName,
+        premiumInfo
       };
     } catch (error) {
       logger.error('Chyba při sbírání informací', this.getAccountName(), error);
