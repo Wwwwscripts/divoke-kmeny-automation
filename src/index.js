@@ -1,27 +1,48 @@
 import 'dotenv/config';
 import DatabaseManager from './database.js';
-import BrowserManager from './browserManager.js';
+import SharedBrowserPool from './sharedBrowserPool.js';
+import WorkerPool from './workerPool.js';
 import AccountInfoModule from './modules/accountInfo.js';
 import RecruitModule from './modules/recruit.js';
 import BuildingModule from './modules/building.js';
 import ResearchModule from './modules/research.js';
-import NotificationsModule from './modules/notifications.js'; 
+import NotificationsModule from './modules/notifications.js';
 
+/**
+ * 🚀 Event-Driven Automator s nezávislými smyčkami
+ *
+ * Architektura:
+ * - Globální WorkerPool (max 40 procesů)
+ * - 4 nezávislé smyčky:
+ *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
+ *   2. Build - dynamicky podle timingu [P2]
+ *   3. Rekrut - každé 4 minuty [P3]
+ *   4. Výzkum - každých 60 minut [P4]
+ */
 class Automator {
   constructor() {
     this.db = new DatabaseManager();
-    this.browserManager = new BrowserManager();
+    this.browserPool = new SharedBrowserPool(this.db);
+    this.workerPool = new WorkerPool(40); // Max 40 procesů
     this.isRunning = false;
-    this.checkInterval = 2 * 60 * 1000; // 2 minuty (rychlý polling, skutečné timing je per-module)
-    this.accountWaitTimes = {}; // Uchovává časy pro další kontrolu každého modulu
-    this.maxConcurrentAccounts = 20; // Zpět na 20 pro rychlé zpracování
-    this.openBrowserWindows = new Set(); // Účty s otevřeným viditelným oknem
+    this.accountWaitTimes = {}; // Per-account per-module timing
 
-    // Defaultní intervaly pro moduly (pokud modul nevrátí vlastní waitTime)
-    this.defaultIntervals = {
-      research: 60 * 60 * 1000,  // 60 minut pro výzkum
-      recruit: 4 * 60 * 1000,     // 4 minuty pro rekrutování
-      building: 5 * 60 * 1000     // 5 minut pro výstavbu (fallback)
+    // Intervaly pro smyčky
+    this.intervals = {
+      checks: 0,        // Kontroly běží neustále (žádný wait)
+      recruit: 4 * 60 * 1000,     // 4 minuty
+      building: 2 * 60 * 1000,    // 2 minuty (kontrola dynamického timingu)
+      research: 60 * 60 * 1000,   // 60 minut
+      accountInfo: 20 * 60 * 1000 // 20 minut (sběr statistik)
+    };
+
+    // Priority (nižší = vyšší priorita)
+    this.priorities = {
+      checks: 1,    // Útoky/CAPTCHA - nejvyšší
+      building: 2,  // Výstavba
+      recruit: 3,   // Rekrutování
+      research: 4,  // Výzkum
+      stats: 5      // Statistiky
     };
   }
 
@@ -30,351 +51,397 @@ class Automator {
    */
   getWorldDomain(world) {
     if (!world) return 'divokekmeny.cz';
-    
-    // SK světy (sk1, sk2, sk97, atd.)
+
     if (world.toLowerCase().startsWith('sk')) {
       return 'divoke-kmene.sk';
     }
-    
-    // CZ světy (cs1, cs107, atd.)
+
     return 'divokekmeny.cz';
   }
 
+  /**
+   * Spustí všechny smyčky
+   */
   async start() {
-    console.log('='.repeat(60));
-    console.log('🤖 Spouštím automatizaci');
-    console.log('⏱️  Polling každé 2 minuty (moduly mají vlastní intervaly)');
-    console.log('🔬 Výzkum: 1x za hodinu | 🎯 Rekrut: každé 4 min | 🏗️  Build: dynamicky');
-    console.log('='.repeat(60));
+    console.log('='.repeat(70));
+    console.log('🤖 Spouštím Event-Driven automatizaci');
+    console.log('⚡ Worker Pool: Max 40 procesů');
+    console.log('🔄 4 nezávislé smyčky:');
+    console.log('   [P1] Kontroly: neustále po 2 účtech');
+    console.log('   [P2] Build: dynamicky');
+    console.log('   [P3] Rekrut: každé 4 min');
+    console.log('   [P4] Výzkum: každých 60 min');
+    console.log('   [P5] Statistiky: každých 20 min');
+    console.log('='.repeat(70));
 
     this.isRunning = true;
 
-    // První běh okamžitě
-    await this.processAllAccounts();
+    // Spusť všechny smyčky paralelně
+    await Promise.all([
+      this.checksLoop(),      // P1: Neustále
+      this.buildingLoop(),    // P2: Každé 2 min (kontrola dynamického timingu)
+      this.recruitLoop(),     // P3: Každé 4 min
+      this.researchLoop(),    // P4: Každých 60 min
+      this.statsMonitor()     // Monitoring
+    ]);
+  }
 
-    // Pak každé 2 minuty
-    this.intervalId = setInterval(async () => {
-      if (this.isRunning) {
-        await this.processAllAccounts();
+  /**
+   * SMYČKA 1: Kontroly (útoky/CAPTCHA)
+   * Běží neustále dokola po 2 účtech
+   * Priorita: 1 (nejvyšší)
+   */
+  async checksLoop() {
+    console.log('🔄 [P1] Smyčka KONTROLY spuštěna');
+
+    while (this.isRunning) {
+      const accounts = this.db.getAllActiveAccounts();
+
+      // Zpracuj po 2 účtech
+      for (let i = 0; i < accounts.length; i += 2) {
+        const batch = accounts.slice(i, i + 2);
+
+        // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
+        await Promise.all(
+          batch.map(account =>
+            this.workerPool.run(
+              () => this.processChecks(account),
+              this.priorities.checks,
+              `Kontroly: ${account.username}`
+            )
+          )
+        );
+
+        // Malá pauza mezi dávkami (100ms)
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
-    }, this.checkInterval);
+
+      // Celý cyklus hotový, krátká pauza před dalším kolem
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
 
-  async processAllAccounts() {
-    console.log('\n' + '='.repeat(60));
-    console.log(`🔄 Nový cyklus: ${new Date().toLocaleString('cs-CZ')}`);
-    console.log('='.repeat(60));
+  /**
+   * SMYČKA 2: Výstavba
+   * Každé 2 minuty projde účty a zkontroluje dynamický timing
+   * Priorita: 2
+   */
+  async buildingLoop() {
+    console.log('🔄 [P2] Smyčka BUILD spuštěna');
 
-    const accounts = this.db.getAllActiveAccounts();
+    while (this.isRunning) {
+      const accounts = this.db.getAllActiveAccounts();
 
-    if (accounts.length === 0) {
-      console.log('❌ Žádné aktivní účty');
-      return;
+      for (const account of accounts) {
+        const buildingSettings = this.db.getBuildingSettings(account.id);
+
+        if (buildingSettings && buildingSettings.enabled) {
+          const buildingKey = `building_${account.id}`;
+          const buildingWaitUntil = this.accountWaitTimes[buildingKey];
+
+          // Pokud je čas, spusť
+          if (!buildingWaitUntil || Date.now() >= buildingWaitUntil) {
+            await this.workerPool.run(
+              () => this.processBuilding(account, buildingSettings),
+              this.priorities.building,
+              `Build: ${account.username}`
+            );
+          }
+        }
+      }
+
+      // Počkej 2 minuty před další kontrolou
+      await new Promise(resolve => setTimeout(resolve, this.intervals.building));
     }
-
-    console.log(`📊 Celkem účtů: ${accounts.length}`);
-    console.log(`⚡ Zpracovávám po ${this.maxConcurrentAccounts} účtech najednou`);
-
-    // Zpracuj účty po dávkách (max 25 najednou)
-    for (let i = 0; i < accounts.length; i += this.maxConcurrentAccounts) {
-      const batch = accounts.slice(i, i + this.maxConcurrentAccounts);
-      console.log(`\n🔸 Dávka ${Math.floor(i / this.maxConcurrentAccounts) + 1}/${Math.ceil(accounts.length / this.maxConcurrentAccounts)}: Zpracovávám ${batch.length} účtů`);
-
-      // Zpracuj všechny účty v dávce paralelně
-      await Promise.all(
-        batch.map(account =>
-          this.processAccount(account).catch(error => {
-            console.error(`❌ Chyba při zpracování účtu ${account.username}:`, error.message);
-          })
-        )
-      );
-
-      console.log(`✅ Dávka ${Math.floor(i / this.maxConcurrentAccounts) + 1} dokončena`);
-    }
-
-    console.log('\n✅ Cyklus dokončen');
-    console.log(`⏰ Další kontrola za 2 minuty...\n`);
   }
 
-  async processAccount(account) {
-    console.log(`\n${'─'.repeat(60)}`);
-    console.log(`📝 Zpracovávám účet: ${account.username} (ID: ${account.id})`);
+  /**
+   * SMYČKA 3: Rekrutování
+   * Každé 4 minuty projde účty a zkontroluje timing
+   * Priorita: 3
+   */
+  async recruitLoop() {
+    console.log('🔄 [P3] Smyčka REKRUT spuštěna');
 
-    let browser, context;
+    while (this.isRunning) {
+      const accounts = this.db.getAllActiveAccounts();
+
+      for (const account of accounts) {
+        const recruitSettings = this.db.getRecruitSettings(account.id);
+
+        if (recruitSettings && recruitSettings.enabled) {
+          const recruitKey = `recruit_${account.id}`;
+          const recruitWaitUntil = this.accountWaitTimes[recruitKey];
+
+          if (!recruitWaitUntil || Date.now() >= recruitWaitUntil) {
+            await this.workerPool.run(
+              () => this.processRecruit(account, recruitSettings),
+              this.priorities.recruit,
+              `Rekrut: ${account.username}`
+            );
+          }
+        }
+      }
+
+      // Počkej 4 minuty
+      await new Promise(resolve => setTimeout(resolve, this.intervals.recruit));
+    }
+  }
+
+  /**
+   * SMYČKA 4: Výzkum
+   * Každých 60 minut projde účty a zkontroluje timing
+   * Priorita: 4
+   */
+  async researchLoop() {
+    console.log('🔄 [P4] Smyčka VÝZKUM spuštěna');
+
+    while (this.isRunning) {
+      const accounts = this.db.getAllActiveAccounts();
+
+      for (const account of accounts) {
+        const researchSettings = this.db.getResearchSettings(account.id);
+
+        if (researchSettings && researchSettings.enabled) {
+          const researchKey = `research_${account.id}`;
+          const researchWaitUntil = this.accountWaitTimes[researchKey];
+
+          if (!researchWaitUntil || Date.now() >= researchWaitUntil) {
+            await this.workerPool.run(
+              () => this.processResearch(account, researchSettings),
+              this.priorities.research,
+              `Výzkum: ${account.username}`
+            );
+          }
+        }
+      }
+
+      // Počkej 60 minut
+      await new Promise(resolve => setTimeout(resolve, this.intervals.research));
+    }
+  }
+
+  /**
+   * Monitoring - vypíše statistiky každých 30 sekund
+   */
+  async statsMonitor() {
+    while (this.isRunning) {
+      await new Promise(resolve => setTimeout(resolve, 30000)); // 30 sekund
+      this.workerPool.logStats();
+
+      const browserStats = this.browserPool.getStats();
+      console.log(`🌐 Browsers: ${browserStats.browsers} | Contexts: ${browserStats.contexts}`);
+    }
+  }
+
+  /**
+   * Zpracuj kontroly (útoky/CAPTCHA)
+   */
+  async processChecks(account) {
+    let browser, context, browserKey;
 
     try {
-      // Vytvoříme browser context
-      ({ browser, context } = await this.browserManager.createContext(account.id));
+      // Vytvoř context (sdílený browser)
+      ({ browser, context, browserKey } = await this.browserPool.createContext(account.id));
       const page = await context.newPage();
 
-      // Přihlásíme se
+      // Přihlásit se
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        console.log(`❌ Přihlášení se nezdařilo`);
-
-        // Zavřeme headless browser
-        await this.browserManager.close(browser, context);
-        // Otevřeme viditelný prohlížeč POUZE pokud už není otevřený
-        if (!this.openBrowserWindows.has(account.id)) {
-          console.log(`🖥️  Otevírám viditelný prohlížeč pro manuální přihlášení`);
-          this.openBrowserWindows.add(account.id);
-          await this.browserManager.testConnection(account.id);
-          console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte problém a zavřete okno`);
-        } else {
-          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
-        }
+        console.log(`❌ [${account.username}] Přihlášení selhalo`);
+        await this.browserPool.closeContext(context, browserKey);
         return;
       }
 
-      // Aktualizujeme statistiky
-      const infoModule = new AccountInfoModule(page, this.db, account.id);
-      await infoModule.collectInfo();
+      // Sbírej statistiky s vlastním intervalem
+      const infoKey = `accountInfo_${account.id}`;
+      const infoWaitUntil = this.accountWaitTimes[infoKey];
 
-      // Zkontrolujeme útoky a CAPTCHA
+      if (!infoWaitUntil || Date.now() >= infoWaitUntil) {
+        const infoModule = new AccountInfoModule(page, this.db, account.id);
+        await infoModule.collectInfo();
+        this.accountWaitTimes[infoKey] = Date.now() + this.intervals.accountInfo;
+      }
+
+      // Kontrola útoků a CAPTCHA (VŽDY)
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       await notificationsModule.detectAttacks();
       const hasCaptcha = await notificationsModule.detectCaptcha();
 
-      // Pokud je CAPTCHA, otevřeme viditelný prohlížeč
       if (hasCaptcha) {
-        console.log(`⚠️  CAPTCHA detekována`);
-
-        // Zavřeme headless browser
-        await this.browserManager.close(browser, context);
-
-        // Otevřeme viditelný prohlížeč POUZE pokud už není otevřený
-        if (!this.openBrowserWindows.has(account.id)) {
-          console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
-          this.openBrowserWindows.add(account.id);
-          await this.browserManager.testConnection(account.id);
-          console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA a zavřete okno`);
-        } else {
-          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
-        }
-        return;
+        console.log(`⚠️  [${account.username}] CAPTCHA detekována!`);
+        // TODO: Otevřít viditelný browser
       }
 
-      // Získáme informace o jednotkách
-      const recruitModule = new RecruitModule(page, this.db, account.id);
-      await recruitModule.collectUnitsInfo();
-
-      // Zpracujeme VÝZKUM (před výstavbou a rekrutováním!)
-      const researchSettings = this.db.getResearchSettings(account.id);
-
-      if (researchSettings && researchSettings.enabled) {
-        const researchKey = `research_${account.id}`;
-        const researchWaitUntil = this.accountWaitTimes[researchKey];
-
-        if (!researchWaitUntil || Date.now() >= researchWaitUntil) {
-          console.log(`🔬 Výzkum zapnut - šablona: ${researchSettings.template}`);
-
-          const researchModule = new ResearchModule(page, this.db, account.id);
-          const researchResult = await researchModule.autoResearch();
-
-          if (researchResult && researchResult.waitTime) {
-            this.accountWaitTimes[researchKey] = Date.now() + researchResult.waitTime;
-            console.log(`⏰ Výzkum: Další kontrola za ${Math.ceil(researchResult.waitTime / 60000)} minut`);
-          } else {
-            this.accountWaitTimes[researchKey] = Date.now() + this.defaultIntervals.research;
-            console.log(`⏰ Výzkum: Další kontrola za 60 minut (default)`);
-          }
-        } else {
-          const remainingMinutes = Math.ceil((researchWaitUntil - Date.now()) / 60000);
-          console.log(`⏭️  Výzkum: Přeskakuji (další kontrola za ${remainingMinutes} minut)`);
-        }
-      } else {
-        console.log(`⏸️  Výzkum vypnut`);
-      }
-
-      // Zpracujeme VÝSTAVBU
-      const buildingSettings = this.db.getBuildingSettings(account.id);
-
-      if (buildingSettings && buildingSettings.enabled) {
-        // Zkontrolujeme, zda už není čas na výstavbu
-        const buildingKey = `building_${account.id}`;
-        const buildingWaitUntil = this.accountWaitTimes[buildingKey];
-
-        if (!buildingWaitUntil || Date.now() >= buildingWaitUntil) {
-          console.log(`🏗️  Výstavba zapnuta - šablona: ${buildingSettings.template}`);
-          
-          const buildingModule = new BuildingModule(page, this.db, account.id);
-          const buildResult = await buildingModule.startBuilding(buildingSettings.template);
-
-          if (buildResult && buildResult.waitTime) {
-            this.accountWaitTimes[buildingKey] = Date.now() + buildResult.waitTime;
-            console.log(`⏰ Výstavba: Další kontrola za ${Math.ceil(buildResult.waitTime / 60000)} minut`);
-          } else {
-            this.accountWaitTimes[buildingKey] = Date.now() + this.defaultIntervals.building;
-            console.log(`⏰ Výstavba: Další kontrola za 5 minut (default)`);
-          }
-        } else {
-          const remainingMinutes = Math.ceil((buildingWaitUntil - Date.now()) / 60000);
-          console.log(`⏭️  Výstavba: Přeskakuji (další kontrola za ${remainingMinutes} minut)`);
-        }
-      } else {
-        console.log(`⏸️  Výstavba vypnuta`);
-      }
-
-      // Zpracujeme REKRUTOVÁNÍ
-      const recruitSettings = this.db.getRecruitSettings(account.id);
-
-      if (recruitSettings && recruitSettings.enabled) {
-        // Zkontrolujeme, zda už není čas na rekrutování
-        const recruitKey = `recruit_${account.id}`;
-        const recruitWaitUntil = this.accountWaitTimes[recruitKey];
-
-        if (!recruitWaitUntil || Date.now() >= recruitWaitUntil) {
-          console.log(`🎯 Rekrutování zapnuto - šablona: ${recruitSettings.template}`);
-          
-          const recruitResult = await recruitModule.startRecruiting(recruitSettings.template);
-
-          if (recruitResult && recruitResult.waitTime) {
-            this.accountWaitTimes[recruitKey] = Date.now() + recruitResult.waitTime;
-            console.log(`⏰ Rekrutování: Další kontrola za ${Math.ceil(recruitResult.waitTime / 60000)} minut`);
-          } else {
-            this.accountWaitTimes[recruitKey] = Date.now() + this.defaultIntervals.recruit;
-            console.log(`⏰ Rekrutování: Další kontrola za 4 minuty (default)`);
-          }
-        } else {
-          const remainingMinutes = Math.ceil((recruitWaitUntil - Date.now()) / 60000);
-          console.log(`⏭️  Rekrutování: Přeskakuji (další kontrola za ${remainingMinutes} minut)`);
-        }
-      } else {
-        console.log(`⏸️  Rekrutování vypnuto`);
-      }
-
-      console.log(`✅ Účet ${account.username} zpracován`);
-
-      // Odstraníme z otevřených oken (pokud tam byl)
-      if (this.openBrowserWindows.has(account.id)) {
-        this.openBrowserWindows.delete(account.id);
-        console.log(`🔓 Označen jako vyřešený - příště se otevře nové okno při problému`);
-      }
-
-      // Zavřeme prohlížeč
-      await this.browserManager.close(browser, context);
-      console.log('✅ Prohlížeč uzavřen');
+      // Zavři context (browser zůstane běžet)
+      await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
-      console.error(`❌ Chyba:`, error.message);
-      if (browser) {
-        await this.browserManager.close(browser, context);
+      console.error(`❌ [${account.username}] Chyba při kontrole:`, error.message);
+      if (context && browserKey) {
+        await this.browserPool.closeContext(context, browserKey);
       }
     }
   }
 
-  async loginToGame(page, account) {
+  /**
+   * Zpracuj výstavbu
+   */
+  async processBuilding(account, settings) {
+    let context, browserKey;
+
     try {
-      console.log(`🌐 Načítám hru...`);
-      
-      if (account.world) {
-        const domain = this.getWorldDomain(account.world);
-        console.log(`🌍 Jdu na svět: ${account.world} (${domain})`);
-        
-        await page.goto(`https://${account.world}.${domain}/game.php`, { 
-          waitUntil: 'domcontentloaded',
-          timeout: 30000 
-        });
+      ({ context, browserKey } = await this.browserPool.createContext(account.id));
+      const page = await context.newPage();
+
+      const loginSuccess = await this.loginToGame(page, account);
+      if (!loginSuccess) {
+        await this.browserPool.closeContext(context, browserKey);
+        return;
+      }
+
+      const buildingModule = new BuildingModule(page, this.db, account.id);
+      const buildResult = await buildingModule.startBuilding(settings.template);
+
+      if (buildResult && buildResult.waitTime) {
+        this.accountWaitTimes[`building_${account.id}`] = Date.now() + buildResult.waitTime;
+        console.log(`⏰ [${account.username}] Build: Další za ${Math.ceil(buildResult.waitTime / 60000)} min`);
       } else {
-        await page.goto('https://www.divokekmeny.cz/', { 
-          waitUntil: 'domcontentloaded',
-          timeout: 30000 
-        });
+        this.accountWaitTimes[`building_${account.id}`] = Date.now() + 5 * 60 * 1000; // 5 min fallback
       }
 
-      // Zkontrolujeme, zda jsme přihlášeni
-      const url = page.url();
-      const domain = this.getWorldDomain(account.world);
-      
-      if (!url.includes(`.${domain}/game.php`)) {
-        
-        // Pokud je session expired, vybereme svět
-        if (url.includes('session_expired=1') && account.world) {
-          console.log(`⚠️  Session vypršela - vybírám svět...`);
-          
-          const clicked = await page.evaluate((world) => {
-            const link = document.querySelector(`a.world-select[href="/page/play/${world}"]`);
-            if (link) {
-              link.click();
-              return true;
-            }
-            return false;
-          }, account.world);
-
-          if (clicked) {
-            await page.waitForTimeout(5000);
-            await this.browserManager.saveCookies(context, account.id);
-            console.log(`✅ Svět vybrán`);
-            return true;
-          } else {
-            console.log(`❌ Nepodařilo se vybrat svět`);
-            return false;
-          }
-        }
-
-        console.log(`❌ Není přihlášen`);
-        return false;
-      }
-
-      console.log(`✅ Přihlášen`);
-      return true;
+      await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
-      console.error(`❌ Chyba při přihlašování:`, error.message);
+      console.error(`❌ [${account.username}] Chyba při buildění:`, error.message);
+      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+    }
+  }
+
+  /**
+   * Zpracuj rekrutování
+   */
+  async processRecruit(account, settings) {
+    let context, browserKey;
+
+    try {
+      ({ context, browserKey } = await this.browserPool.createContext(account.id));
+      const page = await context.newPage();
+
+      const loginSuccess = await this.loginToGame(page, account);
+      if (!loginSuccess) {
+        await this.browserPool.closeContext(context, browserKey);
+        return;
+      }
+
+      const recruitModule = new RecruitModule(page, this.db, account.id);
+      await recruitModule.collectUnitsInfo();
+
+      const recruitResult = await recruitModule.startRecruiting(settings.template);
+
+      if (recruitResult && recruitResult.waitTime) {
+        this.accountWaitTimes[`recruit_${account.id}`] = Date.now() + recruitResult.waitTime;
+        console.log(`⏰ [${account.username}] Rekrut: Další za ${Math.ceil(recruitResult.waitTime / 60000)} min`);
+      } else {
+        this.accountWaitTimes[`recruit_${account.id}`] = Date.now() + this.intervals.recruit;
+      }
+
+      await this.browserPool.closeContext(context, browserKey);
+
+    } catch (error) {
+      console.error(`❌ [${account.username}] Chyba při rekrutování:`, error.message);
+      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+    }
+  }
+
+  /**
+   * Zpracuj výzkum
+   */
+  async processResearch(account, settings) {
+    let context, browserKey;
+
+    try {
+      ({ context, browserKey } = await this.browserPool.createContext(account.id));
+      const page = await context.newPage();
+
+      const loginSuccess = await this.loginToGame(page, account);
+      if (!loginSuccess) {
+        await this.browserPool.closeContext(context, browserKey);
+        return;
+      }
+
+      const researchModule = new ResearchModule(page, this.db, account.id);
+      const researchResult = await researchModule.autoResearch();
+
+      if (researchResult && researchResult.waitTime) {
+        this.accountWaitTimes[`research_${account.id}`] = Date.now() + researchResult.waitTime;
+        console.log(`⏰ [${account.username}] Výzkum: Další za ${Math.ceil(researchResult.waitTime / 60000)} min`);
+      } else {
+        this.accountWaitTimes[`research_${account.id}`] = Date.now() + this.intervals.research;
+      }
+
+      await this.browserPool.closeContext(context, browserKey);
+
+    } catch (error) {
+      console.error(`❌ [${account.username}] Chyba při výzkumu:`, error.message);
+      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+    }
+  }
+
+  /**
+   * Přihlášení do hry
+   */
+  async loginToGame(page, account) {
+    try {
+      const domain = this.getWorldDomain(account.world);
+      await page.goto(`https://${account.world}.${domain}/game.php`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
+      });
+
+      await page.waitForTimeout(2000);
+
+      const isLoggedIn = await page.evaluate(() => {
+        return document.querySelector('#menu_row') !== null;
+      });
+
+      return isLoggedIn;
+    } catch (error) {
+      console.error('❌ Chyba při přihlašování:', error.message);
       return false;
     }
   }
 
+  /**
+   * Zastaví všechny smyčky
+   */
   async stop() {
-    console.log('\n');
-    console.log('='.repeat(60));
-    console.log('🛑  UKONČOVÁNÍ APLIKACE');
-    console.log('='.repeat(60));
-
+    console.log('🛑 Zastavuji automatizaci...');
     this.isRunning = false;
-
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      console.log('✅ Interval zastaven');
-    }
-
-    // Zavřít všechny prohlížeče
-    try {
-      await this.browserManager.closeAll();
-      console.log('✅ Všechny prohlížeče zavřeny');
-    } catch (error) {
-      console.error('⚠️  Chyba při zavírání prohlížečů:', error.message);
-    }
-
-    // Zavřít databázi
-    try {
-      this.db.close();
-      console.log('✅ Databáze uzavřena');
-    } catch (error) {
-      console.error('⚠️  Chyba při zavírání databáze:', error.message);
-    }
-
-    console.log('='.repeat(60));
-    console.log('✅  APLIKACE ÚSPĚŠNĚ UKONČENA');
-    console.log('='.repeat(60));
-    console.log('\n');
+    await this.browserPool.closeAll();
+    console.log('✅ Automatizace zastavena');
   }
 }
 
 // Spuštění
 const automator = new Automator();
-automator.start();
 
-// Graceful shutdown - Ctrl+C
+// Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n⚠️  Zachycen Ctrl+C, ukončuji...');
+  console.log('\n⚠️  Přijat SIGINT - zavírám...');
   await automator.stop();
   process.exit(0);
 });
 
-// Graceful shutdown - kill
 process.on('SIGTERM', async () => {
-  console.log('\n⚠️  Zachycen SIGTERM, ukončuji...');
+  console.log('\n⚠️  Přijat SIGTERM - zavírám...');
   await automator.stop();
   process.exit(0);
 });
+
+automator.start().catch(error => {
+  console.error('❌ Kritická chyba:', error);
+  process.exit(1);
+});
+
+export default Automator;

@@ -5,8 +5,7 @@ import AccountInfoModule from './modules/accountInfo.js';
 import RecruitModule from './modules/recruit.js';
 import BuildingModule from './modules/building.js';
 import ResearchModule from './modules/research.js';
-import NotificationsModule from './modules/notifications.js';
-import IncomingAttacksModule from './modules/incomingAttacks.js'; 
+import NotificationsModule from './modules/notifications.js'; 
 
 class Automator {
   constructor() {
@@ -15,6 +14,7 @@ class Automator {
     this.isRunning = false;
     this.checkInterval = 2 * 60 * 1000; // 2 minuty (rychlý polling, skutečné timing je per-module)
     this.accountWaitTimes = {}; // Uchovává časy pro další kontrolu každého modulu
+    this.maxConcurrentAccounts = 20; // Zpět na 20 pro rychlé zpracování
     this.openBrowserWindows = new Set(); // Účty s otevřeným viditelným oknem
 
     // Defaultní intervaly pro moduly (pokud modul nevrátí vlastní waitTime)
@@ -24,6 +24,21 @@ class Automator {
       building: 5 * 60 * 1000,    // 5 minut pro výstavbu (fallback)
       accountInfo: 20 * 60 * 1000 // 20 minut pro sběr statistik (resources, population, body)
     };
+  }
+
+  /**
+   * 🆕 Získá doménu pro daný svět (CZ nebo SK)
+   */
+  getWorldDomain(world) {
+    if (!world) return 'divokekmeny.cz';
+    
+    // SK světy (sk1, sk2, sk97, atd.)
+    if (world.toLowerCase().startsWith('sk')) {
+      return 'divoke-kmene.sk';
+    }
+    
+    // CZ světy (cs1, cs107, atd.)
+    return 'divokekmeny.cz';
   }
 
   async start() {
@@ -58,12 +73,24 @@ class Automator {
       return;
     }
 
-    for (const account of accounts) {
-      try {
-        await this.processAccount(account);
-      } catch (error) {
-        console.error(`❌ Chyba při zpracování účtu ${account.username}:`, error.message);
-      }
+    console.log(`📊 Celkem účtů: ${accounts.length}`);
+    console.log(`⚡ Zpracovávám po ${this.maxConcurrentAccounts} účtech najednou`);
+
+    // Zpracuj účty po dávkách (max 25 najednou)
+    for (let i = 0; i < accounts.length; i += this.maxConcurrentAccounts) {
+      const batch = accounts.slice(i, i + this.maxConcurrentAccounts);
+      console.log(`\n🔸 Dávka ${Math.floor(i / this.maxConcurrentAccounts) + 1}/${Math.ceil(accounts.length / this.maxConcurrentAccounts)}: Zpracovávám ${batch.length} účtů`);
+
+      // Zpracuj všechny účty v dávce paralelně
+      await Promise.all(
+        batch.map(account =>
+          this.processAccount(account).catch(error => {
+            console.error(`❌ Chyba při zpracování účtu ${account.username}:`, error.message);
+          })
+        )
+      );
+
+      console.log(`✅ Dávka ${Math.floor(i / this.maxConcurrentAccounts) + 1} dokončena`);
     }
 
     console.log('\n✅ Cyklus dokončen');
@@ -85,7 +112,18 @@ class Automator {
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
         console.log(`❌ Přihlášení se nezdařilo`);
+
+        // Zavřeme headless browser
         await this.browserManager.close(browser, context);
+        // Otevřeme viditelný prohlížeč POUZE pokud už není otevřený
+        if (!this.openBrowserWindows.has(account.id)) {
+          console.log(`🖥️  Otevírám viditelný prohlížeč pro manuální přihlášení`);
+          this.openBrowserWindows.add(account.id);
+          await this.browserManager.testConnection(account.id);
+          console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte problém a zavřete okno`);
+        } else {
+          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
+        }
         return;
       }
 
@@ -103,24 +141,9 @@ class Automator {
         console.log(`⏭️  Statistiky: Přeskakuji (další sběr za ${remainingMinutes} minut)`);
       }
 
-      // Příprava pro detekci změn v útocích
+      // Zkontrolujeme útoky a CAPTCHA (VŽDY - důležité!)
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
-      const lastAttackCount = notificationsModule.getLastAttackCount(); // Starý počet PŘED detekcí
-
-      // Zjistíme příchozí útoky (nový modul)
-      // Tento modul automaticky uloží last_attack_count a attacks_info do databáze
-      const incomingAttacksModule = new IncomingAttacksModule(page, this.db, account.id);
-      const attacksResult = await incomingAttacksModule.execute();
-
-      // Discord notifikace - pouze pokud počet útoků VZROSTL
-      if (attacksResult.success && attacksResult.count > lastAttackCount && attacksResult.count > 0) {
-        console.log(`⚔️  NOVÝ ÚTOK! Počet útoků vzrostl z ${lastAttackCount} na ${attacksResult.count}`);
-        await notificationsModule.sendDiscordNotification('attack', {
-          count: attacksResult.count,
-          attacks: attacksResult.attacks
-        });
-      }
-
+      await notificationsModule.detectAttacks();
       const hasCaptcha = await notificationsModule.detectCaptcha();
 
       // Pokud je CAPTCHA, otevřeme viditelný prohlížeč
@@ -254,32 +277,32 @@ class Automator {
   async loginToGame(page, account) {
     try {
       console.log(`🌐 Načítám hru...`);
-
-      const domain = this.db.getDomainForAccount(account);
-      const server = this.db.getServerFromWorld(account.world);
-
+      
       if (account.world) {
-        console.log(`🌍 Jdu na svět: ${account.world} (Server: ${server}, ${domain})`);
-        await page.goto(`https://${account.world}.${domain}/game.php`, {
+        const domain = this.getWorldDomain(account.world);
+        console.log(`🌍 Jdu na svět: ${account.world} (${domain})`);
+        
+        await page.goto(`https://${account.world}.${domain}/game.php`, { 
           waitUntil: 'domcontentloaded',
-          timeout: 30000
+          timeout: 30000 
         });
       } else {
-        console.log(`🌍 Jdu na hlavní stránku (${domain})`);
-        await page.goto(`https://www.${domain}/`, {
+        await page.goto('https://www.divokekmeny.cz/', { 
           waitUntil: 'domcontentloaded',
-          timeout: 30000
+          timeout: 30000 
         });
       }
 
       // Zkontrolujeme, zda jsme přihlášeni
       const url = page.url();
+      const domain = this.getWorldDomain(account.world);
+      
       if (!url.includes(`.${domain}/game.php`)) {
-
+        
         // Pokud je session expired, vybereme svět
         if (url.includes('session_expired=1') && account.world) {
           console.log(`⚠️  Session vypršela - vybírám svět...`);
-
+          
           const clicked = await page.evaluate((world) => {
             const link = document.querySelector(`a.world-select[href="/page/play/${world}"]`);
             if (link) {
@@ -313,14 +336,39 @@ class Automator {
     }
   }
 
-  stop() {
-    console.log('\n🛑 Zastavuji automatizaci...');
+  async stop() {
+    console.log('\n');
+    console.log('='.repeat(60));
+    console.log('🛑  UKONČOVÁNÍ APLIKACE');
+    console.log('='.repeat(60));
+
     this.isRunning = false;
+
     if (this.intervalId) {
       clearInterval(this.intervalId);
+      console.log('✅ Interval zastaven');
     }
-    this.db.close();
-    console.log('✅ Automatizace zastavena');
+
+    // Zavřít všechny prohlížeče
+    try {
+      await this.browserManager.closeAll();
+      console.log('✅ Všechny prohlížeče zavřeny');
+    } catch (error) {
+      console.error('⚠️  Chyba při zavírání prohlížečů:', error.message);
+    }
+
+    // Zavřít databázi
+    try {
+      this.db.close();
+      console.log('✅ Databáze uzavřena');
+    } catch (error) {
+      console.error('⚠️  Chyba při zavírání databáze:', error.message);
+    }
+
+    console.log('='.repeat(60));
+    console.log('✅  APLIKACE ÚSPĚŠNĚ UKONČENA');
+    console.log('='.repeat(60));
+    console.log('\n');
   }
 }
 
@@ -328,8 +376,16 @@ class Automator {
 const automator = new Automator();
 automator.start();
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  automator.stop();
+// Graceful shutdown - Ctrl+C
+process.on('SIGINT', async () => {
+  console.log('\n⚠️  Zachycen Ctrl+C, ukončuji...');
+  await automator.stop();
+  process.exit(0);
+});
+
+// Graceful shutdown - kill
+process.on('SIGTERM', async () => {
+  console.log('\n⚠️  Zachycen SIGTERM, ukončuji...');
+  await automator.stop();
   process.exit(0);
 });
