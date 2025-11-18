@@ -1,6 +1,6 @@
 /**
  * Modul pro správu podpory (jednotky v obraně, podpora jiných vesnic, atd.)
- * Obsahuje vylepšené zjišťování jednotek
+ * Používá metodu overview_villages pro zjišťování jednotek
  */
 
 class SupportModule {
@@ -32,130 +32,145 @@ class SupportModule {
   }
 
   /**
-   * Vylepšené zjišťování jednotek - více metod zjišťování
-   * Zjišťuje z obrazovky place (rally point)
+   * Získá村ID z page objektu
    */
-  async getUnitsFromPlace() {
-    try {
-      console.log('📊 Zjišťuji jednotky z rally point...');
-
-      const worldUrl = this.getWorldUrl();
-      await this.page.goto(`${worldUrl}/game.php?screen=place`, {
-        waitUntil: 'domcontentloaded'
-      });
-
-      await this.page.waitForTimeout(1500);
-
-      const unitsData = await this.page.evaluate(() => {
-        const units = {};
-        const unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob'];
-
-        unitTypes.forEach(unitType => {
-          // Najdeme input pro jednotku
-          const input = document.querySelector(`input[name="${unitType}"]`);
-
-          if (!input) {
-            units[unitType] = { inVillage: 0, total: 0, away: 0 };
-            return;
-          }
-
-          // Zjistíme hodnotu v závorce (počet jednotek ve vesnici)
-          const row = input.closest('tr');
-          if (!row) {
-            units[unitType] = { inVillage: 0, total: 0, away: 0 };
-            return;
-          }
-
-          // Hledáme element s class "unit-item" nebo "units-entry"
-          const unitElement = row.querySelector('.unit-item, .units-entry, a');
-
-          if (unitElement) {
-            const text = unitElement.textContent || '';
-            console.log(`${unitType}: text="${text}"`);
-
-            // Pattern 1: "(123)" - jednotky ve vesnici
-            const inVillageMatch = text.match(/\((\d+)\)/);
-            const inVillage = inVillageMatch ? parseInt(inVillageMatch[1]) : 0;
-
-            // Pattern 2: Celkový počet může být před závorkou nebo v data atributu
-            let total = inVillage;
-
-            // Zkusíme najít data-count attribute
-            const dataCount = input.getAttribute('data-count');
-            if (dataCount) {
-              total = parseInt(dataCount);
-            }
-
-            // Nebo hledáme pattern "123 (456)" kde 123 je total a 456 je inVillage
-            const totalMatch = text.match(/(\d+)\s*\(/);
-            if (totalMatch) {
-              total = parseInt(totalMatch[1]);
-            }
-
-            const away = Math.max(0, total - inVillage);
-
-            units[unitType] = {
-              inVillage,
-              total,
-              away
-            };
-          } else {
-            units[unitType] = { inVillage: 0, total: 0, away: 0 };
-          }
-        });
-
-        return units;
-      });
-
-      console.log('✅ Jednotky z rally point získány');
-      return unitsData;
-
-    } catch (error) {
-      console.error('❌ Chyba při zjišťování jednotek z rally point:', error.message);
-      return null;
-    }
+  async getVillageId() {
+    return await this.page.evaluate(() => {
+      return game_data.village.id;
+    });
   }
 
   /**
-   * Zjišťování jednotek z obrazovky overview
+   * Zjišťování jednotek pomocí overview_villages
+   * Toto je NEJLEPŠÍ metoda - používá stejný způsob jako script "Přehled armády"
    */
   async getUnitsFromOverview() {
     try {
-      console.log('📊 Zjišťuji jednotky z overview...');
+      console.log('📊 Zjišťuji jednotky přes overview_villages...');
 
       const worldUrl = this.getWorldUrl();
-      await this.page.goto(`${worldUrl}/game.php?screen=overview_villages&mode=units`, {
-        waitUntil: 'domcontentloaded'
+      const villageId = await this.getVillageId();
+
+      // Sestavíme URL (stejně jako script "Přehled armády")
+      const url = `${worldUrl}/game.php?village=${villageId}&type=complete&mode=units&group=0&page=-1&screen=overview_villages`;
+
+      console.log(`🌐 Načítám: ${url}`);
+
+      await this.page.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
       });
 
       await this.page.waitForTimeout(2000);
 
+      // Zjistíme jednotky z tabulky
       const unitsData = await this.page.evaluate(() => {
-        const units = {};
-        const unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob'];
+        // Najdeme tabulku
+        const table = document.querySelector('#units_table');
 
-        // Najdeme první řádek s jednotkami (vlastní vesnice)
-        const firstRow = document.querySelector('#units_table tbody tr:first-child');
-
-        if (!firstRow) {
-          console.log('Nenalezen žádný řádek s jednotkami');
+        if (!table || table.rows.length < 2) {
+          console.log('Tabulka #units_table nenalezena nebo je prázdná');
           return null;
         }
 
-        unitTypes.forEach(unitType => {
-          // Najdeme buňku s ikonou jednotky
-          const unitCell = firstRow.querySelector(`.unit-item-${unitType}`);
+        console.log(`Tabulka nalezena, počet řádků: ${table.rows.length}`);
 
-          if (unitCell) {
-            const count = parseInt(unitCell.textContent.trim()) || 0;
-            units[unitType] = {
-              inVillage: count,
-              total: count,
-              away: 0
-            };
-          } else {
-            units[unitType] = { inVillage: 0, total: 0, away: 0 };
+        const firstRow = table.rows[0];
+        const dataRow = table.rows[1];
+
+        // Zjistíme offset (někdy je první buňka název vesnice)
+        const offset = (firstRow.cells.length == dataRow.cells.length) ? 2 : 1;
+        console.log(`Offset: ${offset}`);
+
+        // Typy jednotek
+        let unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob'];
+
+        // Kontrola jestli má archer (některá světa nemají lukostřelce)
+        if (!firstRow.innerHTML.match("archer")) {
+          console.log('Svět nemá lukostřelce - odstraňuji archer a marcher');
+          unitTypes.splice(unitTypes.indexOf("archer"), 1);
+          unitTypes.splice(unitTypes.indexOf("marcher"), 1);
+        }
+
+        // Kontrola jestli má rytíře
+        if (!firstRow.innerHTML.match("knight")) {
+          console.log('Svět nemá rytíře - odstraňuji knight');
+          unitTypes.splice(unitTypes.indexOf("knight"), 1);
+        }
+
+        // Inicializace součtů
+        const totalUnits = {};
+        const unitsInVillages = {};
+        const unitsSupport = {};
+        const unitsSent = {};
+        const unitsOnWay = {};
+
+        unitTypes.forEach(unitType => {
+          totalUnits[unitType] = 0;
+          unitsInVillages[unitType] = 0;
+          unitsSupport[unitType] = 0;
+          unitsSent[unitType] = 0;
+          unitsOnWay[unitType] = 0;
+        });
+
+        // Projdeme všechny řádky
+        // Každá vesnice má 5 řádků (0-4):
+        // 0 = ve vesnici (available)
+        // 1 = vlastní podpora v jiných vesnicích
+        // 2 = odeslaná podpora
+        // 3 = na cestě
+        // 4 = prázdný řádek / oddělovač
+
+        for (let i = 1; i < table.rows.length; i++) {
+          const row = table.rows[i];
+          const rowType = (i - 1) % 5;
+
+          // Přeskočíme prázdné řádky
+          if (row.cells.length < offset + unitTypes.length) {
+            continue;
           }
+
+          for (let j = 0; j < unitTypes.length; j++) {
+            const cellIndex = offset + j;
+            const count = parseInt(row.cells[cellIndex].textContent.trim()) || 0;
+
+            totalUnits[unitTypes[j]] += count;
+
+            if (rowType === 0) {
+              unitsInVillages[unitTypes[j]] += count;
+            } else if (rowType === 1) {
+              unitsSupport[unitTypes[j]] += count;
+            } else if (rowType === 2) {
+              unitsSent[unitTypes[j]] += count;
+            } else if (rowType === 3) {
+              unitsOnWay[unitTypes[j]] += count;
+            }
+          }
+        }
+
+        // Vytvoříme finální formát
+        const units = {};
+        unitTypes.forEach(unitType => {
+          // inVillage = jednotky ve vesnicích + vlastní podpora v jiných vesnicích
+          // (protože obojí je "naše" a máme k nim přístup)
+          const inVillage = unitsInVillages[unitType] + unitsSupport[unitType];
+          const total = totalUnits[unitType];
+          const away = Math.max(0, total - inVillage);
+
+          units[unitType] = {
+            inVillage,
+            total,
+            away,
+            // Extra info pro debugging
+            breakdown: {
+              inVillages: unitsInVillages[unitType],
+              support: unitsSupport[unitType],
+              sent: unitsSent[unitType],
+              onWay: unitsOnWay[unitType]
+            }
+          };
+
+          console.log(`${unitType}: ve vesnicích=${unitsInVillages[unitType]}, podpora=${unitsSupport[unitType]}, odesláno=${unitsSent[unitType]}, na cestě=${unitsOnWay[unitType]}, TOTAL=${total}`);
         });
 
         return units;
@@ -176,164 +191,56 @@ class SupportModule {
   }
 
   /**
-   * Zjišťování jednotek z obrazovky train (kasárna/stáje/dílna)
-   * Toto je původní metoda z recruit modulu, vylepšená
-   */
-  async getUnitsFromTrain() {
-    try {
-      console.log('📊 Zjišťuji jednotky z train screen...');
-
-      const worldUrl = this.getWorldUrl();
-      await this.page.goto(`${worldUrl}/game.php?screen=train`, {
-        waitUntil: 'domcontentloaded'
-      });
-
-      await this.page.waitForTimeout(1500);
-
-      const unitsData = await this.page.evaluate(() => {
-        const units = {};
-        const unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult'];
-
-        unitTypes.forEach(unitType => {
-          const input = document.querySelector(`input[name="${unitType}"]`);
-          if (!input) {
-            units[unitType] = { inVillage: 0, total: 0, away: 0 };
-            return;
-          }
-
-          const row = input.closest('tr');
-          if (!row) {
-            units[unitType] = { inVillage: 0, total: 0, away: 0 };
-            return;
-          }
-
-          // Hledáme buňku s počtem jednotek
-          // Formát: "X / Y" kde X = ve vesnici, Y = celkem
-          const cells = Array.from(row.querySelectorAll('td'));
-
-          for (let cell of cells) {
-            const text = cell.textContent.trim();
-
-            // Přesný pattern pro jednotky: "číslo / číslo"
-            const match = text.match(/^(\d+)\s*\/\s*(\d+)$/);
-
-            if (match) {
-              const inVillage = parseInt(match[1]) || 0;
-              const total = parseInt(match[2]) || 0;
-              const away = Math.max(0, total - inVillage);
-
-              units[unitType] = { inVillage, total, away };
-              console.log(`${unitType}: ${inVillage}/${total} (away: ${away})`);
-              return;
-            }
-          }
-
-          // Pokud nenajdeme pattern, nastavíme 0
-          units[unitType] = { inVillage: 0, total: 0, away: 0 };
-        });
-
-        return units;
-      });
-
-      console.log('✅ Jednotky z train screen získány');
-      return unitsData;
-
-    } catch (error) {
-      console.error('❌ Chyba při zjišťování jednotek z train screen:', error.message);
-      return null;
-    }
-  }
-
-  /**
-   * Získá kompletní informace o jednotkách - kombinuje všechny metody
-   */
-  async getAllUnitsInfo() {
-    try {
-      console.log('\n' + '='.repeat(60));
-      console.log('📊 ZJIŠŤOVÁNÍ JEDNOTEK - VŠECHNY METODY');
-      console.log('='.repeat(60));
-
-      // Metoda 1: Train screen
-      console.log('\n1️⃣ Metoda: Train Screen');
-      const trainUnits = await this.getUnitsFromTrain();
-      if (trainUnits) {
-        this.printUnitsTable(trainUnits, 'Train Screen');
-      }
-
-      // Metoda 2: Rally point (place)
-      console.log('\n2️⃣ Metoda: Rally Point (Place)');
-      const placeUnits = await this.getUnitsFromPlace();
-      if (placeUnits) {
-        this.printUnitsTable(placeUnits, 'Rally Point');
-      }
-
-      // Metoda 3: Overview
-      console.log('\n3️⃣ Metoda: Overview');
-      const overviewUnits = await this.getUnitsFromOverview();
-      if (overviewUnits) {
-        this.printUnitsTable(overviewUnits, 'Overview');
-      }
-
-      // Vybereme nejlepší data (ta, která mají nejvíce jednotek)
-      const bestData = this.selectBestUnitsData([trainUnits, placeUnits, overviewUnits]);
-
-      if (bestData) {
-        console.log('\n✅ VYBRÁNA NEJLEPŠÍ DATA:');
-        this.printUnitsTable(bestData, 'Final');
-
-        // Uložíme do databáze
-        await this.saveUnitsToDatabase(bestData);
-      }
-
-      console.log('='.repeat(60));
-
-      return bestData;
-
-    } catch (error) {
-      console.error('❌ Chyba při zjišťování jednotek:', error.message);
-      return null;
-    }
-  }
-
-  /**
-   * Vybere nejlepší data z více metod
-   */
-  selectBestUnitsData(dataSets) {
-    const validSets = dataSets.filter(set => set !== null);
-
-    if (validSets.length === 0) return null;
-    if (validSets.length === 1) return validSets[0];
-
-    // Spočítáme celkový počet jednotek pro každou metodu
-    const scores = validSets.map(set => {
-      return Object.values(set).reduce((sum, unit) => sum + (unit.total || 0), 0);
-    });
-
-    // Vybereme tu s nejvyšším počtem jednotek
-    const maxIndex = scores.indexOf(Math.max(...scores));
-    return validSets[maxIndex];
-  }
-
-  /**
    * Vytiskne tabulku jednotek
    */
   printUnitsTable(units, source) {
     console.log(`\n📋 Zdroj: ${source}`);
-    console.log('-'.repeat(60));
-    console.log('Jednotka    | Ve vesnici | Celkem | Mimo vesnici');
-    console.log('-'.repeat(60));
+    console.log('-'.repeat(80));
+    console.log('Jednotka    | Ve vesnici | Celkem | Mimo | Breakdown (V/S/O/C)');
+    console.log('-'.repeat(80));
 
     Object.keys(units).forEach(unitType => {
       const unit = units[unitType];
       const name = unitType.padEnd(11);
       const inVillage = String(unit.inVillage).padStart(10);
       const total = String(unit.total).padStart(6);
-      const away = String(unit.away).padStart(12);
+      const away = String(unit.away).padStart(5);
 
-      console.log(`${name} | ${inVillage} | ${total} | ${away}`);
+      const breakdown = unit.breakdown
+        ? `${unit.breakdown.inVillages}/${unit.breakdown.support}/${unit.breakdown.sent}/${unit.breakdown.onWay}`
+        : 'N/A';
+
+      console.log(`${name} | ${inVillage} | ${total} | ${away} | ${breakdown}`);
     });
 
-    console.log('-'.repeat(60));
+    console.log('-'.repeat(80));
+    console.log('V = ve vesnicích, S = vlastní podpora, O = odesláno, C = na cestě');
+  }
+
+  /**
+   * Získá kompletní informace o jednotkách
+   */
+  async getAllUnitsInfo() {
+    try {
+      console.log('\n' + '='.repeat(60));
+      console.log('📊 ZJIŠŤOVÁNÍ JEDNOTEK - OVERVIEW METHOD');
+      console.log('='.repeat(60));
+
+      const unitsData = await this.getUnitsFromOverview();
+
+      if (unitsData) {
+        this.printUnitsTable(unitsData, 'Overview Villages');
+        await this.saveUnitsToDatabase(unitsData);
+      }
+
+      console.log('='.repeat(60));
+
+      return unitsData;
+
+    } catch (error) {
+      console.error('❌ Chyba při zjišťování jednotek:', error.message);
+      return null;
+    }
   }
 
   /**
@@ -343,8 +250,18 @@ class SupportModule {
     if (!unitsData) return;
 
     try {
+      // Odebereme breakdown info před uložením do DB (není potřeba)
+      const cleanData = {};
+      Object.keys(unitsData).forEach(unitType => {
+        cleanData[unitType] = {
+          inVillage: unitsData[unitType].inVillage,
+          total: unitsData[unitType].total,
+          away: unitsData[unitType].away
+        };
+      });
+
       this.db.updateAccountInfo(this.accountId, {
-        units_info: JSON.stringify(unitsData)
+        units_info: JSON.stringify(cleanData)
       });
 
       console.log('✅ Informace o jednotkách uloženy do databáze');
