@@ -65,22 +65,38 @@ async function getOrOpenBrowser(accountId) {
 
   const context = await browser.newContext(contextOptions);
 
-  if (account.cookies) {
-    const cookies = JSON.parse(account.cookies);
-    await context.addCookies(cookies);
+  // Zkontrolovat a načíst cookies
+  if (!account.cookies || account.cookies === 'null') {
+    await browser.close();
+    throw new Error('Účet nemá uložené cookies. Nejprve se přihlaste přes "Otevřít browser" v hlavním menu.');
   }
+
+  const cookies = JSON.parse(account.cookies);
+  await context.addCookies(cookies);
+  console.log(`🍪 Cookies načteny pro účet ${accountId} (${account.username})`);
 
   const page = await context.newPage();
 
-  // Vyčisti localStorage/sessionStorage před načtením stránky
-  await page.goto(`https://${account.world}.${domain}/`);
-  await page.evaluate(() => {
-    localStorage.clear();
-    sessionStorage.clear();
+  // Jít přímo na game.php s cookies
+  await page.goto(`https://${account.world}.${domain}/game.php`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000
   });
 
-  // Teď načti game.php
-  await page.goto(`https://${account.world}.${domain}/game.php`);
+  // Počkat chvíli na načtení
+  await page.waitForTimeout(1500);
+
+  // Zkontrolovat jestli jsme přihlášení (detekovat #menu_row)
+  const isLoggedIn = await page.evaluate(() => {
+    return document.querySelector('#menu_row') !== null;
+  });
+
+  if (!isLoggedIn) {
+    await browser.close();
+    throw new Error('Cookies jsou neplatné nebo vypršely. Přihlaste se znovu přes "Otevřít browser" v hlavním menu.');
+  }
+
+  console.log(`✅ Účet ${account.username} je přihlášen (headless)`);
 
   // Ulož browser do mapy
   browserData = { browser, context, page, account };
@@ -469,19 +485,42 @@ app.post('/api/support/open-manual', async (req, res) => {
 
       const context = await browser.newContext(contextOptions);
 
-      if (account.cookies) {
-        const cookies = JSON.parse(account.cookies);
-        await context.addCookies(cookies);
+      // Zkontrolovat a načíst cookies
+      if (!account.cookies || account.cookies === 'null') {
+        await browser.close();
+        return res.status(400).json({
+          error: 'Účet nemá uložené cookies. Nejprve se přihlaste přes "Otevřít browser" v hlavním menu.'
+        });
       }
+
+      const cookies = JSON.parse(account.cookies);
+      await context.addCookies(cookies);
+      console.log(`🍪 Cookies načteny pro účet ${accountId} (${account.username})`);
 
       const page = await context.newPage();
 
-      // Vyčisti localStorage/sessionStorage
-      await page.goto(`https://${account.world}.${domain}/`);
-      await page.evaluate(() => {
-        localStorage.clear();
-        sessionStorage.clear();
+      // Jít přímo na game.php s cookies
+      await page.goto(`https://${account.world}.${domain}/game.php`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
       });
+
+      // Počkat chvíli na načtení
+      await page.waitForTimeout(1500);
+
+      // Zkontrolovat jestli jsme přihlášení (detekovat #menu_row)
+      const isLoggedIn = await page.evaluate(() => {
+        return document.querySelector('#menu_row') !== null;
+      });
+
+      if (!isLoggedIn) {
+        await browser.close();
+        return res.status(400).json({
+          error: 'Cookies jsou neplatné nebo vypršely. Přihlaste se znovu přes "Otevřít browser" v hlavním menu.'
+        });
+      }
+
+      console.log(`✅ Účet ${account.username} je přihlášen`);
 
       // Ulož browser do mapy
       browserData = { browser, context, page, account };
