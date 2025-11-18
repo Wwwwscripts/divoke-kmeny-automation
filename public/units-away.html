@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jednotky mimo vesnici - Divoké kmeny</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header s vyhledáváním */
+        .header {
+            background: linear-gradient(135deg, #161b22 0%, #1c2128 100%);
+            border-bottom: 1px solid #30363d;
+            padding: 15px 0;
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            font-size: 1.5em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #58a6ff, #79c0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        /* Vyhledávací pole */
+        .search-container {
+            flex: 1;
+            max-width: 600px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 45px 12px 45px;
+            background: #0d1117;
+            border: 2px solid #30363d;
+            border-radius: 8px;
+            color: #c9d1d9;
+            font-size: 15px;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 18px;
+            color: #8b949e;
+        }
+
+        .search-clear {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 5px;
+        }
+
+        .search-clear:hover {
+            color: #c9d1d9;
+        }
+
+        /* Navigace */
+        .nav {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .nav-btn {
+            padding: 10px 18px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .nav-btn:hover {
+            background: #30363d;
+            border-color: #8b949e;
+        }
+
+        .nav-btn.primary {
+            background: #238636;
+            border-color: #2ea043;
+        }
+
+        .nav-btn.primary:hover {
+            background: #2ea043;
+        }
+
+        .nav-btn.danger {
+            background: #da3633;
+            border-color: #f85149;
+        }
+
+        .nav-btn.danger:hover {
+            background: #f85149;
+        }
+
+        /* Dropdown menu */
+        .dropdown {
+            position: relative;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 5px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            min-width: 200px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            z-index: 1000;
+        }
+
+        .dropdown.active .dropdown-content {
+            display: block;
+        }
+
+        .dropdown-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .dropdown-item:hover {
+            background: #21262d;
+        }
+
+        /* Záložky pro světy */
+        .tabs-container {
+            margin-bottom: 20px;
+            border-bottom: 2px solid #30363d;
+            display: flex;
+            gap: 5px;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            color: #c9d1d9;
+        }
+
+        .tab.active {
+            color: #58a6ff;
+            border-bottom-color: #58a6ff;
+        }
+
+        /* Tabulka */
+        .table-container {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #21262d;
+        }
+
+        th {
+            background: #161b22;
+            font-weight: 600;
+            color: #8b949e;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        th.sortable:hover {
+            background: #1c2128;
+            color: #c9d1d9;
+        }
+
+        tbody tr {
+            transition: background 0.2s;
+        }
+
+        tbody tr:hover {
+            background: #161b22;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #8b949e;
+        }
+
+        /* Akční tlačítka */
+        .action-btn {
+            padding: 6px 12px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #c9d1d9;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .action-btn:hover {
+            background: #30363d;
+        }
+
+        .action-btn.primary {
+            background: #1f6feb;
+            border-color: #1f6feb;
+        }
+
+        .action-btn.primary:hover {
+            background: #388bfd;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge.success {
+            background: #238636;
+            color: #fff;
+        }
+
+        .badge.warning {
+            background: #9e6a03;
+            color: #fff;
+        }
+
+        .badge.danger {
+            background: #da3633;
+            color: #fff;
+        }
+
+        /* Statistiky */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #58a6ff;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <div class="logo" onclick="window.location.href='/index.html'">
+                🏹 Divoké kmeny
+            </div>
+
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text"
+                       id="searchInput"
+                       class="search-input"
+                       placeholder="Hledat účet podle jména, světa..."
+                       oninput="filterAccounts()">
+                <button class="search-clear" onclick="clearSearch()">✕</button>
+            </div>
+
+            <div class="nav">
+                <button class="nav-btn" onclick="window.location.href='/index.html'">
+                    🏠 Dashboard
+                </button>
+                <button class="nav-btn danger" onclick="window.location.href='/attacks.html'">
+                    🚨 Útoky
+                </button>
+                <button class="nav-btn" onclick="window.location.href='/units.html'">
+                    ⚔️ Jednotky
+                </button>
+                <button class="nav-btn primary" onclick="loadAccounts()">
+                    🔄 Obnovit
+                </button>
+
+                <div class="dropdown" id="moreMenu">
+                    <button class="nav-btn" onclick="toggleDropdown()">⋯</button>
+                    <div class="dropdown-content">
+                        <div class="dropdown-item" onclick="window.location.href='/accounts.html'">
+                            ➕ Přidat účet
+                        </div>
+                        <div class="dropdown-item" onclick="window.location.href='/training-templates.html'">
+                            📋 Šablony tréninku
+                        </div>
+                        <div class="dropdown-item" onclick="window.location.href='/world-settings.html'">
+                            🌍 Nastavení světů
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Statistiky -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="stat-label">Účtů s jednotkami mimo</div>
+                <div class="stat-value" id="totalWithUnitsAway">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Celkem jednotek mimo</div>
+                <div class="stat-value" id="totalUnitsAway">0</div>
+            </div>
+        </div>
+
+        <!-- Záložky pro světy -->
+        <div class="tabs-container" id="worldTabs">
+            <button class="tab active" onclick="filterByWorld('all')">Všechny světy</button>
+        </div>
+
+        <!-- Tabulka účtů -->
+        <div class="table-container">
+            <table id="accountsTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" onclick="sortBy('username')">Účet</th>
+                        <th class="sortable" onclick="sortBy('world')">Svět</th>
+                        <th class="sortable" onclick="sortBy('unitsAway')">Jednotek mimo</th>
+                        <th>Akce</th>
+                    </tr>
+                </thead>
+                <tbody id="accountsList">
+                    <tr><td colspan="4" class="loading">⏳ Načítám účty...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let allAccounts = [];
+        let currentSort = { column: null, ascending: true };
+        let currentWorld = 'all';
+
+        // Načíst uložené řazení z localStorage
+        function loadSortPreference() {
+            const saved = localStorage.getItem('unitsAway_sortPreference');
+            if (saved) {
+                currentSort = JSON.parse(saved);
+            }
+        }
+
+        // Uložit řazení do localStorage
+        function saveSortPreference() {
+            localStorage.setItem('unitsAway_sortPreference', JSON.stringify(currentSort));
+        }
+
+        // Načíst uložený vybraný svět
+        function loadWorldPreference() {
+            const saved = localStorage.getItem('unitsAway_worldPreference');
+            if (saved) {
+                currentWorld = saved;
+            }
+        }
+
+        // Uložit vybraný svět
+        function saveWorldPreference() {
+            localStorage.setItem('unitsAway_worldPreference', currentWorld);
+        }
+
+        // Dropdown menu
+        function toggleDropdown() {
+            document.getElementById('moreMenu').classList.toggle('active');
+        }
+
+        // Zavřít dropdown při kliku mimo
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('moreMenu');
+            if (!dropdown.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+
+        // Vyčistit vyhledávání
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            filterAccounts();
+        }
+
+        // Načíst účty
+        async function loadAccounts() {
+            const tbody = document.getElementById('accountsList');
+            tbody.innerHTML = '<tr><td colspan="4" class="loading">⏳ Načítám účty...</td></tr>';
+
+            try {
+                const response = await fetch('/api/accounts');
+                const accounts = await response.json();
+
+                // Filtruj pouze účty s jednotkami mimo vesnici
+                allAccounts = accounts.filter(acc =>
+                    acc.units_away && parseInt(acc.units_away) > 0
+                );
+
+                if (allAccounts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="loading">✅ Žádné účty s jednotkami mimo vesnici</td></tr>';
+                    return;
+                }
+
+                // Načti světy a vytvoř záložky
+                loadWorldTabs();
+
+                // Načti preference
+                loadSortPreference();
+                loadWorldPreference();
+
+                // Aplikuj uložené řazení
+                if (currentSort.column) {
+                    allAccounts.sort((a, b) => {
+                        const aVal = a[currentSort.column];
+                        const bVal = b[currentSort.column];
+                        const comparison = aVal > bVal ? 1 : (aVal < bVal ? -1 : 0);
+                        return currentSort.ascending ? comparison : -comparison;
+                    });
+                }
+
+                updateStats();
+                filterAccounts();
+
+            } catch (error) {
+                console.error('Chyba při načítání účtů:', error);
+                tbody.innerHTML = '<tr><td colspan="4" class="loading">❌ Chyba při načítání</td></tr>';
+            }
+        }
+
+        // Načíst světy a vytvořit záložky
+        function loadWorldTabs() {
+            const worlds = [...new Set(allAccounts.map(acc => acc.world))].sort();
+            const tabsContainer = document.getElementById('worldTabs');
+
+            tabsContainer.innerHTML = `
+                <button class="tab ${currentWorld === 'all' ? 'active' : ''}" onclick="filterByWorld('all')">
+                    Všechny světy (${allAccounts.length})
+                </button>
+            `;
+
+            worlds.forEach(world => {
+                const count = allAccounts.filter(acc => acc.world === world).length;
+                const isActive = currentWorld === world;
+                tabsContainer.innerHTML += `
+                    <button class="tab ${isActive ? 'active' : ''}" onclick="filterByWorld('${world}')">
+                        ${world} (${count})
+                    </button>
+                `;
+            });
+        }
+
+        // Filtrovat podle světa
+        function filterByWorld(world) {
+            currentWorld = world;
+            saveWorldPreference();
+
+            // Aktualizuj aktivní záložku
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            filterAccounts();
+        }
+
+        // Filtrovat účty
+        function filterAccounts() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+            let filtered = allAccounts;
+
+            // Filtr podle světa
+            if (currentWorld !== 'all') {
+                filtered = filtered.filter(acc => acc.world === currentWorld);
+            }
+
+            // Filtr podle vyhledávání
+            if (searchTerm) {
+                filtered = filtered.filter(acc =>
+                    acc.username.toLowerCase().includes(searchTerm) ||
+                    acc.world.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            renderAccounts(filtered);
+        }
+
+        // Vykreslit účty
+        function renderAccounts(accounts) {
+            const tbody = document.getElementById('accountsList');
+
+            if (accounts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="loading">Žádné účty odpovídající filtru</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = accounts.map(account => `
+                <tr>
+                    <td><strong>${account.username}</strong></td>
+                    <td>${account.world}</td>
+                    <td>
+                        <span class="badge warning">${account.units_away || 0} jednotek</span>
+                    </td>
+                    <td>
+                        <button class="action-btn primary" onclick="openAccount(${account.id})">
+                            📍 Otevřít jednotky
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Otevřít účet na stránce jednotek
+        async function openAccount(accountId) {
+            try {
+                const response = await fetch(`/api/accounts/${accountId}/browser`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Přejdi na správnou stránku v browseru
+                    const account = allAccounts.find(acc => acc.id === accountId);
+                    if (account) {
+                        // Otevře se v prohlížeči - musíme poslat požadavek na backend
+                        // aby otevřel browser na správné URL
+                        alert(`✅ Prohlížeč otevřen pro ${account.username}\nPřejděte na screen=place&mode=units`);
+                    }
+                } else {
+                    alert(`❌ Chyba: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Chyba při otevírání prohlížeče:', error);
+                alert('❌ Chyba při otevírání prohlížeče');
+            }
+        }
+
+        // Řazení
+        function sortBy(column) {
+            if (currentSort.column === column) {
+                currentSort.ascending = !currentSort.ascending;
+            } else {
+                currentSort.column = column;
+                currentSort.ascending = true;
+            }
+
+            saveSortPreference();
+
+            allAccounts.sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+
+                // Speciální handling pro číselné hodnoty
+                if (column === 'unitsAway') {
+                    aVal = parseInt(a.units_away) || 0;
+                    bVal = parseInt(b.units_away) || 0;
+                }
+
+                const comparison = aVal > bVal ? 1 : (aVal < bVal ? -1 : 0);
+                return currentSort.ascending ? comparison : -comparison;
+            });
+
+            filterAccounts();
+        }
+
+        // Aktualizovat statistiky
+        function updateStats() {
+            const totalWithUnitsAway = allAccounts.length;
+            const totalUnitsAway = allAccounts.reduce((sum, acc) =>
+                sum + (parseInt(acc.units_away) || 0), 0
+            );
+
+            document.getElementById('totalWithUnitsAway').textContent = totalWithUnitsAway;
+            document.getElementById('totalUnitsAway').textContent = totalUnitsAway;
+        }
+
+        // Načíst účty při startu
+        loadAccounts();
+    </script>
+</body>
+</html>

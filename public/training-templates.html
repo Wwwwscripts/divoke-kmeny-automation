@@ -409,22 +409,21 @@
             </div>
 
             <div class="nav">
-                <button class="nav-btn danger" onclick="window.location.href='/attacks.html'">
-                    🚨 Útoky <span id="attackCount"></span>
-                </button>
-                <button class="nav-btn" onclick="window.location.href='/units.html'">
-                    ⚔️ Jednotky
-                </button>
-                <button class="nav-btn" onclick="window.location.href='/'">
-                    🔄
-                </button>
-
+                <button class="nav-btn" onclick="window.location.href='/index.html'">🏠 Dashboard</button>
+                <button class="nav-btn danger" onclick="window.location.href='/attacks.html'">🚨 Útoky <span id="attackCount"></span></button>
+                <button class="nav-btn" onclick="window.location.href='/units.html'">⚔️ Jednotky</button>
+                <button class="nav-btn" onclick="window.location.href='/units-away.html'">📍 Mimo vesnici</button>
+                <button class="nav-btn" onclick="window.location.href='/support-calculator.html'">🛡️ Kalkulátor</button>
+                <button class="nav-btn" onclick="loadUnits()">🔄</button>
                 <div class="dropdown" id="moreMenu">
                     <button class="nav-btn" onclick="toggleDropdown()">⋯</button>
                     <div class="dropdown-content">
-                        <div class="dropdown-item" onclick="window.location.href='/accounts.html'">
-                            ➕ Přidat účet
-                        </div>
+                        <div class="dropdown-item" onclick="window.location.href='/accounts.html'">➕ Přidat účet</div>
+                        <div class="dropdown-item" onclick="window.location.href='/training-templates.html'">📋 Šablony</div>
+                        <div class="dropdown-item" onclick="window.location.href='/world-settings.html'">🌍 Nastavení světů</div>
+                    </div>
+                </div>
+            </div>
                         <div class="dropdown-item" onclick="window.location.href='/training-templates.html'">
                             📋 Šablony tréninku
                         </div>

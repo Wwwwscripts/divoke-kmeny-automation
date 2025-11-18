@@ -326,6 +326,38 @@
             color: #f85149;
             font-weight: 600;
         }
+
+        /* Záložky pro světy */
+        .tabs-container {
+            margin-bottom: 20px;
+            border-bottom: 2px solid #30363d;
+            display: flex;
+            gap: 5px;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            color: #c9d1d9;
+        }
+
+        .tab.active {
+            color: #58a6ff;
+            border-bottom-color: #58a6ff;
+        }
     </style>
 </head>
 <body>
@@ -345,11 +377,17 @@
             </div>
 
             <div class="nav">
+                <button class="nav-btn" onclick="window.location.href='/index.html'">
+                    🏠 Dashboard
+                </button>
                 <button class="nav-btn danger" onclick="window.location.href='/attacks.html'">
                     🚨 Útoky <span id="attackCount"></span>
                 </button>
                 <button class="nav-btn" onclick="window.location.href='/units.html'">
                     ⚔️ Jednotky
+                </button>
+                <button class="nav-btn" onclick="window.location.href='/units-away.html'">
+                    📍 Mimo vesnici
                 </button>
                 <button class="nav-btn" onclick="loadAttacks()">
                     🔄
@@ -364,6 +402,9 @@
                         <div class="dropdown-item" onclick="window.location.href='/training-templates.html'">
                             📋 Šablony tréninku
                         </div>
+                        <div class="dropdown-item" onclick="window.location.href='/world-settings.html'">
+                            🌍 Nastavení světů
+                        </div>
                     </div>
                 </div>
             </div>
@@ -372,6 +413,11 @@
 
     <div class="container">
         <div id="alert"></div>
+
+        <!-- Záložky pro světy -->
+        <div class="tabs-container" id="worldTabs">
+            <button class="tab active" onclick="filterByWorld('all')">Všechny světy</button>
+        </div>
 
         <!-- Tabulka útoků -->
         <div class="table-container">
@@ -398,6 +444,20 @@
 
     <script>
         let allAccounts = [];
+        let currentWorld = 'all';
+
+        // Načíst uložený vybraný svět
+        function loadWorldPreference() {
+            const saved = localStorage.getItem('attacks_worldPreference');
+            if (saved) {
+                currentWorld = saved;
+            }
+        }
+
+        // Uložit vybraný svět
+        function saveWorldPreference() {
+            localStorage.setItem('attacks_worldPreference', currentWorld);
+        }
 
         // Helper funkce pro ikony jednotek z Tribal Wars
         function getUnitIcon(unitType) {
@@ -453,9 +513,15 @@
                     return;
                 }
 
+                // Načti záložky světů
+                loadWorldTabs();
+
+                // Načti preferenci světa
+                loadWorldPreference();
+
                 alertDiv.innerHTML = `<div class="alert">⚠️ <strong>${accountsUnderAttack.length}</strong> účtů je pod útokem!</div>`;
 
-                renderAttacks(accountsUnderAttack);
+                filterAccounts();
                 updateAttackCount();
 
             } catch (error) {
@@ -682,12 +748,58 @@
             }).join('');
         }
 
+        // Načíst světy a vytvořit záložky
+        function loadWorldTabs() {
+            const worlds = [...new Set(allAccounts.map(acc => acc.world))].sort();
+            const tabsContainer = document.getElementById('worldTabs');
+
+            tabsContainer.innerHTML = `
+                <button class="tab ${currentWorld === 'all' ? 'active' : ''}" onclick="filterByWorld('all')">
+                    Všechny světy (${allAccounts.length})
+                </button>
+            `;
+
+            worlds.forEach(world => {
+                const count = allAccounts.filter(acc => acc.world === world).length;
+                const isActive = currentWorld === world;
+                tabsContainer.innerHTML += `
+                    <button class="tab ${isActive ? 'active' : ''}" onclick="filterByWorld('${world}')">
+                        ${world} (${count})
+                    </button>
+                `;
+            });
+        }
+
+        // Filtrovat podle světa
+        function filterByWorld(world) {
+            currentWorld = world;
+            saveWorldPreference();
+
+            // Aktualizuj aktivní záložku
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            filterAccounts();
+        }
+
         function filterAccounts() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allAccounts.filter(acc =>
-                acc.username.toLowerCase().includes(searchTerm) ||
-                (acc.world && acc.world.toLowerCase().includes(searchTerm))
-            );
+
+            let filtered = allAccounts;
+
+            // Filtr podle světa
+            if (currentWorld !== 'all') {
+                filtered = filtered.filter(acc => acc.world === currentWorld);
+            }
+
+            // Filtr podle vyhledávání
+            if (searchTerm) {
+                filtered = filtered.filter(acc =>
+                    acc.username.toLowerCase().includes(searchTerm) ||
+                    (acc.world && acc.world.toLowerCase().includes(searchTerm))
+                );
+            }
+
             renderAttacks(filtered);
         }
 
