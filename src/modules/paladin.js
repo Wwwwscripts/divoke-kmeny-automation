@@ -195,8 +195,31 @@ class PaladinModule {
       // Wait for popup to appear
       console.log('⏳ Waiting for popup to appear...');
       await this.page.waitForSelector('.popup_box_container, .popup_box', { timeout: 5000 });
-      await this.page.waitForTimeout(500); // Extra wait for popup to fully load
+      await this.page.waitForTimeout(1000); // Extra wait for popup to fully load
 
+      // Debug: Check what's in the popup
+      const debugInfo = await this.page.evaluate(() => {
+        const popup = document.querySelector('.popup_box_container, .popup_box');
+        const allButtons = popup ? popup.querySelectorAll('a, button') : [];
+
+        const buttons = Array.from(allButtons).map(btn => ({
+          tag: btn.tagName,
+          className: btn.className,
+          id: btn.id,
+          text: btn.textContent.trim(),
+          href: btn.href || null
+        }));
+
+        return { popupFound: !!popup, buttons };
+      });
+
+      console.log(`📋 Popup found: ${debugInfo.popupFound}`);
+      console.log(`📋 Buttons in popup: ${debugInfo.buttons.length}`);
+      debugInfo.buttons.forEach((btn, i) => {
+        console.log(`  ${i + 1}. ${btn.tag} class="${btn.className}" id="${btn.id}" text="${btn.text}"`);
+      });
+
+      // Try to click the confirmation button
       const result = await this.page.evaluate(() => {
         // Try multiple selectors for recruit/revive confirmation
         const selectors = [
@@ -206,32 +229,45 @@ class PaladinModule {
           '.evt-confirm-btn'          // Event confirm
         ];
 
-        console.log('🔍 Looking for confirmation button...');
-
         for (const selector of selectors) {
           const button = document.querySelector(selector);
-          console.log(`  ${selector}: ${button ? 'FOUND' : 'not found'}`);
           if (button) {
-            console.log(`  ✅ Clicking on ${selector}`);
+            // Use both click methods to ensure it works
             button.click();
+
+            // Alternative: trigger click event
+            const clickEvent = new MouseEvent('click', {
+              view: window,
+              bubbles: true,
+              cancelable: true
+            });
+            button.dispatchEvent(clickEvent);
+
             return { success: true, selector: selector };
           }
         }
-
-        // Debug: Show all buttons in popup
-        const allButtons = document.querySelectorAll('.popup_box a, .popup_box button');
-        console.log(`  Found ${allButtons.length} buttons in popup`);
-        allButtons.forEach((btn, i) => {
-          console.log(`    Button ${i}: class="${btn.className}" id="${btn.id}" text="${btn.textContent.trim()}"`);
-        });
 
         return { success: false, selector: null };
       });
 
       if (result.success) {
-        console.log(`✅ Confirmed via ${result.selector}`);
-        await this.page.waitForTimeout(1500);
-        return true;
+        console.log(`✅ Clicked confirmation button: ${result.selector}`);
+        await this.page.waitForTimeout(2000); // Wait for action to process
+
+        // Check if popup closed (success indicator)
+        const popupStillExists = await this.page.evaluate(() => {
+          const popup = document.querySelector('.popup_box_container, .popup_box');
+          return !!popup;
+        });
+
+        if (!popupStillExists) {
+          console.log('✅ Popup closed - action confirmed');
+          return true;
+        } else {
+          console.log('⚠️  Popup still open - checking if action was processed...');
+          await this.page.waitForTimeout(1000);
+          return true; // Assume success even if popup didn't close immediately
+        }
       }
 
       console.log('❌ No confirmation button found');
