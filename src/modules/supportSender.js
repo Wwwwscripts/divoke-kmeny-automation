@@ -187,56 +187,48 @@ class SupportSender {
   async openManualSupport(unitTypes, targetX, targetY) {
     try {
       const worldUrl = this.getWorldUrl();
-      const villageId = await this.getVillageId();
 
       logger.info(`Otevírám ruční odeslání: ${unitTypes.join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
 
-      // Přejít na rally point
-      const placeUrl = `${worldUrl}/game.php?village=${villageId}&screen=place`;
-      await this.page.goto(placeUrl, { waitUntil: 'domcontentloaded' });
+      // Získat počty jednotek z databáze
+      const account = this.db.getAccount(this.accountId);
+      const unitCounts = {};
 
-      // Počkat na načtení formuláře (input pro jednotky)
-      await this.page.waitForSelector('input[name="x"]', { timeout: 10000 });
-      await this.page.waitForTimeout(1500); // Další čekání pro jistotu
-
-      // Vyplnit formulář pro všechny jednotky
-      const filled = await this.page.evaluate((units, x, y) => {
-        let filledUnits = [];
-        let filledCoords = false;
-
-        // Vyplnit všechny jednotky
-        units.forEach(unit => {
-          const unitInput = document.querySelector(`input[name="${unit}"]`);
-          if (unitInput) {
-            // Najít dostupný počet jednotek
-            const linkElement = unitInput.closest('td')?.nextElementSibling?.querySelector('a');
-            if (linkElement) {
-              const match = linkElement.textContent.match(/\((\d+)\)/);
-              if (match) {
-                const availableCount = parseInt(match[1]);
-                unitInput.value = availableCount; // Poslat všechny dostupné
-                filledUnits.push(`${unit}:${availableCount}`);
-              }
+      if (account.units_info) {
+        try {
+          const unitsInfo = JSON.parse(account.units_info);
+          unitTypes.forEach(unit => {
+            const count = unitsInfo[unit]?.inVillages || 0;
+            if (count > 0) {
+              unitCounts[unit] = count;
             }
-          }
-        });
-
-        // Vyplnit souřadnice
-        const xInput = document.querySelector('input[name="x"]');
-        const yInput = document.querySelector('input[name="y"]');
-        if (xInput) {
-          xInput.value = x;
-          filledCoords = true;
+          });
+        } catch (e) {
+          logger.error(`Chyba při parsování units_info: ${e.message}`, this.getAccountName());
         }
-        if (yInput) {
-          yInput.value = y;
-        }
+      }
 
-        return { filledUnits, filledCoords, x, y };
-      }, unitTypes, targetX, targetY);
+      // Sestavit URL s parametry pro jednotky a souřadnice
+      const params = new URLSearchParams();
+      params.append('screen', 'place');
+      params.append('x', targetX);
+      params.append('y', targetY);
 
-      logger.success(`✅ Formulář vyplněn: ${filled.filledUnits.join(', ')} na ${filled.x}|${filled.y}`, this.getAccountName());
-      return { success: true, unitTypes, targetX, targetY, filled };
+      // Přidat jednotky do URL
+      Object.entries(unitCounts).forEach(([unit, count]) => {
+        params.append(unit, count);
+      });
+
+      const placeUrl = `${worldUrl}/game.php?${params.toString()}`;
+
+      logger.info(`Navigace na: ${placeUrl}`, this.getAccountName());
+
+      // Přejít na URL s předvyplněnými parametry
+      await this.page.goto(placeUrl, { waitUntil: 'domcontentloaded' });
+      await this.page.waitForTimeout(1000);
+
+      logger.success(`✅ Formulář vyplněn přes URL: ${Object.entries(unitCounts).map(([u,c]) => `${u}:${c}`).join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
+      return { success: true, unitTypes, targetX, targetY, unitCounts };
 
     } catch (error) {
       logger.error(`Chyba při otevírání ručního odeslání: ${error.message}`, this.getAccountName());
