@@ -346,7 +346,7 @@
         }
 
         .badge-sent {
-            background: #6e7681;
+            background: #2da44e;
             color: white;
         }
 
@@ -814,11 +814,23 @@
 
                 if (response.ok) {
                     showMessage('Formulář vyplněn v browseru - zkontrolujte a odešlete', 'success');
+
                     // Označit jako vyplněno
                     const statusEl = document.getElementById(`status-${index}`);
                     if (statusEl) {
                         statusEl.className = 'badge badge-info';
                         statusEl.textContent = '📝 Vyplněno';
+                    }
+
+                    // Zakázat všechna tlačítka v tomto řádku
+                    const row = document.getElementById(`row-${index}`);
+                    if (row) {
+                        const buttons = row.querySelectorAll('button');
+                        buttons.forEach(btn => {
+                            btn.disabled = true;
+                            btn.style.opacity = '0.5';
+                            btn.style.cursor = 'not-allowed';
+                        });
                     }
                 } else {
                     const error = await response.json();
@@ -849,11 +861,23 @@
 
                 if (response.ok) {
                     showMessage('Podpora odeslána!', 'success');
+
                     // Označit jako odesláno
                     const statusEl = document.getElementById(`status-${index}`);
                     if (statusEl) {
                         statusEl.className = 'badge badge-sent';
                         statusEl.textContent = '✅ Odesláno';
+                    }
+
+                    // Zakázat všechna tlačítka v tomto řádku
+                    const row = document.getElementById(`row-${index}`);
+                    if (row) {
+                        const buttons = row.querySelectorAll('button');
+                        buttons.forEach(btn => {
+                            btn.disabled = true;
+                            btn.style.opacity = '0.5';
+                            btn.style.cursor = 'not-allowed';
+                        });
                     }
                 } else {
                     const error = await response.json();
