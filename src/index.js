@@ -396,7 +396,7 @@ class Automator {
         this.accountWaitTimes[`building_${account.id}`] = Date.now() + buildResult.waitTime;
         console.log(`⏰ [${account.username}] Build: Další za ${Math.ceil(buildResult.waitTime / 60000)} min`);
       } else {
-        this.accountWaitTimes[`building_${account.id}`] = Date.now() + 2 * 60 * 1000; // 2 min fallback (bylo 5)
+        this.accountWaitTimes[`building_${account.id}`] = Date.now() + 1 * 60 * 1000; // 1 min fallback
       }
 
       await this.browserPool.closeContext(context, browserKey);
