@@ -9,6 +9,7 @@ import BuildingModule from './modules/building.js';
 import ResearchModule from './modules/research.js';
 import NotificationsModule from './modules/notifications.js';
 import PaladinModule from './modules/paladin.js';
+import logger from './logger.js';
 
 /**
  * 🚀 Event-Driven Automator s nezávislými smyčkami
@@ -141,6 +142,7 @@ class Automator {
     while (this.isRunning) {
       const accounts = this.db.getAllActiveAccounts();
 
+      // Sekvenční zpracování - jeden účet za druhým
       for (const account of accounts) {
         const buildingSettings = this.db.getBuildingSettings(account.id);
 
@@ -148,13 +150,18 @@ class Automator {
           const buildingKey = `building_${account.id}`;
           const buildingWaitUntil = this.accountWaitTimes[buildingKey];
 
-          // Pokud je čas, spusť
           if (!buildingWaitUntil || Date.now() >= buildingWaitUntil) {
-            await this.workerPool.run(
-              () => this.processBuilding(account, buildingSettings),
-              this.priorities.building,
-              `Build: ${account.username}`
-            );
+            // Zpracuj SEKVENČNĚ - počkej na dokončení před dalším účtem
+            try {
+              logger.debug(`Zpracovávám výstavbu`, account.username);
+              await this.processBuilding(account, buildingSettings);
+            } catch (error) {
+              logger.error('Chyba při výstavbě', account.username, error);
+            }
+          } else {
+            // Info když přeskakuji kvůli timingu
+            const waitMinutes = Math.round((buildingWaitUntil - Date.now()) / 60000);
+            logger.debug(`Přeskakuji - čeká ${waitMinutes} min`, account.username);
           }
         }
       }
