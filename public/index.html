@@ -388,6 +388,39 @@
             font-weight: 700;
             color: #58a6ff;
         }
+
+        /* Záložky pro světy */
+        .tabs-container {
+            margin-bottom: 20px;
+            border-bottom: 2px solid #30363d;
+            display: flex;
+            gap: 5px;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            color: #c9d1d9;
+            background: rgba(56, 139, 253, 0.1);
+        }
+
+        .tab.active {
+            color: #58a6ff;
+            border-bottom-color: #58a6ff;
+        }
     </style>
 </head>
 <body>
@@ -459,6 +492,11 @@
             </div>
         </div>
 
+        <!-- Záložky pro světy -->
+        <div class="tabs-container" id="worldTabs">
+            <button class="tab active" onclick="filterByWorld('all')">Všechny světy</button>
+        </div>
+
         <!-- Tabulka účtů -->
         <div class="table-container">
             <table id="accountsTable">
@@ -489,6 +527,20 @@
     <script>
         let allAccounts = [];
         let currentSort = { column: null, ascending: true };
+        let currentWorld = 'all';
+
+        // Načíst preferovaný svět z localStorage
+        function loadWorldPreference() {
+            const saved = localStorage.getItem('index_worldPreference');
+            if (saved) {
+                currentWorld = saved;
+            }
+        }
+
+        // Uložit preferovaný svět do localStorage
+        function saveWorldPreference() {
+            localStorage.setItem('index_worldPreference', currentWorld);
+        }
 
         // Helper funkce pro ikony surovin z Tribal Wars
         function getResourceIcon(resourceType) {
@@ -549,8 +601,11 @@
                     return;
                 }
 
+                // Načti světy a vytvoř záložky
+                loadWorldTabs();
+
                 updateStats();
-                renderAccounts(allAccounts);
+                filterAccounts();
 
             } catch (error) {
                 tbody.innerHTML = `<tr><td colspan="12" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
@@ -679,13 +734,58 @@
             }).join('');
         }
 
+        // Načíst světy a vytvořit záložky
+        function loadWorldTabs() {
+            const worlds = [...new Set(allAccounts.map(acc => acc.world))].sort();
+            const tabsContainer = document.getElementById('worldTabs');
+
+            tabsContainer.innerHTML = `
+                <button class="tab ${currentWorld === 'all' ? 'active' : ''}" onclick="filterByWorld('all')">
+                    Všechny světy (${allAccounts.length})
+                </button>
+            `;
+
+            worlds.forEach(world => {
+                const count = allAccounts.filter(acc => acc.world === world).length;
+                tabsContainer.innerHTML += `
+                    <button class="tab ${currentWorld === world ? 'active' : ''}" onclick="filterByWorld('${world}')">
+                        ${world} (${count})
+                    </button>
+                `;
+            });
+        }
+
+        // Filtrovat podle světa
+        function filterByWorld(world) {
+            currentWorld = world;
+            saveWorldPreference();
+
+            // Aktualizuj aktivní záložku
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            filterAccounts();
+        }
+
         // Filtrování účtů
         function filterAccounts() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allAccounts.filter(acc =>
-                acc.username.toLowerCase().includes(searchTerm) ||
-                (acc.world && acc.world.toLowerCase().includes(searchTerm))
-            );
+
+            let filtered = allAccounts;
+
+            // Filtr podle světa
+            if (currentWorld !== 'all') {
+                filtered = filtered.filter(acc => acc.world === currentWorld);
+            }
+
+            // Filtr podle vyhledávání
+            if (searchTerm) {
+                filtered = filtered.filter(acc =>
+                    acc.username.toLowerCase().includes(searchTerm) ||
+                    (acc.world && acc.world.toLowerCase().includes(searchTerm))
+                );
+            }
+
             renderAccounts(filtered);
         }
 
@@ -913,6 +1013,7 @@
 
         // Načíst při startu - update každé 2 minuty
         (async () => {
+            loadWorldPreference(); // Načti preferovaný svět
             await loadTemplates();
             await loadAccounts();
             setInterval(loadAccounts, 120000); // 2 minuty

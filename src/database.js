@@ -411,6 +411,24 @@ class DatabaseManager {
       .filter(a => a.active === 1)
       .map(account => {
         const stats = statsData.stats.find(s => s.account_id === account.id);
+
+        // Vypočítat jednotky mimo vesnici z units_info
+        let units_away = 0;
+        if (account.units_info) {
+          try {
+            const unitsInfo = JSON.parse(account.units_info);
+            for (const unitType in unitsInfo) {
+              const unit = unitsInfo[unitType];
+              // units_away = totalOwn - inVillages (= traveling + supporting)
+              const away = (unit.totalOwn || 0) - (unit.inVillages || 0);
+              units_away += away;
+            }
+          } catch (e) {
+            // Ignorovat chybu parsování JSON
+            units_away = 0;
+          }
+        }
+
         return {
           ...account,
           wood: stats?.wood || null,
@@ -424,7 +442,9 @@ class DatabaseManager {
           research_enabled: account.research_enabled,
           research_template: account.research_template,
           // 🆕 SCAVENGE - Přidáno do response
-          scavenge_enabled: account.scavenge_enabled
+          scavenge_enabled: account.scavenge_enabled,
+          // 🆕 UNITS AWAY - Vypočítáno z units_info
+          units_away: units_away
         };
       });
   }
