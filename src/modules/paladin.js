@@ -258,7 +258,12 @@ class PaladinModule {
 
       return false;
     } catch (error) {
-      logger.error('Chyba při potvrzování popup', this.getAccountName(), error);
+      // Timeout je normální - popup neexistuje (paladin už je, nebo jiný stav)
+      if (error.name === 'TimeoutError') {
+        logger.debug('Popup neexistuje (paladin už rekrutován)', this.getAccountName());
+      } else {
+        logger.error('Chyba při potvrzování popup', this.getAccountName(), error);
+      }
       return false;
     }
   }
