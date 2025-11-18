@@ -15,7 +15,7 @@ import logger from './logger.js';
  * 🚀 Event-Driven Automator s nezávislými smyčkami
  *
  * Architektura:
- * - Globální WorkerPool (max 50 procesů)
+ * - Globální WorkerPool (max 100 procesů)
  * - 5 nezávislých smyček:
  *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
  *   2. Build - dynamicky podle timingu [P2]
@@ -28,7 +28,7 @@ class Automator {
     this.db = new DatabaseManager();
     this.browserManager = new BrowserManager(this.db);
     this.browserPool = new SharedBrowserPool(this.db);
-    this.workerPool = new WorkerPool(50); // Max 50 procesů
+    this.workerPool = new WorkerPool(100); // Max 100 procesů
     this.isRunning = false;
     this.accountWaitTimes = {}; // Per-account per-module timing
     this.openBrowserWindows = new Set(); // Účty s otevřeným viditelným oknem

@@ -22,8 +22,6 @@ class SharedBrowserPool {
     }
 
     // Vytvoř nový browser
-    console.log(`🌐 Vytvářím sdílený browser pro: ${key}`);
-
     const launchOptions = {
       headless: true,
       args: ['--disable-blink-features=AutomationControlled']

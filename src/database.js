@@ -265,7 +265,6 @@ class DatabaseManager {
     }
 
     this._saveStats(data);
-    console.log(`✅ Statistiky aktualizovány pro účet ID: ${accountId}`);
   }
 
   // Aktualizovat informace o rekrutování
