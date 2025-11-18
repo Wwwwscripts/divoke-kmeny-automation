@@ -687,6 +687,37 @@
             const canSendCount = calculationResults.filter(r => r.fastestUnit !== null).length;
             const totalCount = calculationResults.length;
 
+            // Spočítat celkový počet jednotek
+            const totalUnits = {};
+            calculationResults.forEach(result => {
+                if (result.fastestUnit !== null && result.unitsToSend) {
+                    result.unitsToSend.forEach(unit => {
+                        // Získat počet jednotek pro daný typ z account.units_info
+                        const account = result.account;
+                        if (account.units_info) {
+                            try {
+                                const unitsInfo = JSON.parse(account.units_info);
+                                const count = unitsInfo[unit]?.inVillages || 0;
+                                if (count > 0) {
+                                    totalUnits[unit] = (totalUnits[unit] || 0) + count;
+                                }
+                            } catch (e) {
+                                console.error('Chyba při parsování units_info:', e);
+                            }
+                        }
+                    });
+                }
+            });
+
+            // Vytvořit text s celkovým počtem jednotek
+            let totalUnitsText = '';
+            if (Object.keys(totalUnits).length > 0) {
+                const unitCounts = Object.entries(totalUnits)
+                    .map(([unit, count]) => `${UNIT_NAMES[unit]}: ${count}`)
+                    .join(', ');
+                totalUnitsText = ` | Celkem jednotek: ${unitCounts}`;
+            }
+
             tbody.innerHTML = calculationResults.map((result, index) => {
                 const account = result.account;
                 const hasUnits = result.fastestUnit !== null;
@@ -741,8 +772,8 @@
                 `;
             }).join('');
 
-            // Aktualizovat nadpis s počtem vesnic
-            document.querySelector('.results-header h2').textContent = `📊 Dostupné možnosti podpory (${canSendCount}/${totalCount} vesnic stihne)`;
+            // Aktualizovat nadpis s počtem vesnic a jednotek
+            document.querySelector('.results-header h2').textContent = `📊 Dostupné možnosti podpory (${canSendCount}/${totalCount} vesnic stihne${totalUnitsText})`;
         }
 
         function formatDateTime(date) {
