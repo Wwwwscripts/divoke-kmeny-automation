@@ -398,6 +398,11 @@
     <script>
         let allAccounts = [];
 
+        // Helper funkce pro ikony jednotek z Tribal Wars
+        function getUnitIcon(unitType) {
+            return `<img src="https://cs107.divokekmeny.cz/graphic/unit/unit_${unitType}.png" style="width: 18px; height: 18px; vertical-align: middle; margin-right: 2px;" alt="${unitType}">`;
+        }
+
         // Dropdown menu
         function toggleDropdown() {
             document.getElementById('moreMenu').classList.toggle('active');
@@ -536,11 +541,11 @@
 
                             // Detail důležitých jednotek (vlastní ve vesnici / celkem ve vesnici)
                             const detailUnits = [];
-                            if (units.spear?.totalInVillage) detailUnits.push(`🛡️${units.spear.inVillages}/${units.spear.totalInVillage}`);
-                            if (units.sword?.totalInVillage) detailUnits.push(`⚔️${units.sword.inVillages}/${units.sword.totalInVillage}`);
-                            if (units.axe?.totalInVillage) detailUnits.push(`🪓${units.axe.inVillages}/${units.axe.totalInVillage}`);
-                            if (units.archer?.totalInVillage) detailUnits.push(`🏹${units.archer.inVillages}/${units.archer.totalInVillage}`);
-                            if (units.heavy?.totalInVillage) detailUnits.push(`🐴${units.heavy.inVillages}/${units.heavy.totalInVillage}`);
+                            if (units.spear?.totalInVillage) detailUnits.push(`${getUnitIcon('spear')}${units.spear.inVillages}/${units.spear.totalInVillage}`);
+                            if (units.sword?.totalInVillage) detailUnits.push(`${getUnitIcon('sword')}${units.sword.inVillages}/${units.sword.totalInVillage}`);
+                            if (units.axe?.totalInVillage) detailUnits.push(`${getUnitIcon('axe')}${units.axe.inVillages}/${units.axe.totalInVillage}`);
+                            if (units.archer?.totalInVillage) detailUnits.push(`${getUnitIcon('archer')}${units.archer.inVillages}/${units.archer.totalInVillage}`);
+                            if (units.heavy?.totalInVillage) detailUnits.push(`${getUnitIcon('heavy')}${units.heavy.inVillages}/${units.heavy.totalInVillage}`);
 
                             if (detailUnits.length > 0) {
                                 allUnits.push('<br>' + detailUnits.map(u => `<span class="unit-count">${u}</span>`).join(' '));
