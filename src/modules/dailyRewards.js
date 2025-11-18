@@ -124,18 +124,18 @@ class DailyRewardsModule {
         let claimedCount = 0;
 
         // Najdi všechny odměny s třídou "unlocked" (dostupné k otevření)
-        const unlockedChests = document.querySelectorAll('.reward .db-chest.unlocked');
+        // Selektor: .db-chest.unlocked (bez .claimed)
+        const unlockedChests = document.querySelectorAll('.db-chest.unlocked:not(.claimed)');
 
         unlockedChests.forEach((chest) => {
           // Najdi nadřazený element odměny
           const rewardElement = chest.closest('.reward');
           if (!rewardElement) return;
 
-          // Najdi tlačítko "Otevřít"
+          // Najdi tlačítko v .actions
+          // Může být "Otevřít" (CZ) nebo "Otvoriť" (SK)
           const button = rewardElement.querySelector('.actions a.btn');
-          if (button && button.textContent.includes('Otevřít')) {
-            console.log(`🎁 Klikám na odměnu: ${rewardElement.className}`);
-
+          if (button) {
             // Klikni na tlačítko
             button.click();
             claimedCount++;
