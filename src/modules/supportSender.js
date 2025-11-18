@@ -245,51 +245,54 @@ class SupportSender {
   async sendMultipleUnits(unitTypes, targetX, targetY) {
     try {
       const worldUrl = this.getWorldUrl();
-      const villageId = await this.getVillageId();
 
       logger.info(`Odesílám komplexní podporu: ${unitTypes.join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
 
-      // Přejít na rally point
-      const placeUrl = `${worldUrl}/game.php?village=${villageId}&screen=place`;
-      await this.page.goto(placeUrl, { waitUntil: 'domcontentloaded' });
-      await this.page.waitForTimeout(1000);
+      // Získat počty jednotek z databáze (stejně jako openManualSupport)
+      const account = this.db.getAccount(this.accountId);
+      const unitCounts = {};
 
-      // Vyplnit formulář pro všechny jednotky
-      await this.page.evaluate((units, x, y) => {
-        // Vyplnit všechny jednotky
-        units.forEach(unit => {
-          const unitInput = document.querySelector(`input[name="${unit}"]`);
-          if (unitInput) {
-            // Najít dostupný počet jednotek
-            const linkElement = unitInput.closest('td')?.nextElementSibling?.querySelector('a');
-            if (linkElement) {
-              const match = linkElement.textContent.match(/\((\d+)\)/);
-              if (match) {
-                const availableCount = parseInt(match[1]);
-                unitInput.value = availableCount; // Poslat všechny dostupné
-              }
+      if (account.units_info) {
+        try {
+          const unitsInfo = JSON.parse(account.units_info);
+          unitTypes.forEach(unit => {
+            const count = unitsInfo[unit]?.inVillages || 0;
+            if (count > 0) {
+              unitCounts[unit] = count;
             }
-          }
-        });
-
-        // Vyplnit souřadnice
-        const xInput = document.querySelector('input[name="x"]');
-        const yInput = document.querySelector('input[name="y"]');
-        if (xInput) xInput.value = x;
-        if (yInput) yInput.value = y;
-      }, unitTypes, targetX, targetY);
-
-      await this.page.waitForTimeout(500);
-
-      // Kliknout na tlačítko "Útok/Podpora"
-      const submitButton = await this.page.$('input[type="submit"][value*="ttack"], input[type="submit"][value*="tok"], input[type="submit"][value*="Support"], input[type="submit"][value*="Podpora"]');
-
-      if (!submitButton) {
-        logger.error('Nenalezeno tlačítko pro odeslání', this.getAccountName());
-        throw new Error('Nenalezeno tlačítko pro odeslání');
+          });
+        } catch (e) {
+          logger.error(`Chyba při parsování units_info: ${e.message}`, this.getAccountName());
+        }
       }
 
-      await submitButton.click();
+      // Sestavit URL s parametry (stejně jako openManualSupport)
+      const params = new URLSearchParams();
+      params.append('screen', 'place');
+      params.append('x', targetX);
+      params.append('y', targetY);
+
+      Object.entries(unitCounts).forEach(([unit, count]) => {
+        params.append(unit, count);
+      });
+
+      const placeUrl = `${worldUrl}/game.php?${params.toString()}`;
+      logger.info(`Navigace na: ${placeUrl}`, this.getAccountName());
+
+      // Přejít na URL s předvyplněnými parametry
+      await this.page.goto(placeUrl, { waitUntil: 'domcontentloaded' });
+      await this.page.waitForTimeout(1500);
+
+      // Kliknout na tlačítko "Podpora" (input[name="support"])
+      logger.info('Klikám na tlačítko "Podpora"', this.getAccountName());
+      const supportButton = await this.page.$('input[name="support"]');
+
+      if (!supportButton) {
+        logger.error('Nenalezeno tlačítko "Podpora"', this.getAccountName());
+        throw new Error('Nenalezeno tlačítko "Podpora"');
+      }
+
+      await supportButton.click();
       await this.page.waitForTimeout(2000);
 
       // Ověřit, že jsme na potvrzovací stránce
@@ -301,8 +304,14 @@ class SupportSender {
 
       // Zkontrolovat, jestli je to podpora (ne útok)
       const isSupport = await this.page.evaluate(() => {
-        const bodyText = document.body.innerText;
-        return bodyText.includes('Podpora') || bodyText.includes('Support');
+        const confirmButton = document.querySelector('#troop_confirm_submit');
+        if (confirmButton) {
+          // Zkontrolovat class nebo value tlačítka
+          return confirmButton.classList.contains('btn-support') ||
+                 confirmButton.value.includes('podpor') ||
+                 confirmButton.value.toLowerCase().includes('support');
+        }
+        return false;
       });
 
       if (!isSupport) {
@@ -310,8 +319,10 @@ class SupportSender {
         throw new Error('Detekován útok místo podpory');
       }
 
+      logger.info('Potvrzuji odeslání podpory', this.getAccountName());
+
       // Potvrdit odeslání
-      const confirmButton = await this.page.$('input[type="submit"][id="troop_confirm_submit"]');
+      const confirmButton = await this.page.$('#troop_confirm_submit');
 
       if (!confirmButton) {
         logger.error('Nenalezeno potvrzovací tlačítko', this.getAccountName());
@@ -330,8 +341,8 @@ class SupportSender {
       });
 
       if (success) {
-        logger.success(`✅ Komplexní podpora odeslána: ${unitTypes.join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
-        return { success: true, unitTypes, targetX, targetY };
+        logger.success(`✅ Komplexní podpora odeslána: ${unitTypes.join(', ')} (${Object.entries(unitCounts).map(([u,c]) => `${u}:${c}`).join(', ')}) na ${targetX}|${targetY}`, this.getAccountName());
+        return { success: true, unitTypes, targetX, targetY, unitCounts };
       } else {
         logger.error('Podpora nebyla odeslána', this.getAccountName());
         throw new Error('Podpora nebyla odeslána');

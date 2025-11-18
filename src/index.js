@@ -32,7 +32,7 @@ class Automator {
     this.workerPool = new WorkerPool(100); // Max 100 procesů
     this.isRunning = false;
     this.accountWaitTimes = {}; // Per-account per-module timing
-    this.openBrowserWindows = new Set(); // Účty s otevřeným viditelným oknem
+    this.openBrowserWindows = new Map(); // Účty s otevřeným viditelným oknem (accountId => browserInfo)
 
     // Intervaly pro smyčky
     this.intervals = {
@@ -66,6 +66,32 @@ class Automator {
     }
 
     return 'divokekmeny.cz';
+  }
+
+  /**
+   * Zkontroluje jestli je browser pro daný účet opravdu ještě otevřený a připojený
+   * Pokud ne, odstraní ho z mapy
+   * @returns {boolean} true pokud je browser aktivní, false pokud ne
+   */
+  isBrowserActive(accountId) {
+    const browserInfo = this.openBrowserWindows.get(accountId);
+
+    if (!browserInfo) {
+      return false;
+    }
+
+    // Zkontroluj jestli je browser opravdu ještě připojený
+    const isConnected = browserInfo.browser && browserInfo.browser.isConnected();
+
+    if (!isConnected) {
+      // Browser byl zavřen ale nebyl odstraněn z mapy - odstraň ho teď
+      this.openBrowserWindows.delete(accountId);
+      const account = this.db.getAccount(accountId);
+      console.log(`🔌 Browser pro ${account?.username || accountId} již není aktivní - odstraněn z mapy`);
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -301,13 +327,15 @@ class Automator {
         await this.browserPool.closeContext(context, browserKey);
 
         // Otevři viditelný prohlížeč pro manuální přihlášení (NOVÝ ÚČET)
-        if (!this.openBrowserWindows.has(account.id)) {
+        if (!this.isBrowserActive(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro přihlášení: ${account.username}`);
-          this.openBrowserWindows.add(account.id);
 
           // autoSaveAndClose = true (automaticky zavře po přihlášení)
           const browserInfo = await this.browserManager.testConnection(account.id, true);
           if (browserInfo) {
+            // Ulož do mapy
+            this.openBrowserWindows.set(account.id, browserInfo);
+
             // Sleduj zavření browseru
             browserInfo.browser.on('disconnected', () => {
               console.log(`🔒 Browser zavřen pro: ${account.username}`);
@@ -359,13 +387,15 @@ class Automator {
         await this.browserPool.closeContext(context, browserKey);
 
         // Otevři viditelný prohlížeč POUZE pokud už není otevřený (CAPTCHA)
-        if (!this.openBrowserWindows.has(account.id)) {
+        if (!this.isBrowserActive(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
-          this.openBrowserWindows.add(account.id);
 
           // autoSaveAndClose = false (uživatel musí ručně zavřít)
           const browserInfo = await this.browserManager.testConnection(account.id, false);
           if (browserInfo) {
+            // Ulož do mapy
+            this.openBrowserWindows.set(account.id, browserInfo);
+
             // Sleduj zavření browseru
             browserInfo.browser.on('disconnected', () => {
               console.log(`🔒 Browser zavřen pro: ${account.username}`);
@@ -394,13 +424,15 @@ class Automator {
         });
 
         // Otevři viditelný prohlížeč POUZE pokud už není otevřený (DOBYTÁ VESNICE)
-        if (!this.openBrowserWindows.has(account.id)) {
+        if (!this.isBrowserActive(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro vytvoření nové vesnice`);
-          this.openBrowserWindows.add(account.id);
 
           // autoSaveAndClose = false (uživatel musí ručně zavřít)
           const browserInfo = await this.browserManager.testConnection(account.id, false);
           if (browserInfo) {
+            // Ulož do mapy
+            this.openBrowserWindows.set(account.id, browserInfo);
+
             // Sleduj zavření browseru
             browserInfo.browser.on('disconnected', () => {
               console.log(`🔒 Browser zavřen pro: ${account.username}`);
