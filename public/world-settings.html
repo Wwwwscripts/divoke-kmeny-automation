@@ -384,6 +384,8 @@
                         <th>Svět</th>
                         <th>Rychlost světa</th>
                         <th>Modifikátor rychlosti jednotek</th>
+                        <th>Denní odměny</th>
+                        <th>Sběr</th>
                         <th>Akce</th>
                     </tr>
                 </thead>
@@ -422,6 +424,20 @@
                 <input type="number" id="unit-speed-modifier" placeholder="např. 1, 1.5, 2" min="0.1" step="0.1" value="1" required>
             </div>
 
+            <div class="form-group">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="daily-rewards-enabled" style="margin-right: 10px; width: auto; cursor: pointer;">
+                    Denní odměny dostupné na tomto světě
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="scavenge-enabled" style="margin-right: 10px; width: auto; cursor: pointer;">
+                    Sběr (Scavenge) dostupný na tomto světě
+                </label>
+            </div>
+
             <div class="form-actions">
                 <button class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
                 <button class="btn btn-primary" onclick="saveWorld()">Uložit</button>
@@ -457,8 +473,10 @@
                             <td><strong>${world}</strong></td>
                             <td>${settings.speed}x</td>
                             <td>${settings.unitSpeedModifier || 1}x</td>
+                            <td>${settings.dailyRewardsEnabled ? '✅ Ano' : '❌ Ne'}</td>
+                            <td>${settings.scavengeEnabled ? '✅ Ano' : '❌ Ne'}</td>
                             <td>
-                                <button class="action-btn" onclick="editWorld('${world}', ${settings.speed}, ${settings.unitSpeedModifier || 1})">✏️ Upravit</button>
+                                <button class="action-btn" onclick="editWorld('${world}', ${settings.speed}, ${settings.unitSpeedModifier || 1}, ${settings.dailyRewardsEnabled || false}, ${settings.scavengeEnabled || false})">✏️ Upravit</button>
                                 <button class="action-btn delete" onclick="deleteWorld('${world}')">🗑️ Smazat</button>
                             </td>
                         </tr>
@@ -475,16 +493,20 @@
             document.getElementById('world-name').disabled = false;
             document.getElementById('world-speed').value = '1';
             document.getElementById('unit-speed-modifier').value = '1';
+            document.getElementById('daily-rewards-enabled').checked = false;
+            document.getElementById('scavenge-enabled').checked = false;
             document.getElementById('worldModal').style.display = 'block';
         }
 
-        function editWorld(world, speed, unitSpeedModifier) {
+        function editWorld(world, speed, unitSpeedModifier, dailyRewardsEnabled, scavengeEnabled) {
             editingWorld = world;
             document.getElementById('modal-title').textContent = 'Upravit svět';
             document.getElementById('world-name').value = world;
             document.getElementById('world-name').disabled = true;
             document.getElementById('world-speed').value = speed;
             document.getElementById('unit-speed-modifier').value = unitSpeedModifier || 1;
+            document.getElementById('daily-rewards-enabled').checked = dailyRewardsEnabled || false;
+            document.getElementById('scavenge-enabled').checked = scavengeEnabled || false;
             document.getElementById('worldModal').style.display = 'block';
         }
 
@@ -497,6 +519,8 @@
             const worldName = document.getElementById('world-name').value.trim();
             const worldSpeed = parseFloat(document.getElementById('world-speed').value);
             const unitSpeedModifier = parseFloat(document.getElementById('unit-speed-modifier').value);
+            const dailyRewardsEnabled = document.getElementById('daily-rewards-enabled').checked;
+            const scavengeEnabled = document.getElementById('scavenge-enabled').checked;
 
             if (!worldName) {
                 showMessage('Vyplňte název světa', 'error');
@@ -519,7 +543,9 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         speed: worldSpeed,
-                        unitSpeedModifier: unitSpeedModifier
+                        unitSpeedModifier: unitSpeedModifier,
+                        dailyRewardsEnabled: dailyRewardsEnabled,
+                        scavengeEnabled: scavengeEnabled
                     })
                 });
 

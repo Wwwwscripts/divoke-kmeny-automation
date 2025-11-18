@@ -219,12 +219,28 @@ app.put('/api/accounts/:id/research', async (req, res) => {
   try {
     const accountId = parseInt(req.params.id);
     const { enabled, template } = req.body;
-    
+
     db.updateResearchSettings(accountId, {
       researchEnabled: enabled,
       researchTemplate: template
     });
-    
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 🆕 SCAVENGE - Aktualizovat nastavení sběru
+app.put('/api/accounts/:id/scavenge', async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    const { enabled } = req.body;
+
+    db.updateScavengeSettings(accountId, {
+      scavengeEnabled: enabled
+    });
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -416,7 +432,7 @@ app.get('/api/world-settings', (req, res) => {
 app.put('/api/world-settings/:world', (req, res) => {
   try {
     const world = req.params.world;
-    const { speed, unitSpeedModifier } = req.body;
+    const { speed, unitSpeedModifier, dailyRewardsEnabled, scavengeEnabled } = req.body;
 
     if (!speed || speed <= 0) {
       return res.status(400).json({ error: 'Neplatná rychlost světa' });
@@ -426,7 +442,12 @@ app.put('/api/world-settings/:world', (req, res) => {
       return res.status(400).json({ error: 'Neplatný modifikátor rychlosti jednotek' });
     }
 
-    db.saveWorldSettings(world, { speed, unitSpeedModifier: unitSpeedModifier || 1 });
+    db.saveWorldSettings(world, {
+      speed,
+      unitSpeedModifier: unitSpeedModifier || 1,
+      dailyRewardsEnabled: dailyRewardsEnabled || false,
+      scavengeEnabled: scavengeEnabled || false
+    });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -469,11 +469,12 @@
                         <th class="sortable" onclick="sortBy('research_template')">Šablona V</th>
                         <th class="sortable" onclick="sortBy('building_enabled')">Výstavba</th>
                         <th class="sortable" onclick="sortBy('building_template')">Šablona B</th>
+                        <th class="sortable" onclick="sortBy('scavenge_enabled')">Sběr</th>
                         <th>Akce</th>
                     </tr>
                 </thead>
                 <tbody id="accountsList">
-                    <tr><td colspan="12" class="loading">⏳ Načítám účty...</td></tr>
+                    <tr><td colspan="13" class="loading">⏳ Načítám účty...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -655,6 +656,14 @@
                                 <option value="RESOURCES" ${acc.building_template === 'RESOURCES' ? 'selected' : ''}>Resources</option>
                                 <option value="NOBLE" ${acc.building_template === 'NOBLE' ? 'selected' : ''}>Noble</option>
                             </select>
+                        </td>
+                        <td>
+                            <label class="toggle-switch">
+                                <input type="checkbox"
+                                       ${acc.scavenge_enabled ? 'checked' : ''}
+                                       onchange="toggleScavenge(${acc.id}, this.checked)">
+                                <span class="slider"></span>
+                            </label>
                         </td>
                         <td>
                             <button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>
@@ -841,6 +850,24 @@
                 }
             } catch (error) {
                 console.error('❌ Chyba:', error);
+            }
+        }
+
+        async function toggleScavenge(accountId, enabled) {
+            try {
+                const response = await fetch(`/api/accounts/${accountId}/scavenge`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                });
+
+                if ((await response.json()).success) {
+                    const acc = allAccounts.find(a => a.id === accountId);
+                    acc.scavenge_enabled = enabled;
+                    showMessage(enabled ? '✅ Sběr zapnut' : '⏸️ Sběr vypnut', 'success');
+                }
+            } catch (error) {
+                showMessage('❌ Chyba: ' + error.message, 'error');
             }
         }
 
