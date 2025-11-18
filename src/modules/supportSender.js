@@ -179,6 +179,113 @@ class SupportSender {
   }
 
   /**
+   * Odeslat více typů jednotek najednou na podporu
+   * @param {Array<string>} unitTypes - Pole typů jednotek (např. ['knight', 'spear', 'sword'])
+   * @param {number} targetX - Cílová X souřadnice
+   * @param {number} targetY - Cílová Y souřadnice
+   */
+  async sendMultipleUnits(unitTypes, targetX, targetY) {
+    try {
+      const worldUrl = this.getWorldUrl();
+      const villageId = await this.getVillageId();
+
+      logger.info(`Odesílám komplexní podporu: ${unitTypes.join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
+
+      // Přejít na rally point
+      const placeUrl = `${worldUrl}/game.php?village=${villageId}&screen=place`;
+      await this.page.goto(placeUrl, { waitUntil: 'networkidle2' });
+      await this.page.waitForTimeout(1000);
+
+      // Vyplnit formulář pro všechny jednotky
+      await this.page.evaluate((units, x, y) => {
+        // Vyplnit všechny jednotky
+        units.forEach(unit => {
+          const unitInput = document.querySelector(`input[name="${unit}"]`);
+          if (unitInput) {
+            // Najít dostupný počet jednotek
+            const linkElement = unitInput.closest('td')?.nextElementSibling?.querySelector('a');
+            if (linkElement) {
+              const match = linkElement.textContent.match(/\((\d+)\)/);
+              if (match) {
+                const availableCount = parseInt(match[1]);
+                unitInput.value = availableCount; // Poslat všechny dostupné
+              }
+            }
+          }
+        });
+
+        // Vyplnit souřadnice
+        const xInput = document.querySelector('input[name="x"]');
+        const yInput = document.querySelector('input[name="y"]');
+        if (xInput) xInput.value = x;
+        if (yInput) yInput.value = y;
+      }, unitTypes, targetX, targetY);
+
+      await this.page.waitForTimeout(500);
+
+      // Kliknout na tlačítko "Útok/Podpora"
+      const submitButton = await this.page.$('input[type="submit"][value*="ttack"], input[type="submit"][value*="tok"], input[type="submit"][value*="Support"], input[type="submit"][value*="Podpora"]');
+
+      if (!submitButton) {
+        logger.error('Nenalezeno tlačítko pro odeslání', this.getAccountName());
+        throw new Error('Nenalezeno tlačítko pro odeslání');
+      }
+
+      await submitButton.click();
+      await this.page.waitForTimeout(2000);
+
+      // Ověřit, že jsme na potvrzovací stránce
+      const currentUrl = this.page.url();
+      if (!currentUrl.includes('try=confirm')) {
+        logger.error('Nepovedlo se přejít na potvrzovací stránku', this.getAccountName());
+        throw new Error('Nepovedlo se přejít na potvrzovací stránku');
+      }
+
+      // Zkontrolovat, jestli je to podpora (ne útok)
+      const isSupport = await this.page.evaluate(() => {
+        const bodyText = document.body.innerText;
+        return bodyText.includes('Podpora') || bodyText.includes('Support');
+      });
+
+      if (!isSupport) {
+        logger.warning('Detekován útok místo podpory - přerušuji', this.getAccountName());
+        throw new Error('Detekován útok místo podpory');
+      }
+
+      // Potvrdit odeslání
+      const confirmButton = await this.page.$('input[type="submit"][id="troop_confirm_submit"]');
+
+      if (!confirmButton) {
+        logger.error('Nenalezeno potvrzovací tlačítko', this.getAccountName());
+        throw new Error('Nenalezeno potvrzovací tlačítko');
+      }
+
+      await confirmButton.click();
+      await this.page.waitForTimeout(2000);
+
+      // Ověřit úspěch
+      const success = await this.page.evaluate(() => {
+        const bodyText = document.body.innerText;
+        return bodyText.includes('Command sent') ||
+               bodyText.includes('Příkaz odeslán') ||
+               bodyText.includes('Rozkaz odoslaný');
+      });
+
+      if (success) {
+        logger.success(`✅ Komplexní podpora odeslána: ${unitTypes.join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
+        return { success: true, unitTypes, targetX, targetY };
+      } else {
+        logger.error('Podpora nebyla odeslána', this.getAccountName());
+        throw new Error('Podpora nebyla odeslána');
+      }
+
+    } catch (error) {
+      logger.error(`Chyba při odesílání komplexní podpory: ${error.message}`, this.getAccountName());
+      throw error;
+    }
+  }
+
+  /**
    * Odeslat nejrychlejší dostupnou jednotku na podporu
    * @param {number} targetX - Cílová X souřadnice
    * @param {number} targetY - Cílová Y souřadnice

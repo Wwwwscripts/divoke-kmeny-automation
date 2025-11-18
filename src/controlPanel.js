@@ -329,9 +329,9 @@ app.delete('/api/world-settings/:world', (req, res) => {
 // Odeslat podporu do vesnice
 app.post('/api/support/send', async (req, res) => {
   try {
-    const { accountId, unitType, targetX, targetY, count } = req.body;
+    const { accountId, unitTypes, targetX, targetY } = req.body;
 
-    if (!accountId || !unitType || !targetX || !targetY) {
+    if (!accountId || !unitTypes || !targetX || !targetY) {
       return res.status(400).json({ error: 'Chybí povinné parametry' });
     }
 
@@ -345,12 +345,11 @@ app.post('/api/support/send', async (req, res) => {
     const { default: SupportSender } = await import('./modules/supportSender.js');
     const supportSender = new SupportSender(browser.page, db, accountId);
 
-    // Odeslat podporu
-    const result = await supportSender.sendSupport(
-      unitType,
+    // Odeslat podporu (více jednotek najednou)
+    const result = await supportSender.sendMultipleUnits(
+      unitTypes,  // Pole jednotek ['knight', 'spear', 'sword', ...]
       parseInt(targetX),
-      parseInt(targetY),
-      count || 1
+      parseInt(targetY)
     );
 
     res.json({ success: true, result });
