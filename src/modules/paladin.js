@@ -189,10 +189,20 @@ class PaladinModule {
   async confirmPopup() {
     try {
       const confirmed = await this.page.evaluate(() => {
-        const confirmButton = document.querySelector('.btn-confirm-yes, .evt-confirm-btn');
-        if (confirmButton) {
-          confirmButton.click();
-          return true;
+        // Try multiple selectors for recruit/revive confirmation
+        const selectors = [
+          '#knight_recruit_confirm',  // Recruit confirmation
+          '#knight_revive_confirm',   // Revive confirmation
+          '.btn-confirm-yes',         // Generic confirm
+          '.evt-confirm-btn'          // Event confirm
+        ];
+
+        for (const selector of selectors) {
+          const button = document.querySelector(selector);
+          if (button) {
+            button.click();
+            return true;
+          }
         }
         return false;
       });
