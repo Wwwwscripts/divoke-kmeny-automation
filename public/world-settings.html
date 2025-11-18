@@ -383,6 +383,7 @@
                     <tr>
                         <th>Svět</th>
                         <th>Rychlost světa</th>
+                        <th>Modifikátor rychlosti jednotek</th>
                         <th>Akce</th>
                     </tr>
                 </thead>
@@ -414,6 +415,11 @@
             <div class="form-group">
                 <label for="world-speed">Rychlost světa</label>
                 <input type="number" id="world-speed" placeholder="např. 1, 2, 10" min="0.1" step="0.1" value="1" required>
+            </div>
+
+            <div class="form-group">
+                <label for="unit-speed-modifier">Modifikátor rychlosti jednotek</label>
+                <input type="number" id="unit-speed-modifier" placeholder="např. 1, 1.5, 2" min="0.1" step="0.1" value="1" required>
             </div>
 
             <div class="form-actions">
@@ -450,8 +456,9 @@
                         <tr>
                             <td><strong>${world}</strong></td>
                             <td>${settings.speed}x</td>
+                            <td>${settings.unitSpeedModifier || 1}x</td>
                             <td>
-                                <button class="action-btn" onclick="editWorld('${world}', ${settings.speed})">✏️ Upravit</button>
+                                <button class="action-btn" onclick="editWorld('${world}', ${settings.speed}, ${settings.unitSpeedModifier || 1})">✏️ Upravit</button>
                                 <button class="action-btn delete" onclick="deleteWorld('${world}')">🗑️ Smazat</button>
                             </td>
                         </tr>
@@ -467,15 +474,17 @@
             document.getElementById('world-name').value = '';
             document.getElementById('world-name').disabled = false;
             document.getElementById('world-speed').value = '1';
+            document.getElementById('unit-speed-modifier').value = '1';
             document.getElementById('worldModal').style.display = 'block';
         }
 
-        function editWorld(world, speed) {
+        function editWorld(world, speed, unitSpeedModifier) {
             editingWorld = world;
             document.getElementById('modal-title').textContent = 'Upravit svět';
             document.getElementById('world-name').value = world;
             document.getElementById('world-name').disabled = true;
             document.getElementById('world-speed').value = speed;
+            document.getElementById('unit-speed-modifier').value = unitSpeedModifier || 1;
             document.getElementById('worldModal').style.display = 'block';
         }
 
@@ -487,6 +496,7 @@
         async function saveWorld() {
             const worldName = document.getElementById('world-name').value.trim();
             const worldSpeed = parseFloat(document.getElementById('world-speed').value);
+            const unitSpeedModifier = parseFloat(document.getElementById('unit-speed-modifier').value);
 
             if (!worldName) {
                 showMessage('Vyplňte název světa', 'error');
@@ -498,11 +508,19 @@
                 return;
             }
 
+            if (!unitSpeedModifier || unitSpeedModifier <= 0) {
+                showMessage('Zadejte platný modifikátor rychlosti jednotek', 'error');
+                return;
+            }
+
             try {
                 const response = await fetch(`/api/world-settings/${worldName}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ speed: worldSpeed })
+                    body: JSON.stringify({
+                        speed: worldSpeed,
+                        unitSpeedModifier: unitSpeedModifier
+                    })
                 });
 
                 if (response.ok) {

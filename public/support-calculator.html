@@ -403,6 +403,13 @@
                 </div>
             </div>
 
+            <div class="form-group" style="margin-top: 10px;">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="spy-only" style="margin-right: 8px; width: auto;">
+                    <span>Pouze špehové (posílat jen špehy na podporu)</span>
+                </label>
+            </div>
+
             <button class="btn-calculate" onclick="calculateSupport()">🔍 Vypočítat podporu</button>
         </div>
 
@@ -469,6 +476,7 @@
 
         // Pořadí jednotek (od nejrychlejší)
         const UNIT_ORDER = ['spy', 'knight', 'light', 'marcher', 'heavy', 'spear', 'axe', 'archer', 'sword', 'ram', 'catapult', 'snob'];
+        const UNIT_ORDER_NO_SPY = ['knight', 'light', 'marcher', 'heavy', 'spear', 'axe', 'archer', 'sword', 'ram', 'catapult', 'snob'];
 
         let calculationResults = [];
 
@@ -507,6 +515,7 @@
             const coords = document.getElementById('target-coords').value;
             const arrivalTime = document.getElementById('arrival-time').value;
             const supportBoost = parseFloat(document.getElementById('support-boost').value) || 0;
+            const spyOnly = document.getElementById('spy-only').checked;
 
             // Validace
             if (!world) {
@@ -545,6 +554,7 @@
                 const worldSettingsRes = await fetch(`/api/world-settings/${world}`);
                 const worldSettings = await worldSettingsRes.json();
                 const worldSpeed = worldSettings.speed || 1;
+                const unitSpeedModifier = worldSettings.unitSpeedModifier || 1;
 
                 // Získat účty na daném světě
                 const accountsRes = await fetch('/api/accounts');
@@ -565,6 +575,7 @@
                     // Najít nejrychlejší dostupnou jednotku
                     let fastestUnit = null;
                     let travelTime = null;
+                    let unitsToSend = [];
 
                     // Parsovat units_info
                     let unitsInfo = {};
@@ -576,18 +587,40 @@
                         }
                     }
 
-                    for (const unit of UNIT_ORDER) {
-                        const unitSpeed = UNIT_SPEEDS[unit];
+                    // Pokud pouze špehové
+                    if (spyOnly) {
+                        const unitSpeed = UNIT_SPEEDS['spy'];
                         const boostMultiplier = 1 + (supportBoost / 100);
-                        const requiredTime = (distance * unitSpeed) / (worldSpeed * boostMultiplier);
-
-                        // Zkontrolovat, jestli jednotka stihne a jestli ji máme
-                        const unitCount = unitsInfo[unit]?.inVillages || 0;
+                        const requiredTime = (distance * unitSpeed) / (worldSpeed * boostMultiplier * unitSpeedModifier);
+                        const unitCount = unitsInfo['spy']?.inVillages || 0;
 
                         if (requiredTime <= availableTime && unitCount > 0) {
-                            fastestUnit = unit;
+                            fastestUnit = 'spy';
                             travelTime = requiredTime;
-                            break;
+                            unitsToSend = ['spy'];
+                        }
+                    } else {
+                        // Běžná podpora (bez špehů)
+                        for (const unit of UNIT_ORDER_NO_SPY) {
+                            const unitSpeed = UNIT_SPEEDS[unit];
+                            const boostMultiplier = 1 + (supportBoost / 100);
+                            const requiredTime = (distance * unitSpeed) / (worldSpeed * boostMultiplier * unitSpeedModifier);
+                            const unitCount = unitsInfo[unit]?.inVillages || 0;
+
+                            if (requiredTime <= availableTime && unitCount > 0) {
+                                fastestUnit = unit;
+                                travelTime = requiredTime;
+
+                                // Najít všechny jednotky, které mají stejnou nebo vyšší rychlost než nejrychlejší
+                                const fastestSpeed = UNIT_SPEEDS[unit];
+                                unitsToSend = UNIT_ORDER_NO_SPY.filter(u => {
+                                    const speed = UNIT_SPEEDS[u];
+                                    const count = unitsInfo[u]?.inVillages || 0;
+                                    return speed >= fastestSpeed && count > 0;
+                                });
+
+                                break;
+                            }
                         }
                     }
 
@@ -595,6 +628,7 @@
                         account,
                         distance,
                         fastestUnit,
+                        unitsToSend,
                         travelTime,
                         sendTime: fastestUnit ? new Date(arrivalDate - travelTime * 60 * 1000) : null,
                         arrivalTime: arrivalDate,
@@ -641,22 +675,29 @@
                 let actions = '';
 
                 if (hasUnits) {
+                    // Zobrazit všechny jednotky, které se pošlou
+                    const unitsDisplay = result.unitsToSend.map(unit => `
+                        <img src="/images/unit_${unit}.png" class="unit-icon" alt="${UNIT_NAMES[unit]}" title="${UNIT_NAMES[unit]}">
+                    `).join('');
+
                     unitDisplay = `
                         <div class="unit-info">
-                            <img src="/images/unit_${result.fastestUnit}.png" class="unit-icon" alt="${result.fastestUnit}">
-                            <span>${UNIT_NAMES[result.fastestUnit]}</span>
+                            ${unitsDisplay}
                         </div>
                     `;
                     sendTimeDisplay = formatDateTime(result.sendTime);
                     statusBadge = '<span class="badge badge-success">Stihne</span>';
 
                     const domain = account.world.startsWith('sk') ? 'divoke-kmene.sk' : 'divokekmeny.cz';
-                    const manualUrl = `https://${account.world}.${domain}/game.php?village=${account.village_id}&screen=place&target=${result.targetX}|${result.targetY}`;
+                    const proxy = account.proxy ? account.proxy : '';
+                    const manualUrl = proxy
+                        ? `${proxy}/proxy?url=https://${account.world}.${domain}/game.php?village=${account.village_id}&screen=place&target=${result.targetX}|${result.targetY}`
+                        : `https://${account.world}.${domain}/game.php?village=${account.village_id}&screen=place&target=${result.targetX}|${result.targetY}`;
 
                     actions = `
                         <div class="action-buttons">
                             <a href="${manualUrl}" target="_blank" class="action-btn">📝 Ručně</a>
-                            <button class="action-btn auto" onclick="sendSupport(${account.id}, '${result.fastestUnit}', ${result.targetX}, ${result.targetY})">⚡ Auto</button>
+                            <button class="action-btn auto" onclick="sendSupport(${account.id}, ${JSON.stringify(result.unitsToSend)}, ${result.targetX}, ${result.targetY})">⚡ Auto</button>
                         </div>
                     `;
                 } else {
@@ -691,7 +732,7 @@
             return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
         }
 
-        async function sendSupport(accountId, unitType, targetX, targetY) {
+        async function sendSupport(accountId, unitTypes, targetX, targetY) {
             try {
                 showMessage('Odesílám podporu...', 'info');
 
@@ -700,7 +741,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         accountId,
-                        unitType,
+                        unitTypes,  // Pole jednotek
                         targetX,
                         targetY
                     })
@@ -741,7 +782,7 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             accountId: result.account.id,
-                            unitType: result.fastestUnit,
+                            unitTypes: result.unitsToSend,
                             targetX: result.targetX,
                             targetY: result.targetY
                         })
