@@ -19,11 +19,11 @@ import logger from './logger.js';
  * - Globální WorkerPool (max 100 procesů)
  * - 6 nezávislých smyček:
  *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
- *   2. Build - dynamicky podle timingu [P2]
- *   3. Rekrut - každé 4 minuty [P3]
- *   4. Výzkum - každých 120 minut [P4]
- *   5. Paladin - každých 120 minut [P5]
- *   6. Jednotky - každých 20 minut po 5 účtech [P6]
+ *   2. Build - každých 5s po 5 účtech (COOLDOWN režim) [P1]
+ *   3. Rekrut - každé 4 minuty po 5 účtech [P3]
+ *   4. Výzkum - každých 120 minut po 5 účtech [P4]
+ *   5. Paladin - každých 120 minut po 5 účtech [P5]
+ *   6. Jednotky - každých 20 minut po 2 účtech [P6]
  */
 class Automator {
   constructor() {
@@ -106,10 +106,10 @@ class Automator {
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🔄 6 nezávislých smyček:');
     console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
-    console.log('   [P1] Build: každých 5s - COOLDOWN režim (VYSOKÁ PRIORITA)');
-    console.log('   [P3] Rekrut: každé 4 min');
-    console.log('   [P4] Výzkum: každých 120 min (2 hod)');
-    console.log('   [P5] Paladin: každých 120 min (2 hod)');
+    console.log('   [P1] Build: každých 5s po 5 účtech - COOLDOWN režim (VYSOKÁ PRIORITA)');
+    console.log('   [P3] Rekrut: každé 4 min po 5 účtech');
+    console.log('   [P4] Výzkum: každých 120 min po 5 účtech (2 hod)');
+    console.log('   [P5] Paladin: každých 120 min po 5 účtech (2 hod)');
     console.log('   [P6] Jednotky: každých 20 min po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P7] Statistiky: každých 20 min');
     console.log('='.repeat(70));
@@ -118,12 +118,12 @@ class Automator {
 
     // Spusť všechny smyčky paralelně
     await Promise.all([
-      this.checksLoop(),      // P1: Neustále
-      this.buildingLoop(),    // P2: Každé 2 min (kontrola dynamického timingu)
-      this.recruitLoop(),     // P3: Každé 4 min
-      this.researchLoop(),    // P4: Každých 60 min
-      this.paladinLoop(),     // P5: Každých 60 min
-      this.unitsLoop(),       // P6: Každých 20 min - po 5 účtech
+      this.checksLoop(),      // P1: Neustále po 2 účtech
+      this.buildingLoop(),    // P1: Každých 5s po 5 účtech (COOLDOWN režim)
+      this.recruitLoop(),     // P3: Každé 4 min po 5 účtech
+      this.researchLoop(),    // P4: Každých 120 min po 5 účtech
+      this.paladinLoop(),     // P5: Každých 120 min po 5 účtech
+      this.unitsLoop(),       // P6: Každých 20 min po 2 účtech
       this.statsMonitor()     // Monitoring
     ]);
   }
