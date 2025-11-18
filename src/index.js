@@ -110,7 +110,7 @@ class Automator {
     console.log('   [P3] Rekrut: každé 4 min');
     console.log('   [P4] Výzkum: každých 120 min (2 hod)');
     console.log('   [P5] Paladin: každých 120 min (2 hod)');
-    console.log('   [P6] Jednotky: každých 20 min po 5 účtech (~4 min/cyklus pro 100 účtů)');
+    console.log('   [P6] Jednotky: každých 20 min po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P7] Statistiky: každých 20 min');
     console.log('='.repeat(70));
 
@@ -359,7 +359,7 @@ class Automator {
 
   /**
    * SMYČKA 6: Kontrola jednotek
-   * Každých 20 minut projde účty a zkontroluje jednotky (po 5 účtech)
+   * Každých 20 minut projde účty a zkontroluje jednotky (po 2 účtech)
    * Priorita: 6
    */
   async unitsLoop() {
@@ -368,9 +368,9 @@ class Automator {
     while (this.isRunning) {
       const accounts = this.db.getAllActiveAccounts();
 
-      // Zpracuj po 5 účtech
-      for (let i = 0; i < accounts.length; i += 5) {
-        const batch = accounts.slice(i, i + 5);
+      // Zpracuj po 2 účtech
+      for (let i = 0; i < accounts.length; i += 2) {
+        const batch = accounts.slice(i, i + 2);
 
         // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
         await Promise.all(
