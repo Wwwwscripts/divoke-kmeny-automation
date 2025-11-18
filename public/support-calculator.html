@@ -438,6 +438,7 @@
                             <th>Souřadnice</th>
                             <th>Vzdálenost</th>
                             <th>Nejrychlejší jednotka</th>
+                            <th>Čas cesty</th>
                             <th>Čas odeslání</th>
                             <th>Dorazí</th>
                             <th>Akce</th>
@@ -660,6 +661,14 @@
             return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
         }
 
+        function formatTravelTime(minutes) {
+            if (!minutes) return '-';
+            const hours = Math.floor(minutes / 60);
+            const mins = Math.floor(minutes % 60);
+            const secs = Math.floor((minutes % 1) * 60);
+            return `${hours}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
         function displayResults() {
             const tbody = document.getElementById('results-tbody');
             const resultsSection = document.getElementById('results-section');
@@ -674,12 +683,17 @@
             // Seřadit podle vzdálenosti
             calculationResults.sort((a, b) => a.distance - b.distance);
 
+            // Spočítat kolik vesnic stihne odeslat podporu
+            const canSendCount = calculationResults.filter(r => r.fastestUnit !== null).length;
+            const totalCount = calculationResults.length;
+
             tbody.innerHTML = calculationResults.map((result, index) => {
                 const account = result.account;
                 const hasUnits = result.fastestUnit !== null;
                 const rowClass = hasUnits ? '' : 'no-units';
 
                 let unitDisplay = '';
+                let travelTimeDisplay = '';
                 let sendTimeDisplay = '';
                 let statusBadge = '';
                 let actions = '';
@@ -695,6 +709,7 @@
                             ${unitsDisplay}
                         </div>
                     `;
+                    travelTimeDisplay = formatTravelTime(result.travelTime);
                     sendTimeDisplay = formatDateTime(result.sendTime);
                     statusBadge = `<span class="badge badge-success" id="status-${index}">Stihne</span>`;
 
@@ -706,6 +721,7 @@
                     `;
                 } else {
                     unitDisplay = '<span style="color: #8b949e;">Žádné dostupné jednotky</span>';
+                    travelTimeDisplay = '-';
                     sendTimeDisplay = '-';
                     statusBadge = '<span class="badge badge-danger">Nestihne</span>';
                     actions = '-';
@@ -717,12 +733,16 @@
                         <td>${account.coord_x}|${account.coord_y}</td>
                         <td>${result.distance.toFixed(2)} polí</td>
                         <td>${unitDisplay}</td>
+                        <td>${travelTimeDisplay}</td>
                         <td>${sendTimeDisplay}</td>
                         <td>${statusBadge}</td>
                         <td>${actions}</td>
                     </tr>
                 `;
             }).join('');
+
+            // Aktualizovat nadpis s počtem vesnic
+            document.querySelector('.results-header h2').textContent = `📊 Dostupné možnosti podpory (${canSendCount}/${totalCount} vesnic stihne)`;
         }
 
         function formatDateTime(date) {
