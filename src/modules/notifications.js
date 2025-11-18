@@ -98,25 +98,36 @@ class NotificationsModule {
                 attacker = attackerLink.textContent.trim();
               }
 
-              // Souřadnice odkud útok přichází - zkusíme více selektorů
+              // Vesnice odkud útok přichází (může být název nebo souřadnice)
               let origin = '-';
 
-              // Nejdřív zkusíme link na vesnici
-              const coordLink = row.querySelector('a[href*="screen=info_village"]');
-              if (coordLink) {
-                const coordText = coordLink.textContent.trim();
-                const match = coordText.match(/(\d+)\|(\d+)/);
-                if (match) {
-                  origin = `${match[1]}|${match[2]}`;
+              // Hledáme link na vesnici - může obsahovat název nebo souřadnice
+              const villageLinks = row.querySelectorAll('a[href*="screen=info_village"]');
+
+              // První link je obvykle cílová vesnice (naše), druhý je útočníkova
+              if (villageLinks.length >= 2) {
+                // Druhý link = odkud útok přichází
+                const originText = villageLinks[1].textContent.trim();
+                origin = originText; // Použijeme celý text (název nebo souřadnice)
+              } else if (villageLinks.length === 1) {
+                // Pokud je jen jeden link, zkusíme ho
+                const originText = villageLinks[0].textContent.trim();
+
+                // Pokud to vypadá jako souřadnice, použijeme
+                if (originText.includes('|')) {
+                  origin = originText;
+                } else {
+                  // Jinak je to pravděpodobně název vesnice
+                  origin = originText;
                 }
               }
 
-              // Pokud jsme nenašli, zkusíme celý text řádku
+              // Fallback: hledáme souřadnice kdekoli v textu
               if (origin === '-') {
                 const rowText = row.textContent;
-                const match = rowText.match(/(\d{1,3})\|(\d{1,3})/);
-                if (match) {
-                  origin = `${match[1]}|${match[2]}`;
+                const coordMatch = rowText.match(/(\d{1,3})\|(\d{1,3})/);
+                if (coordMatch) {
+                  origin = `${coordMatch[1]}|${coordMatch[2]}`;
                 }
               }
 
