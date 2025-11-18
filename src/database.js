@@ -157,6 +157,11 @@ class DatabaseManager {
         coord_x: null,
         coord_y: null,
         continent: null,
+        // 🆕 TRIBE - Informace o kmeni
+        tribe_name: null,
+        // 🆕 PREMIUM - Premium informace
+        premium_active: false,
+        premium_points: 0,
         recruit_enabled: 0,
         recruit_template: 'FARM',
         building_enabled: 0,
@@ -244,6 +249,11 @@ class DatabaseManager {
       if (info.coord_x !== undefined) account.coord_x = info.coord_x;
       if (info.coord_y !== undefined) account.coord_y = info.coord_y;
       if (info.continent !== undefined) account.continent = info.continent;
+      // 🆕 TRIBE - Ukládání tribe_name
+      if (info.tribe_name !== undefined) account.tribe_name = info.tribe_name;
+      // 🆕 PREMIUM - Ukládání premium informací
+      if (info.premium_active !== undefined) account.premium_active = info.premium_active;
+      if (info.premium_points !== undefined) account.premium_points = info.premium_points;
       this._saveAccounts(data);
     }
   }

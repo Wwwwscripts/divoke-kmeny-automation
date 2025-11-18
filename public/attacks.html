@@ -379,6 +379,7 @@
                 <thead>
                     <tr>
                         <th>Účet</th>
+                        <th>Kmen</th>
                         <th>Svět</th>
                         <th>Souřadnice</th>
                         <th>Suroviny</th>
@@ -389,7 +390,7 @@
                     </tr>
                 </thead>
                 <tbody id="attacksList">
-                    <tr><td colspan="8" class="loading">⏳ Načítám...</td></tr>
+                    <tr><td colspan="9" class="loading">⏳ Načítám...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -430,7 +431,7 @@
         async function loadAttacks() {
             const tbody = document.getElementById('attacksList');
             const alertDiv = document.getElementById('alert');
-            tbody.innerHTML = '<tr><td colspan="8" class="loading">⏳ Načítám...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="loading">⏳ Načítám...</td></tr>';
             alertDiv.innerHTML = '';
 
             try {
@@ -438,7 +439,7 @@
                 const data = await response.json();
 
                 if (!data.success) {
-                    tbody.innerHTML = `<tr><td colspan="8" class="loading" style="color: #f85149;">❌ Chyba: ${data.error}</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="9" class="loading" style="color: #f85149;">❌ Chyba: ${data.error}</td></tr>`;
                     return;
                 }
 
@@ -446,7 +447,7 @@
                 allAccounts = accountsUnderAttack;
 
                 if (accountsUnderAttack.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="loading" style="color: #3fb950;">✅ Žádné účty pod útokem!</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="loading" style="color: #3fb950;">✅ Žádné účty pod útokem!</td></tr>';
                     alertDiv.innerHTML = '<div class="alert success">✅ Všechny účty jsou v bezpečí!</div>';
                     updateAttackCount();
                     return;
@@ -458,7 +459,7 @@
                 updateAttackCount();
 
             } catch (error) {
-                tbody.innerHTML = `<tr><td colspan="8" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
             }
         }
 
@@ -666,6 +667,7 @@
                 return `
                     <tr>
                         <td><span class="account-name">${acc.username}</span></td>
+                        <td>${acc.tribe_name || '-'}</td>
                         <td><span class="world-badge">${acc.world || '-'}</span></td>
                         <td class="coord">${coord}</td>
                         <td class="resources">${resources}</td>
