@@ -8,17 +8,19 @@ import RecruitModule from './modules/recruit.js';
 import BuildingModule from './modules/building.js';
 import ResearchModule from './modules/research.js';
 import NotificationsModule from './modules/notifications.js';
+import PaladinModule from './modules/paladin.js';
 
 /**
  * 🚀 Event-Driven Automator s nezávislými smyčkami
  *
  * Architektura:
  * - Globální WorkerPool (max 50 procesů)
- * - 4 nezávislé smyčky:
+ * - 5 nezávislých smyček:
  *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
  *   2. Build - dynamicky podle timingu [P2]
  *   3. Rekrut - každé 4 minuty [P3]
  *   4. Výzkum - každých 60 minut [P4]
+ *   5. Paladin - každých 60 minut [P5]
  */
 class Automator {
   constructor() {
@@ -36,6 +38,7 @@ class Automator {
       recruit: 4 * 60 * 1000,     // 4 minuty
       building: 2 * 60 * 1000,    // 2 minuty (kontrola dynamického timingu)
       research: 60 * 60 * 1000,   // 60 minut
+      paladin: 60 * 60 * 1000,    // 60 minut
       accountInfo: 20 * 60 * 1000 // 20 minut (sběr statistik)
     };
 
@@ -45,7 +48,8 @@ class Automator {
       building: 2,  // Výstavba
       recruit: 3,   // Rekrutování
       research: 4,  // Výzkum
-      stats: 5      // Statistiky
+      paladin: 5,   // Paladin
+      stats: 6      // Statistiky
     };
   }
 
@@ -69,12 +73,13 @@ class Automator {
     console.log('='.repeat(70));
     console.log('🤖 Spouštím Event-Driven automatizaci');
     console.log('⚡ Worker Pool: Max 50 procesů');
-    console.log('🔄 4 nezávislé smyčky:');
+    console.log('🔄 5 nezávislých smyček:');
     console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P2] Build: dynamicky');
     console.log('   [P3] Rekrut: každé 4 min');
     console.log('   [P4] Výzkum: každých 60 min');
-    console.log('   [P5] Statistiky: každých 20 min');
+    console.log('   [P5] Paladin: každých 60 min');
+    console.log('   [P6] Statistiky: každých 20 min');
     console.log('='.repeat(70));
 
     this.isRunning = true;
@@ -85,6 +90,7 @@ class Automator {
       this.buildingLoop(),    // P2: Každé 2 min (kontrola dynamického timingu)
       this.recruitLoop(),     // P3: Každé 4 min
       this.researchLoop(),    // P4: Každých 60 min
+      this.paladinLoop(),     // P5: Každých 60 min
       this.statsMonitor()     // Monitoring
     ]);
   }
@@ -221,6 +227,36 @@ class Automator {
 
       // Počkej 60 minut
       await new Promise(resolve => setTimeout(resolve, this.intervals.research));
+    }
+  }
+
+  /**
+   * SMYČKA 5: Paladin
+   * Každých 60 minut projde účty a zkontroluje paladina
+   * Priorita: 5
+   */
+  async paladinLoop() {
+    console.log('🔄 [P5] Smyčka PALADIN spuštěna');
+
+    while (this.isRunning) {
+      const accounts = this.db.getAllActiveAccounts();
+
+      for (const account of accounts) {
+        // Paladin modul je vždy aktivní (není třeba kontrolovat settings)
+        const paladinKey = `paladin_${account.id}`;
+        const paladinWaitUntil = this.accountWaitTimes[paladinKey];
+
+        if (!paladinWaitUntil || Date.now() >= paladinWaitUntil) {
+          await this.workerPool.run(
+            () => this.processPaladin(account),
+            this.priorities.paladin,
+            `Paladin: ${account.username}`
+          );
+        }
+      }
+
+      // Počkej 60 minut
+      await new Promise(resolve => setTimeout(resolve, this.intervals.paladin));
     }
   }
 
@@ -405,6 +441,40 @@ class Automator {
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při výzkumu:`, error.message);
+      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+    }
+  }
+
+  /**
+   * Zpracuj paladina
+   */
+  async processPaladin(account) {
+    let context, browserKey;
+
+    try {
+      ({ context, browserKey } = await this.browserPool.createContext(account.id));
+      const page = await context.newPage();
+
+      const loginSuccess = await this.loginToGame(page, account);
+      if (!loginSuccess) {
+        await this.browserPool.closeContext(context, browserKey);
+        return;
+      }
+
+      const paladinModule = new PaladinModule(page, this.db, account.id);
+      const paladinResult = await paladinModule.execute();
+
+      if (paladinResult && paladinResult.waitTime) {
+        this.accountWaitTimes[`paladin_${account.id}`] = Date.now() + paladinResult.waitTime;
+        console.log(`⏰ [${account.username}] Paladin: Další za ${Math.ceil(paladinResult.waitTime / 60000)} min`);
+      } else {
+        this.accountWaitTimes[`paladin_${account.id}`] = Date.now() + this.intervals.paladin;
+      }
+
+      await this.browserPool.closeContext(context, browserKey);
+
+    } catch (error) {
+      console.error(`❌ [${account.username}] Chyba při zpracování paladina:`, error.message);
       if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
     }
   }
