@@ -17,12 +17,13 @@ import logger from './logger.js';
  *
  * Architektura:
  * - Globální WorkerPool (max 100 procesů)
- * - 5 nezávislých smyček:
+ * - 6 nezávislých smyček:
  *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
  *   2. Build - dynamicky podle timingu [P2]
  *   3. Rekrut - každé 4 minuty [P3]
- *   4. Výzkum - každých 60 minut [P4]
- *   5. Paladin - každých 60 minut [P5]
+ *   4. Výzkum - každých 120 minut [P4]
+ *   5. Paladin - každých 120 minut [P5]
+ *   6. Jednotky - každých 20 minut po 5 účtech [P6]
  */
 class Automator {
   constructor() {
@@ -41,6 +42,7 @@ class Automator {
       building: 5 * 1000,         // 5 sekund - COOLDOWN režim (kontroluje hned jak vyprší)
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
       paladin: 120 * 60 * 1000,   // 120 minut (2 hodiny)
+      units: 20 * 60 * 1000,      // 20 minut (kontrola jednotek)
       accountInfo: 20 * 60 * 1000 // 20 minut (sběr statistik)
     };
 
@@ -51,7 +53,8 @@ class Automator {
       recruit: 3,   // Rekrutování
       research: 4,  // Výzkum
       paladin: 5,   // Paladin
-      stats: 6      // Statistiky
+      units: 6,     // Kontrola jednotek
+      stats: 7      // Statistiky
     };
   }
 
@@ -101,13 +104,14 @@ class Automator {
     console.log('='.repeat(70));
     console.log('🤖 Spouštím Event-Driven automatizaci');
     console.log('⚡ Worker Pool: Max 100 procesů');
-    console.log('🔄 5 nezávislých smyček:');
+    console.log('🔄 6 nezávislých smyček:');
     console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P1] Build: každých 5s - COOLDOWN režim (VYSOKÁ PRIORITA)');
     console.log('   [P3] Rekrut: každé 4 min');
     console.log('   [P4] Výzkum: každých 120 min (2 hod)');
     console.log('   [P5] Paladin: každých 120 min (2 hod)');
-    console.log('   [P6] Statistiky: každých 20 min');
+    console.log('   [P6] Jednotky: každých 20 min po 5 účtech (~4 min/cyklus pro 100 účtů)');
+    console.log('   [P7] Statistiky: každých 20 min');
     console.log('='.repeat(70));
 
     this.isRunning = true;
@@ -119,6 +123,7 @@ class Automator {
       this.recruitLoop(),     // P3: Každé 4 min
       this.researchLoop(),    // P4: Každých 60 min
       this.paladinLoop(),     // P5: Každých 60 min
+      this.unitsLoop(),       // P6: Každých 20 min - po 5 účtech
       this.statsMonitor()     // Monitoring
     ]);
   }
@@ -295,6 +300,41 @@ class Automator {
   }
 
   /**
+   * SMYČKA 6: Kontrola jednotek
+   * Každých 20 minut projde účty a zkontroluje jednotky (po 5 účtech)
+   * Priorita: 6
+   */
+  async unitsLoop() {
+    console.log('🔄 [P6] Smyčka JEDNOTKY spuštěna');
+
+    while (this.isRunning) {
+      const accounts = this.db.getAllActiveAccounts();
+
+      // Zpracuj po 5 účtech
+      for (let i = 0; i < accounts.length; i += 5) {
+        const batch = accounts.slice(i, i + 5);
+
+        // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
+        await Promise.all(
+          batch.map(account =>
+            this.workerPool.run(
+              () => this.processUnits(account),
+              this.priorities.units,
+              `Jednotky: ${account.username}`
+            )
+          )
+        );
+
+        // Malá pauza mezi dávkami (100ms)
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Počkej 20 minut
+      await new Promise(resolve => setTimeout(resolve, this.intervals.units));
+    }
+  }
+
+  /**
    * Monitoring - vypíše statistiky každých 30 sekund
    */
   async statsMonitor() {
@@ -363,20 +403,6 @@ class Automator {
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       await notificationsModule.detectAttacks();
 
-      // Sbírej informace o jednotkách s dynamickým intervalem
-      // Účty s útoky: 3 min, bez útoků: 60 min
-      const unitsKey = `units_${account.id}`;
-      const unitsWaitUntil = this.accountWaitTimes[unitsKey];
-
-      if (!unitsWaitUntil || Date.now() >= unitsWaitUntil) {
-        const supportModule = new SupportModule(page, this.db, account.id);
-        await supportModule.getAllUnitsInfo();
-
-        // Dynamický interval podle příchozích útoků
-        const hasAttacks = account.incoming_attacks > 0;
-        const unitsInterval = hasAttacks ? 3 * 60 * 1000 : 60 * 60 * 1000; // 3 min nebo 60 min
-        this.accountWaitTimes[unitsKey] = Date.now() + unitsInterval;
-      }
       const hasCaptcha = await notificationsModule.detectCaptcha();
       const isConquered = await notificationsModule.detectConqueredVillage();
 
@@ -574,6 +600,35 @@ class Automator {
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při výzkumu:`, error.message);
+      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+    }
+  }
+
+  /**
+   * Zpracuj kontrolu jednotek
+   */
+  async processUnits(account) {
+    let context, browserKey;
+
+    try {
+      ({ context, browserKey } = await this.browserPool.createContext(account.id));
+      const page = await context.newPage();
+
+      const loginSuccess = await this.loginToGame(page, account);
+      if (!loginSuccess) {
+        await this.browserPool.closeContext(context, browserKey);
+        return;
+      }
+
+      const supportModule = new SupportModule(page, this.db, account.id);
+      await supportModule.getAllUnitsInfo();
+
+      // Ulož cookies
+      await this.browserPool.saveCookies(context, account.id);
+      await this.browserPool.closeContext(context, browserKey);
+
+    } catch (error) {
+      logger.error(`Chyba při kontrole jednotek: ${error.message}`, account.username);
       if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
     }
   }
