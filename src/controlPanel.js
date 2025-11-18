@@ -7,6 +7,94 @@ const app = express();
 const db = new DatabaseManager();
 const browserManager = new BrowserManager(db);
 
+// Mapa aktivních browserů (accountId => { browser, context, page })
+const activeBrowsers = new Map();
+
+// Pomocná funkce pro získání aktivního browseru
+function getBrowser(accountId) {
+  return activeBrowsers.get(accountId);
+}
+
+// Pomocná funkce pro uložení browseru
+function setBrowser(accountId, browserData) {
+  activeBrowsers.set(accountId, browserData);
+}
+
+// Pomocná funkce pro odstranění browseru
+function removeBrowser(accountId) {
+  activeBrowsers.delete(accountId);
+}
+
+// Pomocná funkce pro získání nebo automatické otevření browseru (headless)
+async function getOrOpenBrowser(accountId) {
+  // Zkontroluj jestli už je browser aktivní
+  let browserData = getBrowser(accountId);
+  if (browserData) {
+    return browserData;
+  }
+
+  // Pokud ne, otevři ho headless
+  console.log(`🔧 Automaticky otevírám headless browser pro účet ${accountId}`);
+
+  const account = db.getAccount(accountId);
+  if (!account) {
+    throw new Error(`Účet s ID ${accountId} nebyl nalezen`);
+  }
+
+  const domain = db.getDomainForAccount(account);
+  const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
+  const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
+
+  const browser = await chromium.launch({
+    headless: true,  // Headless pro automatické operace
+    args: ['--disable-blink-features=AutomationControlled']
+  });
+
+  const contextOptions = {
+    viewport: { width: 1280, height: 720 },
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    locale,
+    timezoneId,
+    ignoreHTTPSErrors: true,
+  };
+
+  if (account.proxy) {
+    const proxy = browserManager.parseProxy(account.proxy);
+    contextOptions.proxy = proxy;
+  }
+
+  const context = await browser.newContext(contextOptions);
+
+  if (account.cookies) {
+    const cookies = JSON.parse(account.cookies);
+    await context.addCookies(cookies);
+  }
+
+  const page = await context.newPage();
+
+  // Vyčisti localStorage/sessionStorage před načtením stránky
+  await page.goto(`https://${account.world}.${domain}/`);
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  // Teď načti game.php
+  await page.goto(`https://${account.world}.${domain}/game.php`);
+
+  // Ulož browser do mapy
+  browserData = { browser, context, page, account };
+  setBrowser(accountId, browserData);
+
+  // Při zavření browseru ho odstraň z mapy
+  browser.on('disconnected', () => {
+    console.log(`🔌 Headless browser pro účet ${accountId} (${account.username}) byl zavrén`);
+    removeBrowser(accountId);
+  });
+
+  return browserData;
+}
+
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -172,6 +260,15 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
     // Teď načti game.php
     await page.goto(`https://${account.world}.${domain}/game.php`);
 
+    // Ulož browser do mapy aktivních browserů
+    setBrowser(accountId, { browser, context, page, account });
+
+    // Při zavření browseru ho odstraň z mapy
+    browser.on('disconnected', () => {
+      console.log(`🔌 Browser pro účet ${accountId} (${account.username}) byl zavrén`);
+      removeBrowser(accountId);
+    });
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -335,17 +432,12 @@ app.post('/api/support/open-manual', async (req, res) => {
       return res.status(400).json({ error: 'Chybí povinné parametry' });
     }
 
-    // Získat browser pro daný účet
-    const browser = browserManager.getBrowser(accountId);
-    if (!browser) {
-      return res.status(400).json({
-        error: 'Browser pro tento účet není aktivní. Nejprve otevřete browser pro tento účet v hlavním menu.'
-      });
-    }
+    // Automaticky získat nebo otevřít browser (headless pokud není aktivní)
+    const browserData = await getOrOpenBrowser(accountId);
 
     // Dynamicky importovat SupportSender
     const { default: SupportSender } = await import('./modules/supportSender.js');
-    const supportSender = new SupportSender(browser.page, db, accountId);
+    const supportSender = new SupportSender(browserData.page, db, accountId);
 
     // Otevřít a vyplnit formulář (ale NEodeslat)
     await supportSender.openManualSupport(
@@ -370,17 +462,12 @@ app.post('/api/support/send', async (req, res) => {
       return res.status(400).json({ error: 'Chybí povinné parametry' });
     }
 
-    // Získat browser pro daný účet
-    const browser = browserManager.getBrowser(accountId);
-    if (!browser) {
-      return res.status(400).json({
-        error: 'Browser pro tento účet není aktivní. Nejprve otevřete browser pro tento účet v hlavním menu.'
-      });
-    }
+    // Automaticky získat nebo otevřít browser (headless pokud není aktivní)
+    const browserData = await getOrOpenBrowser(accountId);
 
     // Dynamicky importovat SupportSender
     const { default: SupportSender } = await import('./modules/supportSender.js');
-    const supportSender = new SupportSender(browser.page, db, accountId);
+    const supportSender = new SupportSender(browserData.page, db, accountId);
 
     // Odeslat podporu (více jednotek najednou)
     const result = await supportSender.sendMultipleUnits(
