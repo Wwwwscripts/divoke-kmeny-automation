@@ -306,6 +306,7 @@ class Automator {
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       await notificationsModule.detectAttacks();
       const hasCaptcha = await notificationsModule.detectCaptcha();
+      const isConquered = await notificationsModule.detectConqueredVillage();
 
       if (hasCaptcha) {
         console.log(`⚠️  [${account.username}] CAPTCHA detekována!`);
@@ -319,6 +320,30 @@ class Automator {
           this.openBrowserWindows.add(account.id);
           await this.browserManager.testConnection(account.id);
           console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA a zavřete okno`);
+        } else {
+          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
+        }
+        return;
+      }
+
+      if (isConquered) {
+        console.log(`⚠️  [${account.username}] VESNICE DOBYTA!`);
+
+        // Zavři headless browser
+        await this.browserPool.closeContext(context, browserKey);
+
+        // Označ účet jako dobytý v databázi
+        this.db.updateAccountInfo(account.id, {
+          village_conquered: true,
+          village_conquered_at: new Date().toISOString()
+        });
+
+        // Otevři viditelný prohlížeč POUZE pokud už není otevřený
+        if (!this.openBrowserWindows.has(account.id)) {
+          console.log(`🖥️  Otevírám viditelný prohlížeč pro vytvoření nové vesnice`);
+          this.openBrowserWindows.add(account.id);
+          await this.browserManager.testConnection(account.id);
+          console.log(`⚠️  Viditelný prohlížeč otevřen - vytvořte novou vesnici a zavřete okno`);
         } else {
           console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
         }

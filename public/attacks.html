@@ -562,10 +562,19 @@
                                     // Dopadlý útok - zobrazí se jinak
                                     return `
                                         <div class="attack-box" style="${boxStyle}" data-timestamp="${timestamp}" data-completed="true">
-                                            👤 <span class="attack-attacker" style="color: #8b949e;">${attacker}</span><br>
-                                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
-                                            🕐 Dopad: <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
-                                            ⏱️ <span style="color: #8b949e; font-weight: 600;">DOPADL</span>
+                                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                                <div style="flex: 1;">
+                                                    👤 <span class="attack-attacker" style="color: #8b949e;">${attacker}</span><br>
+                                                    ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
+                                                    🕐 Dopad: <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
+                                                    ⏱️ <span style="color: #8b949e; font-weight: 600;">DOPADL</span>
+                                                </div>
+                                                <button onclick="deleteCompletedAttack(${acc.id}, '${timestamp}')"
+                                                    style="background: none; border: none; color: #8b949e; cursor: pointer; font-size: 16px; padding: 4px 8px; opacity: 0.7; transition: opacity 0.2s;"
+                                                    onmouseover="this.style.opacity='1'; this.style.color='#f85149';"
+                                                    onmouseout="this.style.opacity='0.7'; this.style.color='#8b949e';"
+                                                    title="Odstranit útok">🗑️</button>
+                                            </div>
                                         </div>
                                     `;
                                 } else {
@@ -631,6 +640,28 @@
                 const result = await response.json();
                 if (!result.success) {
                     alert('❌ Chyba: ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Chyba: ' + error.message);
+            }
+        }
+
+        async function deleteCompletedAttack(accountId, timestamp) {
+            try {
+                const response = await fetch(`/api/accounts/${accountId}/delete-attack`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ timestamp: timestamp })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    // Refresh data
+                    await loadAttacks();
+                } else {
+                    alert('❌ Chyba při mazání útoku: ' + result.error);
                 }
             } catch (error) {
                 alert('❌ Chyba: ' + error.message);

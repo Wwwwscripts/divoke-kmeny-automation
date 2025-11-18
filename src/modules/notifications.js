@@ -12,6 +12,26 @@ class NotificationsModule {
   }
 
   /**
+   * Detekce dobytí vesnice (přesměrování na create_village.php)
+   */
+  async detectConqueredVillage() {
+    try {
+      const currentUrl = this.page.url();
+
+      // Zkontroluj zda URL obsahuje create_village.php
+      if (currentUrl.includes('create_village.php')) {
+        console.log('⚠️  VESNICE DOBYTA! Přesměrováno na vytvoření nové vesnice');
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('❌ Chyba při detekci dobytí vesnice:', error.message);
+      return false;
+    }
+  }
+
+  /**
    * Detekce CAPTCHA
    */
   async detectCaptcha() {
