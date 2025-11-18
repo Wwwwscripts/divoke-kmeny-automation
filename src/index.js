@@ -489,7 +489,7 @@ class Automator {
       }
 
       const recruitModule = new RecruitModule(page, this.db, account.id);
-      await recruitModule.collectUnitsInfo();
+      // collectUnitsInfo() již není potřeba - jednotky sbírá SupportModule v checksLoop()
 
       const recruitResult = await recruitModule.startRecruiting(settings.template);
 
