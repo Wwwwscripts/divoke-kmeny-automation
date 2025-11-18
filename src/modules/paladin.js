@@ -184,7 +184,7 @@ class PaladinModule {
   }
 
   /**
-   * Confirm popup dialog
+   * Confirm popup dialog (for recruit/revive)
    */
   async confirmPopup() {
     try {
@@ -204,6 +204,31 @@ class PaladinModule {
       return confirmed;
     } catch (error) {
       console.error('❌ Error confirming popup:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Confirm skill learning (different button class)
+   */
+  async confirmSkillLearning() {
+    try {
+      const confirmed = await this.page.evaluate(() => {
+        const learnButton = document.querySelector('.knight_study_skill');
+        if (learnButton) {
+          learnButton.click();
+          return true;
+        }
+        return false;
+      });
+
+      if (confirmed) {
+        await this.page.waitForTimeout(1500);
+      }
+
+      return confirmed;
+    } catch (error) {
+      console.error('❌ Error confirming skill learning:', error.message);
       return false;
     }
   }
@@ -274,8 +299,8 @@ class PaladinModule {
       // Wait for popup
       await this.page.waitForTimeout(1000);
 
-      // Confirm learning
-      const confirmed = await this.confirmPopup();
+      // Confirm learning (use skill-specific confirmation)
+      const confirmed = await this.confirmSkillLearning();
 
       if (confirmed) {
         console.log(`✅ Skill ${skillIndex} learned`);
