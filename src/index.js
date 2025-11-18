@@ -166,6 +166,7 @@ class Automator {
   /**
    * SMYČKA 2: Výstavba
    * Každých 5 sekund projde účty - COOLDOWN režim (kontroluje hned jak vyprší čas)
+   * Zpracovává po 10 účtech paralelně
    * Priorita: 1
    */
   async buildingLoop() {
@@ -174,27 +175,36 @@ class Automator {
     while (this.isRunning) {
       const accounts = this.db.getAllActiveAccounts();
 
-      // Sekvenční zpracování - jeden účet za druhým
-      for (const account of accounts) {
+      // Filtruj pouze účty, které mají build enabled a vypršelý timer
+      const accountsToProcess = accounts.filter(account => {
         const buildingSettings = this.db.getBuildingSettings(account.id);
+        if (!buildingSettings || !buildingSettings.enabled) {
+          return false;
+        }
 
-        if (buildingSettings && buildingSettings.enabled) {
-          const buildingKey = `building_${account.id}`;
-          const buildingWaitUntil = this.accountWaitTimes[buildingKey];
+        const buildingKey = `building_${account.id}`;
+        const buildingWaitUntil = this.accountWaitTimes[buildingKey];
+        return !buildingWaitUntil || Date.now() >= buildingWaitUntil;
+      });
 
-          if (!buildingWaitUntil || Date.now() >= buildingWaitUntil) {
-            // Zpracuj SEKVENČNĚ - počkej na dokončení před dalším účtem
-            try {
-              logger.debug(`Zpracovávám výstavbu`, account.username);
-              await this.processBuilding(account, buildingSettings);
-            } catch (error) {
-              logger.error('Chyba při výstavbě', account.username, error);
-            }
-          } else {
-            // Info když přeskakuji kvůli timingu
-            const waitMinutes = Math.round((buildingWaitUntil - Date.now()) / 60000);
-            logger.debug(`Přeskakuji - čeká ${waitMinutes} min`, account.username);
-          }
+      // Zpracuj po 10 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 10) {
+        const batch = accountsToProcess.slice(i, i + 10);
+
+        await Promise.all(
+          batch.map(account => {
+            const buildingSettings = this.db.getBuildingSettings(account.id);
+            return this.workerPool.run(
+              () => this.processBuilding(account, buildingSettings),
+              this.priorities.building,
+              `Build: ${account.username}`
+            );
+          })
+        );
+
+        // Malá pauza mezi dávkami (50ms)
+        if (i + 10 < accountsToProcess.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
 
@@ -206,6 +216,7 @@ class Automator {
   /**
    * SMYČKA 3: Rekrutování
    * Každé 4 minuty projde účty a zkontroluje timing
+   * Zpracovává po 10 účtech paralelně
    * Priorita: 3
    */
   async recruitLoop() {
@@ -214,20 +225,36 @@ class Automator {
     while (this.isRunning) {
       const accounts = this.db.getAllActiveAccounts();
 
-      for (const account of accounts) {
+      // Filtruj pouze účty, které mají recruit enabled a vypršelý timer
+      const accountsToProcess = accounts.filter(account => {
         const recruitSettings = this.db.getRecruitSettings(account.id);
+        if (!recruitSettings || !recruitSettings.enabled) {
+          return false;
+        }
 
-        if (recruitSettings && recruitSettings.enabled) {
-          const recruitKey = `recruit_${account.id}`;
-          const recruitWaitUntil = this.accountWaitTimes[recruitKey];
+        const recruitKey = `recruit_${account.id}`;
+        const recruitWaitUntil = this.accountWaitTimes[recruitKey];
+        return !recruitWaitUntil || Date.now() >= recruitWaitUntil;
+      });
 
-          if (!recruitWaitUntil || Date.now() >= recruitWaitUntil) {
-            await this.workerPool.run(
+      // Zpracuj po 10 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 10) {
+        const batch = accountsToProcess.slice(i, i + 10);
+
+        await Promise.all(
+          batch.map(account => {
+            const recruitSettings = this.db.getRecruitSettings(account.id);
+            return this.workerPool.run(
               () => this.processRecruit(account, recruitSettings),
               this.priorities.recruit,
               `Rekrut: ${account.username}`
             );
-          }
+          })
+        );
+
+        // Malá pauza mezi dávkami (50ms)
+        if (i + 10 < accountsToProcess.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
 
@@ -239,6 +266,7 @@ class Automator {
   /**
    * SMYČKA 4: Výzkum
    * Každé 2 hodiny projde účty a zkontroluje timing
+   * Zpracovává po 10 účtech paralelně
    * Priorita: 4
    */
   async researchLoop() {
@@ -247,20 +275,36 @@ class Automator {
     while (this.isRunning) {
       const accounts = this.db.getAllActiveAccounts();
 
-      for (const account of accounts) {
+      // Filtruj pouze účty, které mají research enabled a vypršelý timer
+      const accountsToProcess = accounts.filter(account => {
         const researchSettings = this.db.getResearchSettings(account.id);
+        if (!researchSettings || !researchSettings.enabled) {
+          return false;
+        }
 
-        if (researchSettings && researchSettings.enabled) {
-          const researchKey = `research_${account.id}`;
-          const researchWaitUntil = this.accountWaitTimes[researchKey];
+        const researchKey = `research_${account.id}`;
+        const researchWaitUntil = this.accountWaitTimes[researchKey];
+        return !researchWaitUntil || Date.now() >= researchWaitUntil;
+      });
 
-          if (!researchWaitUntil || Date.now() >= researchWaitUntil) {
-            await this.workerPool.run(
+      // Zpracuj po 10 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 10) {
+        const batch = accountsToProcess.slice(i, i + 10);
+
+        await Promise.all(
+          batch.map(account => {
+            const researchSettings = this.db.getResearchSettings(account.id);
+            return this.workerPool.run(
               () => this.processResearch(account, researchSettings),
               this.priorities.research,
               `Výzkum: ${account.username}`
             );
-          }
+          })
+        );
+
+        // Malá pauza mezi dávkami (50ms)
+        if (i + 10 < accountsToProcess.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
 
@@ -272,6 +316,7 @@ class Automator {
   /**
    * SMYČKA 5: Paladin
    * Každé 2 hodiny projde účty a zkontroluje paladina
+   * Zpracovává po 10 účtech paralelně
    * Priorita: 5
    */
   async paladinLoop() {
@@ -280,17 +325,30 @@ class Automator {
     while (this.isRunning) {
       const accounts = this.db.getAllActiveAccounts();
 
-      for (const account of accounts) {
-        // Paladin modul je vždy aktivní (není třeba kontrolovat settings)
+      // Filtruj pouze účty s vypršelým timerem
+      const accountsToProcess = accounts.filter(account => {
         const paladinKey = `paladin_${account.id}`;
         const paladinWaitUntil = this.accountWaitTimes[paladinKey];
+        return !paladinWaitUntil || Date.now() >= paladinWaitUntil;
+      });
 
-        if (!paladinWaitUntil || Date.now() >= paladinWaitUntil) {
-          await this.workerPool.run(
-            () => this.processPaladin(account),
-            this.priorities.paladin,
-            `Paladin: ${account.username}`
-          );
+      // Zpracuj po 10 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 10) {
+        const batch = accountsToProcess.slice(i, i + 10);
+
+        await Promise.all(
+          batch.map(account =>
+            this.workerPool.run(
+              () => this.processPaladin(account),
+              this.priorities.paladin,
+              `Paladin: ${account.username}`
+            )
+          )
+        );
+
+        // Malá pauza mezi dávkami (50ms)
+        if (i + 10 < accountsToProcess.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
 
