@@ -517,6 +517,13 @@ class Automator {
 
       await page.waitForTimeout(2000);
 
+      // Zkontroluj, jestli není přesměrováno na create_village.php (dobytí vesnice)
+      const currentUrl = page.url();
+      if (currentUrl.includes('create_village.php')) {
+        console.log('⚠️  Detekováno přesměrování na create_village.php - vesnice dobyta, ale uživatel je přihlášen');
+        return true; // Technicky je přihlášen, jen má dobyto vesnici
+      }
+
       const isLoggedIn = await page.evaluate(() => {
         return document.querySelector('#menu_row') !== null;
       });
