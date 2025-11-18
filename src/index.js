@@ -646,8 +646,10 @@ class Automator {
       const researchResult = await researchModule.autoResearch();
 
       if (researchResult && researchResult.waitTime) {
-        this.accountWaitTimes[`research_${account.id}`] = Date.now() + researchResult.waitTime;
-        console.log(`⏰ [${account.username}] Výzkum: Další za ${Math.ceil(researchResult.waitTime / 60000)} min`);
+        // Použij minimálně interval smyčky (120 min)
+        const actualWaitTime = Math.max(researchResult.waitTime, this.intervals.research);
+        this.accountWaitTimes[`research_${account.id}`] = Date.now() + actualWaitTime;
+        console.log(`⏰ [${account.username}] Výzkum: Další za ${Math.ceil(actualWaitTime / 60000)} min`);
       } else {
         this.accountWaitTimes[`research_${account.id}`] = Date.now() + this.intervals.research;
       }
@@ -711,8 +713,10 @@ class Automator {
       const paladinResult = await paladinModule.execute();
 
       if (paladinResult && paladinResult.waitTime) {
-        this.accountWaitTimes[`paladin_${account.id}`] = Date.now() + paladinResult.waitTime;
-        console.log(`⏰ [${account.username}] Paladin: Další za ${Math.ceil(paladinResult.waitTime / 60000)} min`);
+        // Použij minimálně interval smyčky (120 min)
+        const actualWaitTime = Math.max(paladinResult.waitTime, this.intervals.paladin);
+        this.accountWaitTimes[`paladin_${account.id}`] = Date.now() + actualWaitTime;
+        console.log(`⏰ [${account.username}] Paladin: Další za ${Math.ceil(actualWaitTime / 60000)} min`);
       } else {
         this.accountWaitTimes[`paladin_${account.id}`] = Date.now() + this.intervals.paladin;
       }
