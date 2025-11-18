@@ -207,11 +207,12 @@ class BrowserManager {
         console.log('🖥️  Prohlížeč otevřen - zavřete ho ručně po dokončení');
       }
 
-      // Vrať browser pro sledování zavření
-      return { browser, context, accountId: account.id };
+      // Vrať browser, context, page pro sledování zavření
+      return { browser, context, page, accountId: account.id };
 
     } catch (error) {
       console.error('❌ Chyba při otevírání prohlížeče:', error.message);
+      console.error('🔍 Stack trace:', error.stack);
       await this.close(browser, context);
       return null;
     }
@@ -237,19 +238,41 @@ class BrowserManager {
         if (shouldStop) break;
 
         try {
-          // Zkontroluj jestli je přihlášen (detekuj #menu_row)
-          const isLoggedIn = await page.evaluate(() => {
-            return document.querySelector('#menu_row') !== null;
+          // Robustnější detekce přihlášení - kontroluj více elementů
+          const loginStatus = await page.evaluate(() => {
+            // Detekce PŘIHLÁŠENÍ - hledej více elementů
+            const loggedInIndicators = [
+              document.querySelector('#menu_row'),           // Hlavní menu
+              document.querySelector('#topContainer'),       // Top kontejner
+              document.querySelector('.village-name'),       // Název vesnice
+              document.querySelector('#header_info'),        // Header info
+              document.querySelector('.quickbar')            // Quickbar
+            ];
+            const hasLoggedInElement = loggedInIndicators.some(el => el !== null);
+
+            // Detekce NEPŘIHLÁŠENÍ - hledej login formulář
+            const loginIndicators = [
+              document.querySelector('input[name="user"]'),      // Login input
+              document.querySelector('input[name="username"]'),  // Username input
+              document.querySelector('input[name="password"]'),  // Password input
+              document.querySelector('#login_form')              // Login formulář
+            ];
+            const hasLoginForm = loginIndicators.some(el => el !== null);
+
+            return {
+              isLoggedIn: hasLoggedInElement && !hasLoginForm,
+              hasLoginForm: hasLoginForm
+            };
           });
 
-          if (isLoggedIn) {
+          if (loginStatus.isLoggedIn) {
             console.log(`✅ [${account.username}] Přihlášení detekováno - ukládám cookies`);
 
             // Ulož cookies
             const cookies = await context.cookies();
             this.db.updateCookies(account.id, cookies);
 
-            console.log(`💾 [${account.username}] Cookies uloženy - zavírám browser`);
+            console.log(`💾 [${account.username}] Cookies uloženy (${cookies.length} cookies) - zavírám browser`);
 
             // Zavři browser (vyvolá 'disconnected' event)
             await browser.close();
@@ -257,6 +280,7 @@ class BrowserManager {
           }
         } catch (error) {
           // Browser byl pravděpodobně zavřen nebo page neexistuje
+          console.log(`🔒 [${account.username}] Login watcher ukončen (browser zavřen)`);
           break;
         }
       }
