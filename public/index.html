@@ -486,7 +486,7 @@
         function getResourceIcon(resourceType) {
             const resourceMap = { wood: 'holz', clay: 'lehm', iron: 'eisen' };
             const graphicName = resourceMap[resourceType] || resourceType;
-            return `<img src="https://cs107.divokekmeny.cz/graphic/${graphicName}.png" style="width: 18px; height: 18px; vertical-align: middle; margin-right: 2px;" alt="${resourceType}">`;
+            return `<img src="/images/${graphicName}.png" style="width: 18px; height: 18px; vertical-align: middle; margin-right: 2px;" alt="${resourceType}">`;
         }
         let recruitTemplates = [];
         let researchTemplates = [];
