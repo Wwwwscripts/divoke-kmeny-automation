@@ -159,6 +159,17 @@ class BrowserManager {
       const page = await context.newPage();
 
       if (account.world) {
+        // Vyčisti localStorage/sessionStorage před načtením
+        console.log(`🧹 Čistím storage pro: ${account.username}`);
+        await page.goto(`https://${account.world}.${domain}/`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000
+        });
+        await page.evaluate(() => {
+          localStorage.clear();
+          sessionStorage.clear();
+        });
+
         console.log(`🌐 Načítám svět: ${account.world} (${domain}, ${locale})`);
         await page.goto(`https://${account.world}.${domain}/game.php`, {
           waitUntil: 'domcontentloaded',
