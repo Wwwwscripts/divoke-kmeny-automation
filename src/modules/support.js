@@ -250,9 +250,16 @@ class SupportModule {
    */
   async getAllUnitsInfo() {
     try {
+      console.log(`🔍 [Support] Zjišťuji jednotky pro účet ID ${this.accountId}`);
+
       // Získej vlastní jednotky z overview
       const ownUnits = await this.getUnitsFromOverview();
-      if (!ownUnits) return null;
+      if (!ownUnits) {
+        console.log(`⚠️  [Support] Nepodařilo se získat jednotky z overview pro účet ID ${this.accountId}`);
+        return null;
+      }
+
+      console.log(`✅ [Support] Získány vlastní jednotky pro účet ID ${this.accountId}`);
 
       // Získej cizí podpory z place
       const foreignSupport = await this.getForeignSupport();
@@ -273,11 +280,12 @@ class SupportModule {
       });
 
       await this.saveUnitsToDatabase(combinedData);
+      console.log(`💾 [Support] Jednotky uloženy do DB pro účet ID ${this.accountId}`);
 
       return combinedData;
 
     } catch (error) {
-      // Tichá chyba
+      console.error(`❌ [Support] Chyba při zjišťování jednotek pro účet ID ${this.accountId}:`, error.message);
       return null;
     }
   }
