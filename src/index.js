@@ -11,6 +11,7 @@ import NotificationsModule from './modules/notifications.js';
 import PaladinModule from './modules/paladin.js';
 import SupportModule from './modules/support.js';
 import DailyRewardsModule from './modules/dailyRewards.js';
+import ScavengeModule from './modules/scavenge.js';
 import logger from './logger.js';
 
 /**
@@ -18,7 +19,7 @@ import logger from './logger.js';
  *
  * Architektura:
  * - Globální WorkerPool (max 100 procesů)
- * - 7 nezávislých smyček:
+ * - 8 nezávislých smyček:
  *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
  *   2. Build - každých 5s po 5 účtech (COOLDOWN režim) [P1]
  *   3. Rekrut - každé 2 minuty po 5 účtech [P3]
@@ -26,6 +27,7 @@ import logger from './logger.js';
  *   5. Paladin - každých 120 minut po 5 účtech [P5]
  *   6. Jednotky - každých 20 minut po 2 účtech [P6]
  *   7. Denní odměny - jednou denně ve 4:00 nebo při startu [P6]
+ *   8. Sběr - každých 5 minut po 5 účtech [P2]
  */
 class Automator {
   constructor() {
@@ -47,13 +49,15 @@ class Automator {
       paladin: 120 * 60 * 1000,   // 120 minut (2 hodiny)
       units: 20 * 60 * 1000,      // 20 minut (kontrola jednotek)
       accountInfo: 20 * 60 * 1000, // 20 minut (sběr statistik)
-      dailyRewards: 24 * 60 * 60 * 1000 // 24 hodin (denní odměny)
+      dailyRewards: 24 * 60 * 60 * 1000, // 24 hodin (denní odměny)
+      scavenge: 5 * 60 * 1000     // 5 minut (sběr surovin)
     };
 
     // Priority (nižší = vyšší priorita)
     this.priorities = {
       checks: 1,        // Útoky/CAPTCHA
       building: 1,      // Výstavba - STEJNÁ PRIORITA jako kontroly
+      scavenge: 2,      // Sběr - vyšší priorita než rekrut
       recruit: 3,       // Rekrutování
       research: 4,      // Výzkum
       paladin: 5,       // Paladin
@@ -109,9 +113,10 @@ class Automator {
     console.log('='.repeat(70));
     console.log('🤖 Spouštím Event-Driven automatizaci');
     console.log('⚡ Worker Pool: Max 100 procesů');
-    console.log('🔄 7 nezávislých smyček:');
+    console.log('🔄 8 nezávislých smyček:');
     console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P1] Build: každých 5s po 5 účtech - COOLDOWN režim (VYSOKÁ PRIORITA)');
+    console.log('   [P2] Sběr: každých 5 min po 5 účtech');
     console.log('   [P3] Rekrut: každé 2 min po 5 účtech');
     console.log('   [P4] Výzkum: každých 120 min po 5 účtech (2 hod)');
     console.log('   [P5] Paladin: každých 120 min po 5 účtech (2 hod)');
@@ -126,6 +131,7 @@ class Automator {
     await Promise.all([
       this.checksLoop(),       // P1: Neustále po 2 účtech
       this.buildingLoop(),     // P1: Každých 5s po 5 účtech (COOLDOWN režim)
+      this.scavengeLoop(),     // P2: Každých 5 min po 5 účtech
       this.recruitLoop(),      // P3: Každé 2 min po 5 účtech
       this.researchLoop(),     // P4: Každých 120 min po 5 účtech
       this.paladinLoop(),      // P5: Každých 120 min po 5 účtech
@@ -217,6 +223,61 @@ class Automator {
 
       // Počkej 5 sekund před další kontrolou (COOLDOWN režim)
       await new Promise(resolve => setTimeout(resolve, this.intervals.building));
+    }
+  }
+
+  /**
+   * SMYČKA 2.5: Sběr (Scavenge)
+   * Každých 5 minut projde účty a zkontroluje timing
+   * Zpracovává po 5 účtech paralelně
+   * Priorita: 2
+   */
+  async scavengeLoop() {
+    console.log('🔄 [P2] Smyčka SBĚR spuštěna');
+
+    while (this.isRunning) {
+      const accounts = this.db.getAllActiveAccounts();
+
+      // Filtruj pouze účty, které mají scavenge enabled a vypršelý timer
+      const accountsToProcess = accounts.filter(account => {
+        // Kontrola scavenge_enabled v účtu
+        if (!account.scavenge_enabled) {
+          return false;
+        }
+
+        // Kontrola zda má svět scavenge povolený
+        const worldSettings = this.db.getWorldSettings(account.world);
+        if (!worldSettings.scavengeEnabled) {
+          return false;
+        }
+
+        const scavengeKey = `scavenge_${account.id}`;
+        const scavengeWaitUntil = this.accountWaitTimes[scavengeKey];
+        return !scavengeWaitUntil || Date.now() >= scavengeWaitUntil;
+      });
+
+      // Zpracuj po 5 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 5) {
+        const batch = accountsToProcess.slice(i, i + 5);
+
+        await Promise.all(
+          batch.map(account => {
+            return this.workerPool.run(
+              () => this.processScavenge(account),
+              this.priorities.scavenge,
+              `Sběr: ${account.username}`
+            );
+          })
+        );
+
+        // Malá pauza mezi dávkami (50ms)
+        if (i + 5 < accountsToProcess.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+
+      // Počkej 5 minut
+      await new Promise(resolve => setTimeout(resolve, this.intervals.scavenge));
     }
   }
 
@@ -695,6 +756,42 @@ class Automator {
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při buildění:`, error.message);
+      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+    }
+  }
+
+  /**
+   * Zpracuj sběr (scavenge)
+   */
+  async processScavenge(account) {
+    let context, browserKey;
+
+    try {
+      ({ context, browserKey } = await this.browserPool.createContext(account.id));
+      const page = await context.newPage();
+
+      const loginSuccess = await this.loginToGame(page, account);
+      if (!loginSuccess) {
+        await this.browserPool.closeContext(context, browserKey);
+        return;
+      }
+
+      const scavengeModule = new ScavengeModule(page, this.db, account.id);
+      const scavengeResult = await scavengeModule.execute();
+
+      if (scavengeResult && scavengeResult.waitTime) {
+        this.accountWaitTimes[`scavenge_${account.id}`] = Date.now() + scavengeResult.waitTime;
+        console.log(`⏰ [${account.username}] Sběr: Další za ${Math.ceil(scavengeResult.waitTime / 60000)} min`);
+      } else {
+        this.accountWaitTimes[`scavenge_${account.id}`] = Date.now() + this.intervals.scavenge;
+      }
+
+      // Ulož cookies
+      await this.browserPool.saveCookies(context, account.id);
+      await this.browserPool.closeContext(context, browserKey);
+
+    } catch (error) {
+      console.error(`❌ [${account.username}] Chyba při sběru:`, error.message);
       if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
     }
   }
