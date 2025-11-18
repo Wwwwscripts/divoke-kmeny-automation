@@ -470,29 +470,60 @@
 
                         const allUnits = [];
 
-                        // Spočítáme celkový počet jednotek
-                        let totalUnits = 0;
-                        if (units.spear?.total) totalUnits += units.spear.total;
-                        if (units.sword?.total) totalUnits += units.sword.total;
-                        if (units.axe?.total) totalUnits += units.axe.total;
-                        if (units.archer?.total) totalUnits += units.archer.total;
-                        if (units.spy?.total) totalUnits += units.spy.total;
-                        if (units.light?.total) totalUnits += units.light.total;
-                        if (units.marcher?.total) totalUnits += units.marcher.total;
-                        if (units.heavy?.total) totalUnits += units.heavy.total;
-                        if (units.ram?.total) totalUnits += units.ram.total;
-                        if (units.catapult?.total) totalUnits += units.catapult.total;
+                        // Spočítáme celkový počet jednotek ve vesnici (vlastní + cizí podpory)
+                        let totalOwnInVillage = 0;
+                        let totalInVillage = 0;
+                        if (units.spear) {
+                            totalOwnInVillage += units.spear.inVillages || 0;
+                            totalInVillage += units.spear.totalInVillage || 0;
+                        }
+                        if (units.sword) {
+                            totalOwnInVillage += units.sword.inVillages || 0;
+                            totalInVillage += units.sword.totalInVillage || 0;
+                        }
+                        if (units.axe) {
+                            totalOwnInVillage += units.axe.inVillages || 0;
+                            totalInVillage += units.axe.totalInVillage || 0;
+                        }
+                        if (units.archer) {
+                            totalOwnInVillage += units.archer.inVillages || 0;
+                            totalInVillage += units.archer.totalInVillage || 0;
+                        }
+                        if (units.spy) {
+                            totalOwnInVillage += units.spy.inVillages || 0;
+                            totalInVillage += units.spy.totalInVillage || 0;
+                        }
+                        if (units.light) {
+                            totalOwnInVillage += units.light.inVillages || 0;
+                            totalInVillage += units.light.totalInVillage || 0;
+                        }
+                        if (units.marcher) {
+                            totalOwnInVillage += units.marcher.inVillages || 0;
+                            totalInVillage += units.marcher.totalInVillage || 0;
+                        }
+                        if (units.heavy) {
+                            totalOwnInVillage += units.heavy.inVillages || 0;
+                            totalInVillage += units.heavy.totalInVillage || 0;
+                        }
+                        if (units.ram) {
+                            totalOwnInVillage += units.ram.inVillages || 0;
+                            totalInVillage += units.ram.totalInVillage || 0;
+                        }
+                        if (units.catapult) {
+                            totalOwnInVillage += units.catapult.inVillages || 0;
+                            totalInVillage += units.catapult.totalInVillage || 0;
+                        }
 
-                        if (totalUnits > 0) {
-                            allUnits.push(`<strong>Celkem: ${totalUnits}</strong>`);
+                        if (totalInVillage > 0) {
+                            allUnits.push(`<strong>Vlastní: ${totalOwnInVillage} | Celkem: ${totalInVillage}</strong>`);
 
-                            // Detail důležitých jednotek
+                            // Detail důležitých jednotek (vlastní ve vesnici / celkem ve vesnici)
                             const detailUnits = [];
-                            if (units.spear?.total) detailUnits.push(`🛡️${units.spear.total}`);
-                            if (units.sword?.total) detailUnits.push(`⚔️${units.sword.total}`);
-                            if (units.axe?.total) detailUnits.push(`🪓${units.axe.total}`);
-                            if (units.archer?.total) detailUnits.push(`🏹${units.archer.total}`);
-                            if (units.heavy?.total) detailUnits.push(`🐴${units.heavy.total}`);
+                            if (units.spear?.totalInVillage) detailUnits.push(`🛡️${units.spear.inVillages}/${units.spear.totalInVillage}`);
+                            if (units.sword?.totalInVillage) detailUnits.push(`⚔️${units.sword.inVillages}/${units.sword.totalInVillage}`);
+                            if (units.axe?.totalInVillage) detailUnits.push(`🪓${units.axe.inVillages}/${units.axe.totalInVillage}`);
+                            if (units.archer?.totalInVillage) detailUnits.push(`🏹${units.archer.inVillages}/${units.archer.totalInVillage}`);
+                            if (units.heavy?.totalInVillage) detailUnits.push(`🐴${units.heavy.inVillages}/${units.heavy.totalInVillage}`);
 
                             if (detailUnits.length > 0) {
                                 allUnits.push('<br>' + detailUnits.map(u => `<span class="unit-count">${u}</span>`).join(' '));

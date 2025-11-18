@@ -394,18 +394,18 @@
                         const units = typeof acc.units_info === 'string' ? JSON.parse(acc.units_info) : acc.units_info;
 
                         const ownUnits = [];
-                        if (units.spear?.total) ownUnits.push(`🛡️ ${units.spear.total}`);
-                        if (units.sword?.total) ownUnits.push(`⚔️ ${units.sword.total}`);
-                        if (units.axe?.total) ownUnits.push(`🪓 ${units.axe.total}`);
-                        if (units.archer?.total) ownUnits.push(`🏹 ${units.archer.total}`);
-                        if (units.spy?.total) ownUnits.push(`👁️ ${units.spy.total}`);
-                        if (units.light?.total) ownUnits.push(`🐎 ${units.light.total}`);
-                        if (units.marcher?.total) ownUnits.push(`🏇 ${units.marcher.total}`);
-                        if (units.heavy?.total) ownUnits.push(`🐴 ${units.heavy.total}`);
-                        if (units.ram?.total) ownUnits.push(`🐏 ${units.ram.total}`);
-                        if (units.catapult?.total) ownUnits.push(`⚙️ ${units.catapult.total}`);
-                        if (units.knight?.total) ownUnits.push(`🤴 ${units.knight.total}`);
-                        if (units.snob?.total) ownUnits.push(`👑 ${units.snob.total}`);
+                        if (units.spear?.totalOwn) ownUnits.push(`🛡️ ${units.spear.inVillages}/${units.spear.totalOwn}`);
+                        if (units.sword?.totalOwn) ownUnits.push(`⚔️ ${units.sword.inVillages}/${units.sword.totalOwn}`);
+                        if (units.axe?.totalOwn) ownUnits.push(`🪓 ${units.axe.inVillages}/${units.axe.totalOwn}`);
+                        if (units.archer?.totalOwn) ownUnits.push(`🏹 ${units.archer.inVillages}/${units.archer.totalOwn}`);
+                        if (units.spy?.totalOwn) ownUnits.push(`👁️ ${units.spy.inVillages}/${units.spy.totalOwn}`);
+                        if (units.light?.totalOwn) ownUnits.push(`🐎 ${units.light.inVillages}/${units.light.totalOwn}`);
+                        if (units.marcher?.totalOwn) ownUnits.push(`🏇 ${units.marcher.inVillages}/${units.marcher.totalOwn}`);
+                        if (units.heavy?.totalOwn) ownUnits.push(`🐴 ${units.heavy.inVillages}/${units.heavy.totalOwn}`);
+                        if (units.ram?.totalOwn) ownUnits.push(`🐏 ${units.ram.inVillages}/${units.ram.totalOwn}`);
+                        if (units.catapult?.totalOwn) ownUnits.push(`⚙️ ${units.catapult.inVillages}/${units.catapult.totalOwn}`);
+                        if (units.knight?.totalOwn) ownUnits.push(`🤴 ${units.knight.inVillages}/${units.knight.totalOwn}`);
+                        if (units.snob?.totalOwn) ownUnits.push(`👑 ${units.snob.inVillages}/${units.snob.totalOwn}`);
 
                         if (ownUnits.length > 0) {
                             unitsDisplay = ownUnits.map(u => `<span class="unit-count">${u}</span>`).join(' ');

@@ -9,6 +9,7 @@ import BuildingModule from './modules/building.js';
 import ResearchModule from './modules/research.js';
 import NotificationsModule from './modules/notifications.js';
 import PaladinModule from './modules/paladin.js';
+import SupportModule from './modules/support.js';
 import logger from './logger.js';
 
 /**
@@ -307,6 +308,16 @@ class Automator {
         const infoModule = new AccountInfoModule(page, this.db, account.id);
         await infoModule.collectInfo();
         this.accountWaitTimes[infoKey] = Date.now() + this.intervals.accountInfo;
+      }
+
+      // Sbírej informace o jednotkách s vlastním intervalem (30 minut)
+      const unitsKey = `units_${account.id}`;
+      const unitsWaitUntil = this.accountWaitTimes[unitsKey];
+
+      if (!unitsWaitUntil || Date.now() >= unitsWaitUntil) {
+        const supportModule = new SupportModule(page, this.db, account.id);
+        await supportModule.getAllUnitsInfo();
+        this.accountWaitTimes[unitsKey] = Date.now() + 30 * 60 * 1000; // 30 minut
       }
 
       // Kontrola útoků a CAPTCHA (VŽDY)

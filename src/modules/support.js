@@ -141,16 +141,14 @@ class SupportModule {
         // Vytvoříme finální formát
         const units = {};
         unitTypes.forEach(unitType => {
-          // inVillage = jednotky ve vesnicích + vlastní podpora v jiných vesnicích
-          // (protože obojí je "naše" a máme k nim přístup)
-          const inVillage = unitsInVillages[unitType] + unitsSupport[unitType];
-          const total = totalUnits[unitType];
-          const away = Math.max(0, total - inVillage);
+          // inVillages = jen jednotky přímo ve vesnicích (BEZ vlastní podpory v jiných vesnicích)
+          // totalOwn = všechny naše jednotky (ve vesnicích + podpory + sent + on way)
+          const inVillages = unitsInVillages[unitType];
+          const totalOwn = totalUnits[unitType];
 
           units[unitType] = {
-            inVillage,
-            total,
-            away,
+            inVillages,     // Jen ve vesnicích (bez podpory)
+            totalOwn,       // Celkem vlastní
             // Extra info pro debugging
             breakdown: {
               inVillages: unitsInVillages[unitType],
@@ -173,6 +171,73 @@ class SupportModule {
   }
 
   /**
+   * Získá cizí podpory (jednotky od jiných hráčů) ze shromaždiště
+   */
+  async getForeignSupport() {
+    try {
+      const worldUrl = this.getWorldUrl();
+      const villageId = await this.getVillageId();
+
+      const url = `${worldUrl}/game.php?village=${villageId}&screen=place&mode=units`;
+
+      await this.page.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000
+      });
+
+      await this.page.waitForTimeout(2000);
+
+      const foreignUnits = await this.page.evaluate(() => {
+        const unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob'];
+        const foreignSupport = {};
+
+        unitTypes.forEach(unitType => {
+          foreignSupport[unitType] = 0;
+        });
+
+        // Najdeme tabulku s cizími podporami
+        const tables = document.querySelectorAll('table.vis');
+
+        for (const table of tables) {
+          // Hledáme tabulku s cizími podporami (má nadpis "Jednotky jiných hráčů" nebo podobný)
+          const headerRow = table.querySelector('th');
+          if (!headerRow) continue;
+
+          const headerText = headerRow.textContent.toLowerCase();
+
+          // Pokud je to tabulka s cizími jednotkami
+          if (headerText.includes('podpora') || headerText.includes('support') || headerText.includes('jednotky jiných')) {
+            const rows = table.querySelectorAll('tr');
+
+            rows.forEach(row => {
+              const cells = row.querySelectorAll('td');
+              if (cells.length < 2) return;
+
+              // Každý řádek reprezentuje podporu od jednoho hráče
+              unitTypes.forEach((unitType, index) => {
+                // Data-count atributy nebo textContent
+                const cell = cells[index + 1]; // +1 protože první sloupec je jméno hráče
+                if (cell) {
+                  const count = parseInt(cell.textContent.trim()) || 0;
+                  foreignSupport[unitType] += count;
+                }
+              });
+            });
+          }
+        }
+
+        return foreignSupport;
+      });
+
+      return foreignUnits;
+
+    } catch (error) {
+      // Tichá chyba
+      return null;
+    }
+  }
+
+  /**
    * Vytiskne tabulku jednotek (pouze v DEBUG módu)
    */
   printUnitsTable(units, source) {
@@ -185,13 +250,31 @@ class SupportModule {
    */
   async getAllUnitsInfo() {
     try {
-      const unitsData = await this.getUnitsFromOverview();
+      // Získej vlastní jednotky z overview
+      const ownUnits = await this.getUnitsFromOverview();
+      if (!ownUnits) return null;
 
-      if (unitsData) {
-        await this.saveUnitsToDatabase(unitsData);
-      }
+      // Získej cizí podpory z place
+      const foreignSupport = await this.getForeignSupport();
 
-      return unitsData;
+      // Zkombinuj data
+      const combinedData = {};
+      Object.keys(ownUnits).forEach(unitType => {
+        const own = ownUnits[unitType];
+        const foreign = foreignSupport ? (foreignSupport[unitType] || 0) : 0;
+
+        combinedData[unitType] = {
+          inVillages: own.inVillages,           // Vlastní jednotky ve vesnici
+          totalOwn: own.totalOwn,               // Celkem vlastní (všude)
+          foreignSupport: foreign,              // Cizí podpory
+          totalInVillage: own.inVillages + foreign,  // Celkem ve vesnici (vlastní + cizí)
+          breakdown: own.breakdown
+        };
+      });
+
+      await this.saveUnitsToDatabase(combinedData);
+
+      return combinedData;
 
     } catch (error) {
       // Tichá chyba
@@ -210,9 +293,10 @@ class SupportModule {
       const cleanData = {};
       Object.keys(unitsData).forEach(unitType => {
         cleanData[unitType] = {
-          inVillage: unitsData[unitType].inVillage,
-          total: unitsData[unitType].total,
-          away: unitsData[unitType].away
+          inVillages: unitsData[unitType].inVillages,          // Vlastní ve vesnici
+          totalOwn: unitsData[unitType].totalOwn,              // Celkem vlastní
+          foreignSupport: unitsData[unitType].foreignSupport,  // Cizí podpory
+          totalInVillage: unitsData[unitType].totalInVillage   // Celkem ve vesnici
         };
       });
 
