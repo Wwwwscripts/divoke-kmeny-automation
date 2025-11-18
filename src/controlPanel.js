@@ -155,9 +155,6 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
 
     const context = await browser.newContext(contextOptions);
 
-    // Vyčisti vše před načtením cookies
-    await context.clearCookies();
-
     if (account.cookies) {
       const cookies = JSON.parse(account.cookies);
       await context.addCookies(cookies);

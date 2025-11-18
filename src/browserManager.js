@@ -142,9 +142,6 @@ class BrowserManager {
 
     const context = await browser.newContext(contextOptions);
 
-    // Vyčisti vše před načtením cookies
-    await context.clearCookies();
-
     if (account.cookies) {
       try {
         const cookies = JSON.parse(account.cookies);
