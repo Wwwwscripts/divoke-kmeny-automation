@@ -326,6 +326,38 @@ app.delete('/api/world-settings/:world', (req, res) => {
 
 // ============ PODPORA ============
 
+// Otevřít ruční odeslání podpory (vyplní formulář v browseru)
+app.post('/api/support/open-manual', async (req, res) => {
+  try {
+    const { accountId, unitTypes, targetX, targetY } = req.body;
+
+    if (!accountId || !unitTypes || !targetX || !targetY) {
+      return res.status(400).json({ error: 'Chybí povinné parametry' });
+    }
+
+    // Získat browser pro daný účet
+    const browser = browserManager.getBrowser(accountId);
+    if (!browser) {
+      return res.status(404).json({ error: 'Browser pro tento účet není aktivní' });
+    }
+
+    // Dynamicky importovat SupportSender
+    const { default: SupportSender } = await import('./modules/supportSender.js');
+    const supportSender = new SupportSender(browser.page, db, accountId);
+
+    // Otevřít a vyplnit formulář (ale NEodeslat)
+    await supportSender.openManualSupport(
+      unitTypes,
+      parseInt(targetX),
+      parseInt(targetY)
+    );
+
+    res.json({ success: true, message: 'Formulář vyplněn' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Odeslat podporu do vesnice
 app.post('/api/support/send', async (req, res) => {
   try {
