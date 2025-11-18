@@ -787,64 +787,35 @@
             return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
         }
 
-        function openManual(accountId, unitTypesStr, targetX, targetY, index) {
+        async function openManual(accountId, unitTypesStr, targetX, targetY, index) {
             try {
                 // Převést string na pole
                 const unitTypes = unitTypesStr.split(',');
 
-                // Najít výsledek pro daný index
-                const result = calculationResults[index];
-                if (!result) {
-                    showMessage('Chyba: Výsledek nenalezen', 'error');
-                    return;
-                }
+                showMessage('Otevírám browser s vyplněným formulářem...', 'info');
 
-                const account = result.account;
-                const world = account.world;
+                const response = await fetch('/api/support/open-manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        accountId,
+                        unitTypes,
+                        targetX,
+                        targetY
+                    })
+                });
 
-                // Zjistit doménu podle světa
-                let domain = 'divokekmeny.cz';
-                if (world && world.toLowerCase().startsWith('sk')) {
-                    domain = 'divoke-kmeny.sk';
-                }
-
-                // Získat počty jednotek z account.units_info
-                const unitParams = [];
-                if (account.units_info) {
-                    try {
-                        const unitsInfo = JSON.parse(account.units_info);
-                        unitTypes.forEach(unit => {
-                            const count = unitsInfo[unit]?.inVillages || 0;
-                            if (count > 0) {
-                                unitParams.push(`${unit}=${count}`);
-                            }
-                        });
-                    } catch (e) {
-                        console.error('Chyba při parsování units_info:', e);
+                if (response.ok) {
+                    showMessage('Formulář vyplněn v browseru - zkontrolujte a odešlete', 'success');
+                    // Označit jako vyplněno
+                    const statusEl = document.getElementById(`status-${index}`);
+                    if (statusEl) {
+                        statusEl.className = 'badge badge-info';
+                        statusEl.textContent = '📝 Vyplněno';
                     }
-                }
-
-                // Sestavit URL
-                const baseUrl = `https://${world}.${domain}/game.php`;
-                const params = [
-                    'screen=place',
-                    `x=${targetX}`,
-                    `y=${targetY}`,
-                    ...unitParams
-                ].join('&');
-
-                const finalUrl = `${baseUrl}?${params}`;
-
-                // Otevřít v novém okně
-                window.open(finalUrl, '_blank');
-
-                showMessage('Odkaz otevřen v novém okně', 'success');
-
-                // Označit jako vyplněno
-                const statusEl = document.getElementById(`status-${index}`);
-                if (statusEl) {
-                    statusEl.className = 'badge badge-info';
-                    statusEl.textContent = '📝 Vyplněno';
+                } else {
+                    const error = await response.json();
+                    showMessage('Chyba: ' + error.error, 'error');
                 }
             } catch (error) {
                 showMessage('Chyba při otevírání: ' + error.message, 'error');
