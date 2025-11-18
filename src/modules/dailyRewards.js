@@ -36,13 +36,13 @@ class DailyRewardsModule {
       // Přejít na stránku denních odměn
       const worldUrl = this.getWorldUrl();
       console.log(`🌐 Navigace na stránku denních odměn...`);
-      await this.page.goto(`${worldUrl}/game.php?screen=main&mode=daily_bonus`, {
+      await this.page.goto(`${worldUrl}/game.php?screen=info_player&mode=daily_bonus`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000
       });
 
-      // Počkat na načtení stránky
-      await this.page.waitForTimeout(2000);
+      // Počkat na načtení stránky (delší timeout pro pomalé světy)
+      await this.page.waitForTimeout(3000);
 
       // Zkontrolovat, zda stránka denních odměn existuje
       const pageExists = await this.checkPageExists();
@@ -97,15 +97,22 @@ class DailyRewardsModule {
   async checkPageExists() {
     try {
       // Zkontrolovat, zda existuje hlavní kontejner s denními odměnami
-      const exists = await this.page.evaluate(() => {
+      const result = await this.page.evaluate(() => {
         const dailyBonusContent = document.querySelector('#daily_bonus_content');
         const rewardsGrid = document.querySelector('.rewards_grid');
+        const rewards = document.querySelectorAll('.reward');
 
-        // Stránka existuje, pokud má oba elementy
-        return dailyBonusContent !== null && rewardsGrid !== null;
+        return {
+          hasDailyBonusContent: dailyBonusContent !== null,
+          hasRewardsGrid: rewardsGrid !== null,
+          rewardsCount: rewards.length,
+          exists: (dailyBonusContent !== null || rewardsGrid !== null) && rewards.length > 0
+        };
       });
 
-      return exists;
+      console.log(`📊 Kontrola stránky: daily_bonus_content=${result.hasDailyBonusContent}, rewards_grid=${result.hasRewardsGrid}, rewards=${result.rewardsCount}`);
+
+      return result.exists;
     } catch (error) {
       console.error(`Chyba při kontrole existence stránky:`, error.message);
       return false;
@@ -120,12 +127,16 @@ class DailyRewardsModule {
       console.log(`🔍 Hledám dostupné odměny k vyzvednutí...`);
 
       // Najdi všechny dostupné odměny (unlocked) a klikni na ně
-      const claimed = await this.page.evaluate(() => {
+      const result = await this.page.evaluate(() => {
         let claimedCount = 0;
 
         // Najdi všechny odměny s třídou "unlocked" (dostupné k otevření)
         // Selektor: .db-chest.unlocked (bez .claimed)
         const unlockedChests = document.querySelectorAll('.db-chest.unlocked:not(.claimed)');
+
+        // Debug info
+        const allChests = document.querySelectorAll('.db-chest');
+        const allRewards = document.querySelectorAll('.reward');
 
         unlockedChests.forEach((chest) => {
           // Najdi nadřazený element odměny
@@ -142,21 +153,28 @@ class DailyRewardsModule {
           }
         });
 
-        return claimedCount;
+        return {
+          claimed: claimedCount,
+          totalChests: allChests.length,
+          totalRewards: allRewards.length,
+          unlockedCount: unlockedChests.length
+        };
       });
 
-      if (claimed > 0) {
-        console.log(`✅ Vybráno ${claimed} denních odměn`);
+      console.log(`📊 Stav odměn: ${result.totalRewards} celkem, ${result.totalChests} truhlice, ${result.unlockedCount} odemčené`);
+
+      if (result.claimed > 0) {
+        console.log(`✅ Vybráno ${result.claimed} denních odměn`);
 
         // Po kliknutí počkej chvíli, aby se stránka aktualizovala
         await this.randomWait(2000, 3000);
       } else {
-        console.log(`ℹ️  Žádné dostupné odměny k vyzvednutí`);
+        console.log(`ℹ️  Žádné dostupné odměny k vyzvednutí (odemčené: ${result.unlockedCount})`);
       }
 
-      return claimed;
+      return result.claimed;
     } catch (error) {
-      console.error(`Chyba při výběru odměn:`, error.message);
+      console.error(`❌ Chyba při výběru odměn:`, error.message);
       return 0;
     }
   }

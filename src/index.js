@@ -46,11 +46,11 @@ class Automator {
       recruit: 2 * 60 * 1000,     // 2 minuty
       building: 5 * 1000,         // 5 sekund - COOLDOWN režim (kontroluje hned jak vyprší)
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
-      paladin: 120 * 60 * 1000,   // 120 minut (2 hodiny)
-      units: 20 * 60 * 1000,      // 20 minut (kontrola jednotek)
+      paladin: 60 * 60 * 1000,    // 60 minut (1 hodina) - ZMĚNĚNO z 2 hodin
+      units: 10 * 60 * 1000,      // 10 minut (kontrola jednotek) - ZMĚNĚNO z 20 minut
       accountInfo: 20 * 60 * 1000, // 20 minut (sběr statistik)
-      dailyRewards: 24 * 60 * 60 * 1000, // 24 hodin (denní odměny)
-      scavenge: 5 * 60 * 1000     // 5 minut (sběr surovin)
+      dailyRewards: 24 * 60 * 60 * 1000, // Nepoužívá se - denní odměny běží 2x denně (4:00 a 16:00)
+      scavenge: 1 * 60 * 1000     // 1 minuta (sběr surovin) - ZMĚNĚNO z 5 minut (kvůli per-account timing)
     };
 
     // Priority (nižší = vyšší priorita)
@@ -116,12 +116,12 @@ class Automator {
     console.log('🔄 8 nezávislých smyček:');
     console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P1] Build: každých 5s po 5 účtech - COOLDOWN režim (VYSOKÁ PRIORITA)');
-    console.log('   [P2] Sběr: každých 5 min po 5 účtech');
-    console.log('   [P3] Rekrut: každé 2 min po 5 účtech');
-    console.log('   [P4] Výzkum: každých 120 min po 5 účtech (2 hod)');
-    console.log('   [P5] Paladin: každých 120 min po 5 účtech (2 hod)');
-    console.log('   [P6] Jednotky: každých 20 min po 2 účtech (~10 min/cyklus pro 100 účtů)');
-    console.log('   [P6] Denní odměny: jednou denně ve 4:00 nebo při startu');
+    console.log('   [P2] Sběr: každou 1 min po 5 účtech (per-account timing)');
+    console.log('   [P3] Rekrut: každé 2 min po 5 účtech (per-account timing)');
+    console.log('   [P4] Výzkum: každých 120 min po 5 účtech (2 hod, per-account timing)');
+    console.log('   [P5] Paladin: každých 60 min po 5 účtech (1 hod, per-account timing)');
+    console.log('   [P6] Jednotky: každých 10 min po 2 účtech');
+    console.log('   [P6] Denní odměny: 2x denně ve 4:00 a 16:00 + při startu');
     console.log('   [P7] Statistiky: každých 20 min');
     console.log('='.repeat(70));
 
@@ -228,7 +228,7 @@ class Automator {
 
   /**
    * SMYČKA 2.5: Sběr (Scavenge)
-   * Každých 5 minut projde účty a zkontroluje timing
+   * Každou 1 minutu projde účty a zkontroluje per-account timing
    * Zpracovává po 5 účtech paralelně
    * Priorita: 2
    */
@@ -276,7 +276,7 @@ class Automator {
         }
       }
 
-      // Počkej 5 minut
+      // Počkej 1 minutu
       await new Promise(resolve => setTimeout(resolve, this.intervals.scavenge));
     }
   }
@@ -383,7 +383,7 @@ class Automator {
 
   /**
    * SMYČKA 5: Paladin
-   * Každé 2 hodiny projde účty a zkontroluje paladina
+   * Každou 1 hodinu projde účty a zkontroluje per-account timing
    * Zpracovává po 5 účtech paralelně
    * Priorita: 5
    */
@@ -420,14 +420,14 @@ class Automator {
         }
       }
 
-      // Počkej 2 hodiny
+      // Počkej 1 hodinu
       await new Promise(resolve => setTimeout(resolve, this.intervals.paladin));
     }
   }
 
   /**
    * SMYČKA 6: Kontrola jednotek
-   * Každých 20 minut projde účty a zkontroluje jednotky (po 2 účtech)
+   * Každých 10 minut projde účty a zkontroluje jednotky (po 2 účtech)
    * Priorita: 6
    */
   async unitsLoop() {
@@ -455,14 +455,14 @@ class Automator {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      // Počkej 20 minut
+      // Počkej 10 minut
       await new Promise(resolve => setTimeout(resolve, this.intervals.units));
     }
   }
 
   /**
    * SMYČKA 7: Denní odměny
-   * Běží jednou denně ve 4:00 nebo při prvním spuštění
+   * Běží 2x denně: ve 4:00 a 16:00 + při prvním spuštění
    * Priorita: 6
    */
   async dailyRewardsLoop() {
@@ -472,21 +472,32 @@ class Automator {
     await this.processDailyRewardsForAllAccounts(true);
 
     while (this.isRunning) {
-      // Čekej až do 4:00 ráno příštího dne
+      // Čekej až do dalšího času: 4:00 nebo 16:00
       const now = new Date();
-      const next4AM = new Date();
-      next4AM.setHours(4, 0, 0, 0);
+      const currentHour = now.getHours();
 
-      // Pokud je aktuální čas po 4:00, nastav na zítřejší 4:00
-      if (now.getHours() >= 4) {
-        next4AM.setDate(next4AM.getDate() + 1);
+      let nextRunTime = new Date();
+
+      // Určit další čas spuštění
+      if (currentHour < 4) {
+        // Před 4:00 ráno - spustit dnes ve 4:00
+        nextRunTime.setHours(4, 0, 0, 0);
+      } else if (currentHour < 16) {
+        // Mezi 4:00 a 16:00 - spustit dnes v 16:00
+        nextRunTime.setHours(16, 0, 0, 0);
+      } else {
+        // Po 16:00 - spustit zítra ve 4:00
+        nextRunTime.setDate(nextRunTime.getDate() + 1);
+        nextRunTime.setHours(4, 0, 0, 0);
       }
 
-      const timeUntil4AM = next4AM.getTime() - now.getTime();
-      console.log(`⏰ Denní odměny: další spuštění za ${Math.round(timeUntil4AM / 1000 / 60)} minut (ve ${next4AM.toLocaleString('cs-CZ')})`);
+      const timeUntilNext = nextRunTime.getTime() - now.getTime();
+      const hoursUntil = Math.floor(timeUntilNext / 1000 / 60 / 60);
+      const minutesUntil = Math.floor((timeUntilNext / 1000 / 60) % 60);
+      console.log(`⏰ Denní odměny: další spuštění za ${hoursUntil}h ${minutesUntil}min (ve ${nextRunTime.toLocaleString('cs-CZ')})`);
 
-      // Počkej až do 4:00
-      await new Promise(resolve => setTimeout(resolve, timeUntil4AM));
+      // Počkej do dalšího času
+      await new Promise(resolve => setTimeout(resolve, timeUntilNext));
 
       // Zpracuj denní odměny pro všechny účty
       await this.processDailyRewardsForAllAccounts(false);
