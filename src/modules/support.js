@@ -41,130 +41,178 @@ class SupportModule {
   }
 
   /**
-   * Zjišťování jednotek pomocí overview_villages
-   * Toto je NEJLEPŠÍ metoda - používá stejný způsob jako script "Přehled armády"
+   * Zjišťování jednotek pomocí place&mode=units (funguje i bez premium účtu)
+   * Tato metoda je nezávislá na jazyce - používá data-unit-count atributy
    */
   async getUnitsFromOverview() {
     try {
       const worldUrl = this.getWorldUrl();
       const villageId = await this.getVillageId();
 
-      // Sestavíme URL (stejně jako script "Přehled armády")
-      const url = `${worldUrl}/game.php?village=${villageId}&type=complete&mode=units&group=0&page=-1&screen=overview_villages`;
+      // URL pro shromaždiště - funguje pro všechny účty
+      const url = `${worldUrl}/game.php?village=${villageId}&screen=place&mode=units`;
 
       await this.page.goto(url, {
         waitUntil: 'domcontentloaded',
-        timeout: 45000  // Zvýšeno z 30s na 45s
+        timeout: 45000
       });
 
-      await this.page.waitForTimeout(3000);  // Zvýšeno z 2s na 3s
+      await this.page.waitForTimeout(3000);
 
       // Zkontroluj jestli existuje tabulka před parsováním
       const tableExists = await this.page.evaluate(() => {
-        return document.querySelector('#units_table') !== null;
+        return document.querySelector('#units_home') !== null;
       });
 
       if (!tableExists) {
-        console.log(`⚠️  [Support] Tabulka #units_table nenalezena pro účet ID ${this.accountId}`);
+        console.log(`⚠️  [Support] Tabulka #units_home nenalezena pro účet ID ${this.accountId}`);
         return null;
       }
 
-      // Zjistíme jednotky z tabulky
+      // Zjistíme jednotky z tabulky (nezávislé na jazyce)
       const unitsData = await this.page.evaluate(() => {
-        // Najdeme tabulku
-        const table = document.querySelector('#units_table');
+        // Funkce pro parsování jednotek z řádku pomocí data-unit-count
+        const parseUnitsFromRow = (row) => {
+          const units = {};
+          const unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob'];
 
-        if (!table || table.rows.length < 2) {
-          return null;
-        }
+          unitTypes.forEach(unitType => {
+            // Najdeme buňku s data-unit-count pro tento typ jednotky
+            const cell = row.querySelector(`.unit-item-${unitType}`);
+            if (cell) {
+              const count = parseInt(cell.getAttribute('data-unit-count')) || 0;
+              units[unitType] = count;
+            } else {
+              units[unitType] = 0;
+            }
+          });
 
-        const firstRow = table.rows[0];
-        const dataRow = table.rows[1];
+          return units;
+        };
 
-        // Zjistíme offset (někdy je první buňka název vesnice)
-        const offset = (firstRow.cells.length == dataRow.cells.length) ? 2 : 1;
+        // Inicializace
+        const unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob'];
+        let unitsHome = {};      // Jednotky doma
+        let unitsTotal = {};     // Celkem (doma + cizí podpora)
+        let unitsTraveling = {}; // Na cestě
+        let unitsSupporting = {}; // Podporují jiné vesnice
 
-        // Typy jednotek
-        let unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob'];
-
-        // Kontrola jestli má archer (některá světa nemají lukostřelce)
-        if (!firstRow.innerHTML.match("archer")) {
-          unitTypes.splice(unitTypes.indexOf("archer"), 1);
-          unitTypes.splice(unitTypes.indexOf("marcher"), 1);
-        }
-
-        // Kontrola jestli má rytíře
-        if (!firstRow.innerHTML.match("knight")) {
-          unitTypes.splice(unitTypes.indexOf("knight"), 1);
-        }
-
-        // Inicializace součtů
-        const totalUnits = {};
-        const unitsInVillages = {};
-        const unitsSupport = {};
-        const unitsSent = {};
-        const unitsOnWay = {};
-
-        unitTypes.forEach(unitType => {
-          totalUnits[unitType] = 0;
-          unitsInVillages[unitType] = 0;
-          unitsSupport[unitType] = 0;
-          unitsSent[unitType] = 0;
-          unitsOnWay[unitType] = 0;
+        unitTypes.forEach(ut => {
+          unitsHome[ut] = 0;
+          unitsTotal[ut] = 0;
+          unitsTraveling[ut] = 0;
+          unitsSupporting[ut] = 0;
         });
 
-        // Projdeme všechny řádky
-        // Každá vesnice má 5 řádků (0-4):
-        // 0 = ve vesnici (available)
-        // 1 = vlastní podpora v jiných vesnicích
-        // 2 = odeslaná podpora
-        // 3 = na cestě
-        // 4 = prázdný řádek / oddělovač
-
-        for (let i = 1; i < table.rows.length; i++) {
-          const row = table.rows[i];
-          const rowType = (i - 1) % 5;
-
-          // Přeskočíme prázdné řádky
-          if (row.cells.length < offset + unitTypes.length) {
-            continue;
+        // ==== TABULKA 1: #units_home - jednotky v obraně ====
+        const homeTable = document.querySelector('#units_home');
+        if (homeTable && homeTable.rows.length >= 2) {
+          // Řádek 1 = jednotky doma (první datový řádek po hlavičce)
+          const homeRow = homeTable.rows[1];
+          if (homeRow) {
+            unitsHome = parseUnitsFromRow(homeRow);
           }
 
-          for (let j = 0; j < unitTypes.length; j++) {
-            const cellIndex = offset + j;
-            const count = parseInt(row.cells[cellIndex].textContent.trim()) || 0;
+          // Najdeme řádek "Dohromady" (total) - má class "units_total" nebo je předposlední řádek
+          for (let i = 1; i < homeTable.rows.length; i++) {
+            const row = homeTable.rows[i];
+            // Identifikuj "Dohromady" řádek pomocí třídy nebo pozice
+            if (row.className && row.className.includes('units_total')) {
+              unitsTotal = parseUnitsFromRow(row);
+              break;
+            }
+          }
 
-            totalUnits[unitTypes[j]] += count;
-
-            if (rowType === 0) {
-              unitsInVillages[unitTypes[j]] += count;
-            } else if (rowType === 1) {
-              unitsSupport[unitTypes[j]] += count;
-            } else if (rowType === 2) {
-              unitsSent[unitTypes[j]] += count;
-            } else if (rowType === 3) {
-              unitsOnWay[unitTypes[j]] += count;
+          // Pokud jsme nenašli "Dohromady" pomocí třídy, zkusíme poslední řádek s daty
+          if (Object.values(unitsTotal).every(v => v === 0)) {
+            const lastDataRow = homeTable.rows[homeTable.rows.length - 1];
+            if (lastDataRow && lastDataRow.querySelector('.unit-item')) {
+              unitsTotal = parseUnitsFromRow(lastDataRow);
             }
           }
         }
 
-        // Vytvoříme finální formát
+        // ==== TABULKA 2: Jednotky na cestě ====
+        // Hledáme tabulku s traveling units (má mnoho řádků, každý příkaz = řádek)
+        const allTables = document.querySelectorAll('table.vis');
+        let travelingTable = null;
+
+        // Tabulka s cestujícími jednotkami je obvykle druhá nebo třetí table.vis
+        for (let i = 1; i < allTables.length; i++) {
+          const table = allTables[i];
+          // Traveling table má obvykle mnoho řádků a obsahuje unit-item buňky
+          if (table.rows.length > 5 && table.querySelector('.unit-item')) {
+            // Není to #units_home
+            if (table.id !== 'units_home') {
+              travelingTable = table;
+              break;
+            }
+          }
+        }
+
+        if (travelingTable) {
+          // Sečteme všechny jednotky na cestě (každý řádek = jeden příkaz)
+          for (let i = 1; i < travelingTable.rows.length; i++) {
+            const row = travelingTable.rows[i];
+            if (row.querySelector('.unit-item')) {
+              const rowUnits = parseUnitsFromRow(row);
+              unitTypes.forEach(ut => {
+                unitsTraveling[ut] += rowUnits[ut] || 0;
+              });
+            }
+          }
+        }
+
+        // ==== TABULKA 3: Jednotky podporující jiné vesnice ====
+        // Hledáme tabulku s supporting units (menší tabulka)
+        let supportingTable = null;
+
+        for (let i = 1; i < allTables.length; i++) {
+          const table = allTables[i];
+          // Supporting table je menší než traveling, ale má unit-item buňky
+          if (table.id !== 'units_home' && table !== travelingTable && table.querySelector('.unit-item')) {
+            supportingTable = table;
+            break;
+          }
+        }
+
+        if (supportingTable) {
+          // Sečteme jednotky podporující jiné vesnice
+          for (let i = 1; i < supportingTable.rows.length; i++) {
+            const row = supportingTable.rows[i];
+            if (row.querySelector('.unit-item')) {
+              const rowUnits = parseUnitsFromRow(row);
+              unitTypes.forEach(ut => {
+                unitsSupporting[ut] += rowUnits[ut] || 0;
+              });
+            }
+          }
+        }
+
+        // ==== VÝPOČET FINÁLNÍCH HODNOT ====
         const units = {};
         unitTypes.forEach(unitType => {
-          // inVillages = jen jednotky přímo ve vesnicích (BEZ vlastní podpory v jiných vesnicích)
-          // totalOwn = všechny naše jednotky (ve vesnicích + podpory + sent + on way)
-          const inVillages = unitsInVillages[unitType];
-          const totalOwn = totalUnits[unitType];
+          const inVillages = unitsHome[unitType] || 0;
+          const traveling = unitsTraveling[unitType] || 0;
+          const supporting = unitsSupporting[unitType] || 0;
+          const totalInVillage = unitsTotal[unitType] || inVillages; // fallback pokud "Dohromady" nenalezen
+
+          // totalOwn = jednotky doma + na cestě + podporující
+          const totalOwn = inVillages + traveling + supporting;
+
+          // foreignSupport = rozdíl mezi total a vlastními doma
+          const foreignSupport = Math.max(0, totalInVillage - inVillages);
 
           units[unitType] = {
-            inVillages,     // Jen ve vesnicích (bez podpory)
-            totalOwn,       // Celkem vlastní
-            // Extra info pro debugging
+            inVillages,          // Vlastní jednotky doma
+            totalOwn,            // Celkem vlastní (doma + cestou + podpory)
+            foreignSupport,      // Cizí podpory
+            totalInVillage,      // Celkem ve vesnici (vlastní + cizí)
             breakdown: {
-              inVillages: unitsInVillages[unitType],
-              support: unitsSupport[unitType],
-              sent: unitsSent[unitType],
-              onWay: unitsOnWay[unitType]
+              home: inVillages,
+              traveling: traveling,
+              supporting: supporting,
+              foreign: foreignSupport
             }
           };
         });
@@ -175,9 +223,8 @@ class SupportModule {
       return unitsData;
 
     } catch (error) {
-      // Timeout je normální pro pomalá spojení nebo CAPTCHA
       if (error.name === 'TimeoutError') {
-        console.log(`⏱️  [Support] Timeout při načítání overview pro účet ID ${this.accountId} (${error.message})`);
+        console.log(`⏱️  [Support] Timeout při načítání place&mode=units pro účet ID ${this.accountId}`);
       } else {
         console.log(`⚠️  [Support] Chyba při parsování jednotek pro účet ID ${this.accountId}: ${error.message}`);
       }
@@ -186,70 +233,12 @@ class SupportModule {
   }
 
   /**
-   * Získá cizí podpory (jednotky od jiných hráčů) ze shromaždiště
+   * getForeignSupport() již není potřeba - cizí podpory se zjišťují přímo v getUnitsFromOverview()
+   * Metoda ponechána pro zpětnou kompatibilitu, ale nepoužívá se
    */
   async getForeignSupport() {
-    try {
-      const worldUrl = this.getWorldUrl();
-      const villageId = await this.getVillageId();
-
-      const url = `${worldUrl}/game.php?village=${villageId}&screen=place&mode=units`;
-
-      await this.page.goto(url, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000
-      });
-
-      await this.page.waitForTimeout(2000);
-
-      const foreignUnits = await this.page.evaluate(() => {
-        const unitTypes = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy', 'ram', 'catapult', 'knight', 'snob'];
-        const foreignSupport = {};
-
-        unitTypes.forEach(unitType => {
-          foreignSupport[unitType] = 0;
-        });
-
-        // Najdeme tabulku s cizími podporami
-        const tables = document.querySelectorAll('table.vis');
-
-        for (const table of tables) {
-          // Hledáme tabulku s cizími podporami (má nadpis "Jednotky jiných hráčů" nebo podobný)
-          const headerRow = table.querySelector('th');
-          if (!headerRow) continue;
-
-          const headerText = headerRow.textContent.toLowerCase();
-
-          // Pokud je to tabulka s cizími jednotkami
-          if (headerText.includes('podpora') || headerText.includes('support') || headerText.includes('jednotky jiných')) {
-            const rows = table.querySelectorAll('tr');
-
-            rows.forEach(row => {
-              const cells = row.querySelectorAll('td');
-              if (cells.length < 2) return;
-
-              // Každý řádek reprezentuje podporu od jednoho hráče
-              unitTypes.forEach((unitType, index) => {
-                // Data-count atributy nebo textContent
-                const cell = cells[index + 1]; // +1 protože první sloupec je jméno hráče
-                if (cell) {
-                  const count = parseInt(cell.textContent.trim()) || 0;
-                  foreignSupport[unitType] += count;
-                }
-              });
-            });
-          }
-        }
-
-        return foreignSupport;
-      });
-
-      return foreignUnits;
-
-    } catch (error) {
-      // Tichá chyba
-      return null;
-    }
+    // Deprecated - foreign support is now handled in getUnitsFromOverview()
+    return null;
   }
 
   /**
@@ -265,35 +254,20 @@ class SupportModule {
    */
   async getAllUnitsInfo() {
     try {
-      // Získej vlastní jednotky z overview
-      const ownUnits = await this.getUnitsFromOverview();
-      if (!ownUnits) {
+      // Získej všechna data jednotek (včetně cizích podpor) z place&mode=units
+      const unitsData = await this.getUnitsFromOverview();
+      if (!unitsData) {
         // Chyba už byla zalogována v getUnitsFromOverview()
         return null;
       }
 
-      // Získej cizí podpory z place
-      const foreignSupport = await this.getForeignSupport();
+      // Data jsou už kompletní z getUnitsFromOverview()
+      // Obsahují: inVillages, totalOwn, foreignSupport, totalInVillage, breakdown
 
-      // Zkombinuj data
-      const combinedData = {};
-      Object.keys(ownUnits).forEach(unitType => {
-        const own = ownUnits[unitType];
-        const foreign = foreignSupport ? (foreignSupport[unitType] || 0) : 0;
-
-        combinedData[unitType] = {
-          inVillages: own.inVillages,           // Vlastní jednotky ve vesnici
-          totalOwn: own.totalOwn,               // Celkem vlastní (všude)
-          foreignSupport: foreign,              // Cizí podpory
-          totalInVillage: own.inVillages + foreign,  // Celkem ve vesnici (vlastní + cizí)
-          breakdown: own.breakdown
-        };
-      });
-
-      await this.saveUnitsToDatabase(combinedData);
+      await this.saveUnitsToDatabase(unitsData);
       console.log(`💾 [Support] Jednotky uloženy do DB pro účet ID ${this.accountId}`);
 
-      return combinedData;
+      return unitsData;
 
     } catch (error) {
       console.error(`❌ [Support] Chyba při zjišťování jednotek pro účet ID ${this.accountId}:`, error.message);
