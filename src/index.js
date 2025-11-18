@@ -36,7 +36,7 @@ class Automator {
     this.intervals = {
       checks: 0,        // Kontroly běží neustále (žádný wait)
       recruit: 4 * 60 * 1000,     // 4 minuty
-      building: 2 * 60 * 1000,    // 2 minuty (kontrola dynamického timingu)
+      building: 30 * 1000,        // 30 sekund - RYCHLÁ kontrola výstavby
       research: 60 * 60 * 1000,   // 60 minut
       paladin: 60 * 60 * 1000,    // 60 minut
       accountInfo: 20 * 60 * 1000 // 20 minut (sběr statistik)
@@ -44,8 +44,8 @@ class Automator {
 
     // Priority (nižší = vyšší priorita)
     this.priorities = {
-      checks: 1,    // Útoky/CAPTCHA - nejvyšší
-      building: 2,  // Výstavba
+      checks: 1,    // Útoky/CAPTCHA
+      building: 1,  // Výstavba - STEJNÁ PRIORITA jako kontroly
       recruit: 3,   // Rekrutování
       research: 4,  // Výzkum
       paladin: 5,   // Paladin
@@ -75,7 +75,7 @@ class Automator {
     console.log('⚡ Worker Pool: Max 50 procesů');
     console.log('🔄 5 nezávislých smyček:');
     console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
-    console.log('   [P2] Build: dynamicky');
+    console.log('   [P1] Build: každých 30s (VYSOKÁ PRIORITA)');
     console.log('   [P3] Rekrut: každé 4 min');
     console.log('   [P4] Výzkum: každých 60 min');
     console.log('   [P5] Paladin: každých 60 min');
@@ -159,7 +159,7 @@ class Automator {
         }
       }
 
-      // Počkej 2 minuty před další kontrolou
+      // Počkej 30 sekund před další kontrolou (bylo 2 minuty)
       await new Promise(resolve => setTimeout(resolve, this.intervals.building));
     }
   }
@@ -389,7 +389,7 @@ class Automator {
         this.accountWaitTimes[`building_${account.id}`] = Date.now() + buildResult.waitTime;
         console.log(`⏰ [${account.username}] Build: Další za ${Math.ceil(buildResult.waitTime / 60000)} min`);
       } else {
-        this.accountWaitTimes[`building_${account.id}`] = Date.now() + 5 * 60 * 1000; // 5 min fallback
+        this.accountWaitTimes[`building_${account.id}`] = Date.now() + 2 * 60 * 1000; // 2 min fallback (bylo 5)
       }
 
       await this.browserPool.closeContext(context, browserKey);
