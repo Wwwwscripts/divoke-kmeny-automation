@@ -509,38 +509,91 @@
 
                 // Parsování útoků
                 let attacksDisplay = '-';
+                let hasCompletedAttacks = false;
                 if (acc.attacks_info) {
                     try {
                         const attacks = typeof acc.attacks_info === 'string' ? JSON.parse(acc.attacks_info) : acc.attacks_info;
 
                         if (attacks && attacks.length > 0) {
-                            attacksDisplay = attacks.map((attack, index) => {
+                            const now = Math.floor(Date.now() / 1000);
+
+                            // Seřaď útoky: aktivní (budoucí) první, dopadlé poslední
+                            const sortedAttacks = [...attacks].sort((a, b) => {
+                                const timeA = Number(a.arrival_timestamp) || 0;
+                                const timeB = Number(b.arrival_timestamp) || 0;
+
+                                // Dopadlé útoky (timestamp v minulosti) na konec
+                                const aCompleted = timeA > 0 && timeA < now;
+                                const bCompleted = timeB > 0 && timeB < now;
+
+                                if (aCompleted && !bCompleted) return 1;
+                                if (!aCompleted && bCompleted) return -1;
+                                if (aCompleted && bCompleted) return timeB - timeA; // Novější dopadlé první
+
+                                // Aktivní útoky seřaď podle času (nejbližší první)
+                                return timeA - timeB;
+                            });
+
+                            // Zjisti zda má alespoň jeden dopadlý útok
+                            hasCompletedAttacks = sortedAttacks.some(attack => {
+                                const timestamp = Number(attack.arrival_timestamp) || 0;
+                                return timestamp > 0 && timestamp < now;
+                            });
+
+                            attacksDisplay = sortedAttacks.map((attack, index) => {
                                 const attacker = attack.attacker || 'Neznámý';
                                 const name = attack.name || 'Útok';
                                 const impact = attack.impact || name;
                                 const arrivalTime = attack.arrival_time || attack.arrival_date || '-';
                                 const timestamp = attack.arrival_timestamp;
 
-                                // Ikona a barva podle názvu/dopadu útoku
-                                let impactIcon = '⚔️';
-                                let impactColor = '#f85149';
+                                // Zkontroluj zda útok už dopadl
+                                const isCompleted = timestamp && Number(timestamp) < now;
+
+                                // Ikona a barva podle stavu
+                                let impactIcon = isCompleted ? '📋' : '⚔️';
+                                let impactColor = isCompleted ? '#8b949e' : '#f85149';
+                                let boxStyle = isCompleted ? 'opacity: 0.7; border-color: rgba(139, 148, 158, 0.3);' : '';
 
                                 // Jedinečné ID pro countdown element
                                 const countdownId = `countdown-${acc.id}-${index}`;
 
-                                return `
-                                    <div class="attack-box" data-timestamp="${timestamp}">
-                                        👤 <span class="attack-attacker">${attacker}</span><br>
-                                        ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
-                                        🕐 Dopad: <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
-                                        ⏱️ <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
-                                    </div>
-                                `;
+                                if (isCompleted) {
+                                    // Dopadlý útok - zobrazí se jinak
+                                    return `
+                                        <div class="attack-box" style="${boxStyle}" data-timestamp="${timestamp}" data-completed="true">
+                                            👤 <span class="attack-attacker" style="color: #8b949e;">${attacker}</span><br>
+                                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
+                                            🕐 Dopad: <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
+                                            ⏱️ <span style="color: #8b949e; font-weight: 600;">DOPADL</span>
+                                        </div>
+                                    `;
+                                } else {
+                                    // Aktivní útok
+                                    return `
+                                        <div class="attack-box" data-timestamp="${timestamp}">
+                                            👤 <span class="attack-attacker">${attacker}</span><br>
+                                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
+                                            🕐 Dopad: <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
+                                            ⏱️ <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
+                                        </div>
+                                    `;
+                                }
                             }).join('');
                         }
                     } catch (e) {
                         attacksDisplay = '<span style="color: #f85149;">❌ Chyba parsování</span>';
                     }
+                }
+
+                // Tlačítko podle typu útoků
+                let actionButton = '';
+                if (hasCompletedAttacks) {
+                    // Má dopadlé útoky - zobrazí "Prohlédnout oznámení"
+                    actionButton = `<button class="btn-small" style="background: #238636;" onclick="openBrowser(${acc.id})">📋 Prohlédnout oznámení</button>`;
+                } else {
+                    // Jen aktivní útoky - zobrazí "Otevřít"
+                    actionButton = `<button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>`;
                 }
 
                 return `
@@ -553,7 +606,7 @@
                         <td>${unitsDisplay}</td>
                         <td>${attacksDisplay}</td>
                         <td>
-                            <button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>
+                            ${actionButton}
                         </td>
                     </tr>
                 `;
