@@ -98,17 +98,29 @@ class NotificationsModule {
                 attacker = attackerLink.textContent.trim();
               }
 
-              // Souřadnice odkud útok přichází
+              // Souřadnice odkud útok přichází - zkusíme více selektorů
               let origin = '-';
+
+              // Nejdřív zkusíme link na vesnici
               const coordLink = row.querySelector('a[href*="screen=info_village"]');
               if (coordLink) {
-                const match = coordLink.textContent.match(/(\d+)\|(\d+)/);
+                const coordText = coordLink.textContent.trim();
+                const match = coordText.match(/(\d+)\|(\d+)/);
                 if (match) {
                   origin = `${match[1]}|${match[2]}`;
                 }
               }
 
-              return {
+              // Pokud jsme nenašli, zkusíme celý text řádku
+              if (origin === '-') {
+                const rowText = row.textContent;
+                const match = rowText.match(/(\d{1,3})\|(\d{1,3})/);
+                if (match) {
+                  origin = `${match[1]}|${match[2]}`;
+                }
+              }
+
+              const attackData = {
                 name: name,
                 attacker: attacker,
                 origin: origin,
@@ -118,6 +130,11 @@ class NotificationsModule {
                 countdown: arrivalCountdown, // Alias pro Discord
                 impact: name  // Název útoku = dopad
               };
+
+              // Debug log pro parsování
+              console.log(`   Parsován útok: ${attacker} z ${origin}, dopad: ${arrivalTime}`);
+
+              return attackData;
             } catch (e) {
               console.error('Chyba při parsování řádku útoku:', e);
               return null;
