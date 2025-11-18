@@ -432,8 +432,67 @@ app.post('/api/support/open-manual', async (req, res) => {
       return res.status(400).json({ error: 'Chybí povinné parametry' });
     }
 
-    // Automaticky získat nebo otevřít browser (headless pokud není aktivní)
-    const browserData = await getOrOpenBrowser(accountId);
+    // Získat účet z databáze
+    const account = db.getAccount(accountId);
+    if (!account) {
+      return res.status(404).json({ error: 'Účet nenalezen' });
+    }
+
+    // Automaticky získat nebo otevřít browser (VIDITELNÝ pokud není aktivní)
+    let browserData = getBrowser(accountId);
+
+    if (!browserData) {
+      // Otevřít VIDITELNÝ browser pro ruční odeslání
+      console.log(`🔧 Otevírám VIDITELNÝ browser pro ruční odeslání (účet ${accountId})`);
+
+      const domain = db.getDomainForAccount(account);
+      const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
+      const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
+
+      const browser = await chromium.launch({
+        headless: false,  // VIDITELNÝ pro ruční kontrolu
+        args: ['--disable-blink-features=AutomationControlled']
+      });
+
+      const contextOptions = {
+        viewport: { width: 1280, height: 720 },
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        locale,
+        timezoneId,
+        ignoreHTTPSErrors: true,
+      };
+
+      if (account.proxy) {
+        const proxy = browserManager.parseProxy(account.proxy);
+        contextOptions.proxy = proxy;
+      }
+
+      const context = await browser.newContext(contextOptions);
+
+      if (account.cookies) {
+        const cookies = JSON.parse(account.cookies);
+        await context.addCookies(cookies);
+      }
+
+      const page = await context.newPage();
+
+      // Vyčisti localStorage/sessionStorage
+      await page.goto(`https://${account.world}.${domain}/`);
+      await page.evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      });
+
+      // Ulož browser do mapy
+      browserData = { browser, context, page, account };
+      setBrowser(accountId, browserData);
+
+      // Při zavření browseru ho odstraň z mapy
+      browser.on('disconnected', () => {
+        console.log(`🔌 Viditelný browser pro účet ${accountId} (${account.username}) byl zavřen`);
+        removeBrowser(accountId);
+      });
+    }
 
     // Dynamicky importovat SupportSender
     const { default: SupportSender } = await import('./modules/supportSender.js');

@@ -70,7 +70,7 @@ class SupportSender {
 
       // Přejít na rally point
       const placeUrl = `${worldUrl}/game.php?village=${villageId}&screen=place`;
-      await this.page.goto(placeUrl, { waitUntil: 'networkidle2' });
+      await this.page.goto(placeUrl, { waitUntil: 'domcontentloaded' });
       await this.page.waitForTimeout(1000);
 
       // Zjistit, jestli máme dostatek jednotek
@@ -193,7 +193,7 @@ class SupportSender {
 
       // Přejít na rally point
       const placeUrl = `${worldUrl}/game.php?village=${villageId}&screen=place`;
-      await this.page.goto(placeUrl, { waitUntil: 'networkidle2' });
+      await this.page.goto(placeUrl, { waitUntil: 'domcontentloaded' });
       await this.page.waitForTimeout(1000);
 
       // Vyplnit formulář pro všechny jednotky
@@ -245,7 +245,7 @@ class SupportSender {
 
       // Přejít na rally point
       const placeUrl = `${worldUrl}/game.php?village=${villageId}&screen=place`;
-      await this.page.goto(placeUrl, { waitUntil: 'networkidle2' });
+      await this.page.goto(placeUrl, { waitUntil: 'domcontentloaded' });
       await this.page.waitForTimeout(1000);
 
       // Vyplnit formulář pro všechny jednotky
