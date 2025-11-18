@@ -192,6 +192,11 @@ class PaladinModule {
    */
   async confirmPopup() {
     try {
+      // Wait for popup to appear
+      console.log('⏳ Waiting for popup to appear...');
+      await this.page.waitForSelector('.popup_box_container, .popup_box', { timeout: 5000 });
+      await this.page.waitForTimeout(500); // Extra wait for popup to fully load
+
       const result = await this.page.evaluate(() => {
         // Try multiple selectors for recruit/revive confirmation
         const selectors = [
