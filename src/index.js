@@ -336,7 +336,7 @@ class Automator {
       await notificationsModule.detectAttacks();
 
       // Sbírej informace o jednotkách s dynamickým intervalem
-      // Účty s útoky: 10 min, bez útoků: 60 min
+      // Účty s útoky: 3 min, bez útoků: 60 min
       const unitsKey = `units_${account.id}`;
       const unitsWaitUntil = this.accountWaitTimes[unitsKey];
 
@@ -346,7 +346,7 @@ class Automator {
 
         // Dynamický interval podle příchozích útoků
         const hasAttacks = account.incoming_attacks > 0;
-        const unitsInterval = hasAttacks ? 10 * 60 * 1000 : 60 * 60 * 1000; // 10 min nebo 60 min
+        const unitsInterval = hasAttacks ? 3 * 60 * 1000 : 60 * 60 * 1000; // 3 min nebo 60 min
         this.accountWaitTimes[unitsKey] = Date.now() + unitsInterval;
       }
       const hasCaptcha = await notificationsModule.detectCaptcha();
