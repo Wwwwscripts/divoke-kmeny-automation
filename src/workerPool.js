@@ -3,7 +3,7 @@
  * Limituje max počet souběžných operací
  */
 class WorkerPool {
-  constructor(maxWorkers = 40) {
+  constructor(maxWorkers = 50) {
     this.maxWorkers = maxWorkers;
     this.runningWorkers = 0;
     this.queue = []; // Fronta čekajících úloh

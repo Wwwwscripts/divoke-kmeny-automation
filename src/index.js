@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import DatabaseManager from './database.js';
+import BrowserManager from './browserManager.js';
 import SharedBrowserPool from './sharedBrowserPool.js';
 import WorkerPool from './workerPool.js';
 import AccountInfoModule from './modules/accountInfo.js';
@@ -12,7 +13,7 @@ import NotificationsModule from './modules/notifications.js';
  * 🚀 Event-Driven Automator s nezávislými smyčkami
  *
  * Architektura:
- * - Globální WorkerPool (max 40 procesů)
+ * - Globální WorkerPool (max 50 procesů)
  * - 4 nezávislé smyčky:
  *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
  *   2. Build - dynamicky podle timingu [P2]
@@ -22,10 +23,12 @@ import NotificationsModule from './modules/notifications.js';
 class Automator {
   constructor() {
     this.db = new DatabaseManager();
+    this.browserManager = new BrowserManager(this.db);
     this.browserPool = new SharedBrowserPool(this.db);
-    this.workerPool = new WorkerPool(40); // Max 40 procesů
+    this.workerPool = new WorkerPool(50); // Max 50 procesů
     this.isRunning = false;
     this.accountWaitTimes = {}; // Per-account per-module timing
+    this.openBrowserWindows = new Set(); // Účty s otevřeným viditelným oknem
 
     // Intervaly pro smyčky
     this.intervals = {
@@ -65,9 +68,9 @@ class Automator {
   async start() {
     console.log('='.repeat(70));
     console.log('🤖 Spouštím Event-Driven automatizaci');
-    console.log('⚡ Worker Pool: Max 40 procesů');
+    console.log('⚡ Worker Pool: Max 50 procesů');
     console.log('🔄 4 nezávislé smyčky:');
-    console.log('   [P1] Kontroly: neustále po 2 účtech');
+    console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P2] Build: dynamicky');
     console.log('   [P3] Rekrut: každé 4 min');
     console.log('   [P4] Výzkum: každých 60 min');
@@ -270,11 +273,29 @@ class Automator {
 
       if (hasCaptcha) {
         console.log(`⚠️  [${account.username}] CAPTCHA detekována!`);
-        // TODO: Otevřít viditelný browser
+
+        // Zavři headless browser
+        await this.browserPool.closeContext(context, browserKey);
+
+        // Otevři viditelný prohlížeč POUZE pokud už není otevřený
+        if (!this.openBrowserWindows.has(account.id)) {
+          console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+          this.openBrowserWindows.add(account.id);
+          await this.browserManager.testConnection(account.id);
+          console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA a zavřete okno`);
+        } else {
+          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
+        }
+        return;
       }
 
       // Zavři context (browser zůstane běžet)
       await this.browserPool.closeContext(context, browserKey);
+
+      // Odstraň z otevřených oken (pokud tam byl) - úspěšné zpracování = CAPTCHA vyřešena
+      if (this.openBrowserWindows.has(account.id)) {
+        this.openBrowserWindows.delete(account.id);
+      }
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při kontrole:`, error.message);
