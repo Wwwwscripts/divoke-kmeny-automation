@@ -98,17 +98,40 @@ class NotificationsModule {
                 attacker = attackerLink.textContent.trim();
               }
 
-              // Souřadnice odkud útok přichází
+              // Vesnice odkud útok přichází (může být název nebo souřadnice)
               let origin = '-';
-              const coordLink = row.querySelector('a[href*="screen=info_village"]');
-              if (coordLink) {
-                const match = coordLink.textContent.match(/(\d+)\|(\d+)/);
-                if (match) {
-                  origin = `${match[1]}|${match[2]}`;
+
+              // Hledáme link na vesnici - může obsahovat název nebo souřadnice
+              const villageLinks = row.querySelectorAll('a[href*="screen=info_village"]');
+
+              // První link je obvykle cílová vesnice (naše), druhý je útočníkova
+              if (villageLinks.length >= 2) {
+                // Druhý link = odkud útok přichází
+                const originText = villageLinks[1].textContent.trim();
+                origin = originText; // Použijeme celý text (název nebo souřadnice)
+              } else if (villageLinks.length === 1) {
+                // Pokud je jen jeden link, zkusíme ho
+                const originText = villageLinks[0].textContent.trim();
+
+                // Pokud to vypadá jako souřadnice, použijeme
+                if (originText.includes('|')) {
+                  origin = originText;
+                } else {
+                  // Jinak je to pravděpodobně název vesnice
+                  origin = originText;
                 }
               }
 
-              return {
+              // Fallback: hledáme souřadnice kdekoli v textu
+              if (origin === '-') {
+                const rowText = row.textContent;
+                const coordMatch = rowText.match(/(\d{1,3})\|(\d{1,3})/);
+                if (coordMatch) {
+                  origin = `${coordMatch[1]}|${coordMatch[2]}`;
+                }
+              }
+
+              const attackData = {
                 name: name,
                 attacker: attacker,
                 origin: origin,
@@ -118,6 +141,11 @@ class NotificationsModule {
                 countdown: arrivalCountdown, // Alias pro Discord
                 impact: name  // Název útoku = dopad
               };
+
+              // Debug log pro parsování
+              console.log(`   Parsován útok: ${attacker} z ${origin}, dopad: ${arrivalTime}`);
+
+              return attackData;
             } catch (e) {
               console.error('Chyba při parsování řádku útoku:', e);
               return null;
