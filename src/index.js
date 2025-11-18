@@ -585,22 +585,39 @@ class Automator {
         // Zavři headless browser
         await this.browserPool.closeContext(context, browserKey);
 
+        // Smaž neplatné cookies (pokud existují)
+        const accountData = this.db.getAccount(account.id);
+        if (accountData && accountData.cookies && accountData.cookies !== 'null') {
+          console.log(`🗑️  [${account.username}] Mažu neplatné cookies`);
+          this.db.updateCookies(account.id, null);
+        }
+
         // Otevři viditelný prohlížeč pro manuální přihlášení (NOVÝ ÚČET)
         if (!this.isBrowserActive(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro přihlášení: ${account.username}`);
 
-          // autoSaveAndClose = true (automaticky zavře po přihlášení)
-          const browserInfo = await this.browserManager.testConnection(account.id, true);
-          if (browserInfo) {
-            // Ulož do mapy
-            this.openBrowserWindows.set(account.id, browserInfo);
+          try {
+            // autoSaveAndClose = true (automaticky zavře po přihlášení)
+            const browserInfo = await this.browserManager.testConnection(account.id, true);
 
-            // Sleduj zavření browseru
-            browserInfo.browser.on('disconnected', () => {
-              console.log(`🔒 Browser zavřen pro: ${account.username}`);
-              this.openBrowserWindows.delete(account.id);
-              console.log(`✅ Účet ${account.username} odebrán z otevřených oken`);
-            });
+            if (browserInfo && browserInfo.browser && browserInfo.page) {
+              // Ulož do mapy
+              this.openBrowserWindows.set(account.id, browserInfo);
+
+              console.log(`✅ [${account.username}] Viditelné okno úspěšně otevřeno`);
+
+              // Sleduj zavření browseru
+              browserInfo.browser.on('disconnected', () => {
+                console.log(`🔒 Browser zavřen pro: ${account.username}`);
+                this.openBrowserWindows.delete(account.id);
+                console.log(`✅ Účet ${account.username} odebrán z otevřených oken`);
+              });
+            } else {
+              console.error(`❌ [${account.username}] Nepodařilo se otevřít viditelné okno - browserInfo je neplatný`);
+            }
+          } catch (error) {
+            console.error(`❌ [${account.username}] Chyba při otevírání viditelného okna:`, error.message);
+            console.error(`🔍 Stack trace:`, error.stack);
           }
         } else {
           console.log(`⏭️  Viditelný prohlížeč už je otevřený pro ${account.username} - přeskakuji`);
@@ -986,7 +1003,8 @@ class Automator {
         timeout: 30000
       });
 
-      await page.waitForTimeout(2000);
+      // Počkej delší dobu na načtení stránky
+      await page.waitForTimeout(3000);
 
       // Zkontroluj, jestli není přesměrováno na create_village.php (dobytí vesnice)
       const currentUrl = page.url();
@@ -995,13 +1013,49 @@ class Automator {
         return true; // Technicky je přihlášen, jen má dobyto vesnici
       }
 
-      const isLoggedIn = await page.evaluate(() => {
-        return document.querySelector('#menu_row') !== null;
+      // Robustnější detekce přihlášení
+      const loginStatus = await page.evaluate(() => {
+        // Detekce PŘIHLÁŠENÍ - hledej více elementů
+        const loggedInIndicators = [
+          document.querySelector('#menu_row'),           // Hlavní menu
+          document.querySelector('#topContainer'),       // Top kontejner
+          document.querySelector('.village-name'),       // Název vesnice
+          document.querySelector('#header_info'),        // Header info
+          document.querySelector('.quickbar')            // Quickbar
+        ];
+        const hasLoggedInElement = loggedInIndicators.some(el => el !== null);
+
+        // Detekce NEPŘIHLÁŠENÍ - hledej login formulář
+        const loginIndicators = [
+          document.querySelector('input[name="user"]'),      // Login input
+          document.querySelector('input[name="password"]'),  // Password input
+          document.querySelector('#login_form'),             // Login formulář
+          document.querySelector('.login-container')         // Login kontejner
+        ];
+        const hasLoginForm = loginIndicators.some(el => el !== null);
+
+        return {
+          isLoggedIn: hasLoggedInElement && !hasLoginForm,
+          hasLoginForm: hasLoginForm,
+          hasGameElements: hasLoggedInElement
+        };
       });
 
-      return isLoggedIn;
+      if (loginStatus.hasLoginForm) {
+        console.log(`🔒 [${account.username}] Detekován přihlašovací formulář - cookies neplatné nebo vypršené`);
+        return false;
+      }
+
+      if (!loginStatus.isLoggedIn) {
+        console.log(`❌ [${account.username}] Přihlášení se nezdařilo - nenalezeny herní elementy`);
+        return false;
+      }
+
+      console.log(`✅ [${account.username}] Úspěšně přihlášen`);
+      return true;
+
     } catch (error) {
-      console.error('❌ Chyba při přihlašování:', error.message);
+      console.error(`❌ [${account.username}] Chyba při přihlašování:`, error.message);
       return false;
     }
   }
