@@ -74,13 +74,13 @@ class Automator {
   async start() {
     console.log('='.repeat(70));
     console.log('🤖 Spouštím Event-Driven automatizaci');
-    console.log('⚡ Worker Pool: Max 50 procesů');
+    console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🔄 5 nezávislých smyček:');
     console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
-    console.log('   [P1] Build: každých 30s (VYSOKÁ PRIORITA)');
+    console.log('   [P1] Build: každých 5s - COOLDOWN režim (VYSOKÁ PRIORITA)');
     console.log('   [P3] Rekrut: každé 4 min');
-    console.log('   [P4] Výzkum: každých 60 min');
-    console.log('   [P5] Paladin: každých 60 min');
+    console.log('   [P4] Výzkum: každých 120 min (2 hod)');
+    console.log('   [P5] Paladin: každých 120 min (2 hod)');
     console.log('   [P6] Statistiky: každých 20 min');
     console.log('='.repeat(70));
 
