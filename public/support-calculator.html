@@ -620,15 +620,19 @@
 
                             if (requiredTime <= availableTime && unitCount > 0) {
                                 fastestUnit = unit;
-                                travelTime = requiredTime;
 
-                                // Najít všechny jednotky, které mají stejnou nebo vyšší rychlost než nejrychlejší
+                                // Najít všechny jednotky, které mají stejnou nebo pomalejší rychlost než nejrychlejší
                                 const fastestSpeed = UNIT_SPEEDS[unit];
                                 unitsToSend = UNIT_ORDER_NO_SPY.filter(u => {
                                     const speed = UNIT_SPEEDS[u];
                                     const count = unitsInfo[u]?.inVillages || 0;
                                     return speed >= fastestSpeed && count > 0;
                                 });
+
+                                // Spočítat cestovní čas pro NEJPOMALEJŠÍ jednotku (ta určuje kdy všechny dorazí)
+                                const slowestSpeed = Math.max(...unitsToSend.map(u => UNIT_SPEEDS[u]));
+                                const boostMultiplier = 1 + (supportBoost / 100);
+                                travelTime = (distance * slowestSpeed) / (worldSpeed * boostMultiplier * unitSpeedModifier);
 
                                 break;
                             }

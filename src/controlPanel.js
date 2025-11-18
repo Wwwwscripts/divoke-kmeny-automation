@@ -30,7 +30,14 @@ async function getOrOpenBrowser(accountId) {
   // Zkontroluj jestli už je browser aktivní
   let browserData = getBrowser(accountId);
   if (browserData) {
-    return browserData;
+    // Ověř že browser je opravdu ještě připojený
+    const isConnected = browserData.browser && browserData.browser.isConnected();
+    if (isConnected) {
+      return browserData;
+    }
+    // Browser byl zavřen - odstraň z mapy
+    console.log(`🔌 Browser pro účet ${accountId} již není aktivní - otevírám nový`);
+    removeBrowser(accountId);
   }
 
   // Pokud ne, otevři ho headless
@@ -456,6 +463,16 @@ app.post('/api/support/open-manual', async (req, res) => {
 
     // Automaticky získat nebo otevřít browser (VIDITELNÝ pokud není aktivní)
     let browserData = getBrowser(accountId);
+
+    // Ověř že browser je opravdu ještě připojený
+    if (browserData) {
+      const isConnected = browserData.browser && browserData.browser.isConnected();
+      if (!isConnected) {
+        console.log(`🔌 Browser pro účet ${accountId} již není aktivní - otevírám nový`);
+        removeBrowser(accountId);
+        browserData = null;
+      }
+    }
 
     if (!browserData) {
       // Otevřít VIDITELNÝ browser pro ruční odeslání
