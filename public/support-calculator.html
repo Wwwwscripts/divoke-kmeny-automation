@@ -396,6 +396,11 @@
                     <label for="arrival-time">Čas dopadu</label>
                     <input type="datetime-local" id="arrival-time">
                 </div>
+
+                <div class="form-group">
+                    <label for="support-boost">Zrychlení podpor (%)</label>
+                    <input type="number" id="support-boost" placeholder="např. 50" min="0" max="100" step="1" value="0">
+                </div>
             </div>
 
             <button class="btn-calculate" onclick="calculateSupport()">🔍 Vypočítat podporu</button>
@@ -501,6 +506,7 @@
             const world = document.getElementById('world-select').value;
             const coords = document.getElementById('target-coords').value;
             const arrivalTime = document.getElementById('arrival-time').value;
+            const supportBoost = parseFloat(document.getElementById('support-boost').value) || 0;
 
             // Validace
             if (!world) {
@@ -515,6 +521,11 @@
 
             if (!arrivalTime) {
                 showMessage('Zadejte čas dopadu', 'error');
+                return;
+            }
+
+            if (supportBoost < 0 || supportBoost > 100) {
+                showMessage('Zrychlení musí být mezi 0 a 100 %', 'error');
                 return;
             }
 
@@ -567,7 +578,8 @@
 
                     for (const unit of UNIT_ORDER) {
                         const unitSpeed = UNIT_SPEEDS[unit];
-                        const requiredTime = (distance * unitSpeed) / worldSpeed;
+                        const boostMultiplier = 1 + (supportBoost / 100);
+                        const requiredTime = (distance * unitSpeed) / (worldSpeed * boostMultiplier);
 
                         // Zkontrolovat, jestli jednotka stihne a jestli ji máme
                         const unitCount = unitsInfo[unit]?.inVillages || 0;
