@@ -181,12 +181,12 @@ class BrowserManager {
 
         if (loginFormExists) {
           console.log(`📝 Vyplňuji přihlašovací údaje pro: ${account.username}`);
-          await page.evaluate((username, password) => {
+          await page.evaluate(({ username, password }) => {
             const usernameInput = document.querySelector('input[name="username"]');
             const passwordInput = document.querySelector('input[name="password"]');
             if (usernameInput) usernameInput.value = username;
             if (passwordInput) passwordInput.value = password;
-          }, account.username, account.password);
+          }, { username: account.username, password: account.password });
           console.log(`✅ Údaje vyplněny - stiskněte tlačítko přihlásit`);
         }
       } else {
