@@ -129,6 +129,11 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
       return res.status(404).json({ error: 'Account not found' });
     }
 
+    // Zjisti locale podle světa
+    const domain = db.getDomainForAccount(account);
+    const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
+    const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
+
     const browser = await chromium.launch({
       headless: false,
       args: ['--disable-blink-features=AutomationControlled']
@@ -137,8 +142,10 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
     const contextOptions = {
       viewport: { width: 1280, height: 720 },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      locale: 'cs-CZ',
-      timezoneId: 'Europe/Prague',
+      locale,
+      timezoneId,
+      // Vypni cache a lokální úložiště z předchozích session
+      ignoreHTTPSErrors: true,
     };
 
     if (account.proxy) {
@@ -148,13 +155,15 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
 
     const context = await browser.newContext(contextOptions);
 
+    // Vyčisti vše před načtením cookies
+    await context.clearCookies();
+
     if (account.cookies) {
       const cookies = JSON.parse(account.cookies);
       await context.addCookies(cookies);
     }
 
     const page = await context.newPage();
-    const domain = db.getDomainForAccount(account);
     await page.goto(`https://${account.world}.${domain}/game.php`);
 
     res.json({ success: true });

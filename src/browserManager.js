@@ -109,18 +109,24 @@ class BrowserManager {
 
   async testConnection(accountId) {
     const account = this.db.getAccount(accountId);
-    
+
     if (!account) {
       throw new Error(`Účet s ID ${accountId} nebyl nalezen`);
     }
 
     console.log(`🖥️  Otevírám VIDITELNÝ prohlížeč pro: ${account.username}`);
 
+    // Zjisti locale podle světa
+    const domain = this.db.getDomainForAccount(account);
+    const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
+    const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
+
     const contextOptions = {
       viewport: { width: 1280, height: 720 },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      locale: 'cs-CZ',
-      timezoneId: 'Europe/Prague',
+      locale,
+      timezoneId,
+      ignoreHTTPSErrors: true,
     };
 
     if (account.proxy) {
@@ -136,6 +142,9 @@ class BrowserManager {
 
     const context = await browser.newContext(contextOptions);
 
+    // Vyčisti vše před načtením cookies
+    await context.clearCookies();
+
     if (account.cookies) {
       try {
         const cookies = JSON.parse(account.cookies);
@@ -145,13 +154,12 @@ class BrowserManager {
         console.error('❌ Chyba při načítání cookies:', error.message);
       }
     }
-    
+
     try {
       const page = await context.newPage();
-      const domain = this.db.getDomainForAccount(account);
 
       if (account.world) {
-        console.log(`🌐 Načítám svět: ${account.world} (${domain})`);
+        console.log(`🌐 Načítám svět: ${account.world} (${domain}, ${locale})`);
         await page.goto(`https://${account.world}.${domain}/game.php`, {
           waitUntil: 'domcontentloaded',
           timeout: 30000
@@ -165,7 +173,7 @@ class BrowserManager {
       }
 
       console.log('🖥️  Prohlížeč otevřen - zavřete ho ručně');
-      console.log('💾 Cookies budou automaticky uloženy při zavření');
+      console.log('💾 Cookies se uloží automaticky při dalším zpracování účtu');
 
     } catch (error) {
       console.error('❌ Chyba při otevírání prohlížeče:', error.message);

@@ -295,8 +295,20 @@ class Automator {
       // Přihlásit se
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        console.log(`❌ [${account.username}] Přihlášení selhalo`);
+        console.log(`❌ [${account.username}] Přihlášení selhalo - otevírám viditelný browser`);
+
+        // Zavři headless browser
         await this.browserPool.closeContext(context, browserKey);
+
+        // Otevři viditelný prohlížeč pro manuální přihlášení
+        if (!this.openBrowserWindows.has(account.id)) {
+          console.log(`🖥️  Otevírám viditelný prohlížeč pro přihlášení: ${account.username}`);
+          this.openBrowserWindows.add(account.id);
+          await this.browserManager.testConnection(account.id);
+          console.log(`⚠️  Viditelný prohlížeč otevřen - přihlaste se a zavřete okno`);
+        } else {
+          console.log(`⏭️  Viditelný prohlížeč už je otevřený pro ${account.username} - přeskakuji`);
+        }
         return;
       }
 
@@ -368,12 +380,16 @@ class Automator {
         return;
       }
 
+      // Ulož cookies po úspěšném zpracování (důležité pro nové účty)
+      await this.browserPool.saveCookies(context, account.id);
+
       // Zavři context (browser zůstane běžet)
       await this.browserPool.closeContext(context, browserKey);
 
-      // Odstraň z otevřených oken (pokud tam byl) - úspěšné zpracování = CAPTCHA vyřešena
+      // Odstraň z otevřených oken (pokud tam byl) - úspěšné zpracování = CAPTCHA/login vyřešen
       if (this.openBrowserWindows.has(account.id)) {
         this.openBrowserWindows.delete(account.id);
+        console.log(`✅ [${account.username}] Úspěšně přihlášen/vyřešeno - cookies uloženy`);
       }
 
     } catch (error) {
@@ -410,6 +426,8 @@ class Automator {
         this.accountWaitTimes[`building_${account.id}`] = Date.now() + 1 * 60 * 1000; // 1 min fallback
       }
 
+      // Ulož cookies
+      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
@@ -446,6 +464,8 @@ class Automator {
         this.accountWaitTimes[`recruit_${account.id}`] = Date.now() + this.intervals.recruit;
       }
 
+      // Ulož cookies
+      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
@@ -480,6 +500,8 @@ class Automator {
         this.accountWaitTimes[`research_${account.id}`] = Date.now() + this.intervals.research;
       }
 
+      // Ulož cookies
+      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
@@ -514,6 +536,8 @@ class Automator {
         this.accountWaitTimes[`paladin_${account.id}`] = Date.now() + this.intervals.paladin;
       }
 
+      // Ulož cookies
+      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
