@@ -246,7 +246,8 @@ class NotificationsModule {
   }
 
   /**
-   * Uložení detailů útoků
+   * Uložení detailů útoků (MERGE s existujícími dopadlými)
+   * Zachová dopadlé útoky dokud je uživatel neodstraní ručně
    */
   saveAttacksInfo(attacks) {
     try {
@@ -254,7 +255,37 @@ class NotificationsModule {
       const account = data.accounts.find(a => a.id === this.accountId);
 
       if (account) {
-        account.attacks_info = JSON.stringify(attacks);
+        const now = Math.floor(Date.now() / 1000);
+
+        // Načteme existující útoky
+        let existingAttacks = [];
+        if (account.attacks_info) {
+          try {
+            existingAttacks = JSON.parse(account.attacks_info);
+          } catch (e) {
+            existingAttacks = [];
+          }
+        }
+
+        // Najdeme dopadlé útoky (které už dopadly - timestamp < now)
+        const completedAttacks = existingAttacks.filter(attack => {
+          const timestamp = Number(attack.arrival_timestamp);
+          return timestamp > 0 && timestamp < now;
+        });
+
+        // Vytvoříme Set timestampů z nových útoků (abychom je neduplicovali)
+        const newTimestamps = new Set(attacks.map(a => a.arrival_timestamp));
+
+        // Odfiltrujeme dopadlé útoky, které už TAKÉ nejsou v novém seznamu
+        // (tzn. zachováme jen ty dopadlé, které nejsou duplicitní s novými)
+        const uniqueCompletedAttacks = completedAttacks.filter(attack =>
+          !newTimestamps.has(attack.arrival_timestamp)
+        );
+
+        // Spojíme: nové aktivní útoky + staré dopadlé útoky (oznámení)
+        const mergedAttacks = [...attacks, ...uniqueCompletedAttacks];
+
+        account.attacks_info = JSON.stringify(mergedAttacks);
         this.db._saveAccounts(data);
       }
     } catch (error) {

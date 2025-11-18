@@ -68,22 +68,29 @@ class AccountInfoModule {
   }
 
   /**
-   * Získá body
+   * Získá body (nezávislé na jazyce - CZ i SK)
    */
   async getPoints() {
     try {
       const points = await this.page.evaluate(() => {
-        // Najdeme link na žebříček a jeho parent element
+        // Zkusíme nejprve game_data.player.points (nejspolehlivější)
+        if (typeof game_data !== 'undefined' && game_data.player && game_data.player.points) {
+          return parseInt(game_data.player.points);
+        }
+
+        // Fallback: Najdeme link na žebříček a jeho parent element
         const rankingLink = document.querySelector('a[href*="screen=ranking"]');
         if (rankingLink && rankingLink.parentElement) {
           const text = rankingLink.parentElement.textContent;
 
-          // Pattern: "Žebříček (pozice|body P)"
-          // Příklad: "Žebříček (26.|21.909 P)"
-          const match = text.match(/Žebříček\s*\([^|]*\|([0-9.]+)\s*P\)/);
+          // Pattern (CZ i SK): "Žebříček/Rebríček (pozice|body P)"
+          // Příklad CZ: "Žebříček (26.|21.909 P)"
+          // Příklad SK: "Rebríček (26.|21.909 P)"
+          // Univerzální regex: hledáme číslo před " P)" za "|"
+          const match = text.match(/\|\s*([0-9.\s]+)\s*P\)/);
           if (match) {
-            // Odstraníme tečky (tisícové oddělovače) a převedeme na číslo
-            const pointsStr = match[1].replace(/\./g, '');
+            // Odstraníme tečky a mezery (tisícové oddělovače) a převedeme na číslo
+            const pointsStr = match[1].replace(/[\.\s]/g, '');
             const points = parseInt(pointsStr);
             return points;
           }
