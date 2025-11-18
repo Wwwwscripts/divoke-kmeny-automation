@@ -780,16 +780,49 @@ class BuildingModule {
 
       if (result.response && result.response.success) {
         // LOGUJ AKCI - skutečná výstavba
-        await this.page.waitForTimeout(1500);
-        const queueInfo = await this.checkBuildQueue();
+        await this.page.waitForTimeout(2000);
 
+        // Pokus se získat čas z odpovědi API
         let buildTime = '?';
         let waitTimeMs = 5 * 60 * 1000;
 
-        if (queueInfo.hasQueue && queueInfo.buildings.length > 0) {
-          const lastBuilding = queueInfo.buildings[queueInfo.buildings.length - 1];
-          buildTime = lastBuilding.time;
-          waitTimeMs = this.parseTimeToMs(lastBuilding.time);
+        // Načti aktuální frontu výstavby ze stránky
+        const queueTime = await this.page.evaluate(() => {
+          try {
+            // Zkus najít buildqueue element
+            const buildQueue = document.getElementById('buildqueue');
+            if (!buildQueue) return null;
+
+            // Získej všechny řádky fronty
+            const rows = buildQueue.querySelectorAll('tr');
+            if (rows.length < 3) return null;
+
+            // Poslední řádek by měl být naše nová stavba
+            const lastRow = rows[rows.length - 1];
+            const timeTd = lastRow.querySelectorAll('td')[1];
+
+            if (timeTd) {
+              const timeSpan = timeTd.querySelector('span');
+              return timeSpan ? timeSpan.textContent.trim() : timeTd.textContent.trim();
+            }
+
+            return null;
+          } catch (e) {
+            return null;
+          }
+        });
+
+        if (queueTime) {
+          buildTime = queueTime;
+          waitTimeMs = this.parseTimeToMs(queueTime);
+        } else {
+          // Fallback - zkus checkBuildQueue
+          const queueInfo = await this.checkBuildQueue();
+          if (queueInfo.hasQueue && queueInfo.buildings.length > 0) {
+            const lastBuilding = queueInfo.buildings[queueInfo.buildings.length - 1];
+            buildTime = lastBuilding.time;
+            waitTimeMs = this.parseTimeToMs(lastBuilding.time);
+          }
         }
 
         logger.building(this.getAccountName(), buildingName, level, buildTime);
