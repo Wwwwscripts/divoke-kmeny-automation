@@ -3,11 +3,14 @@
  * S podporou CZ i SK světů
  */
 
+import logger from '../logger.js';
+
 class RecruitModule {
   constructor(page, db, accountId) {
     this.page = page;
     this.db = db;
     this.accountId = accountId;
+    this.accountName = null;
     this.buildingPositions = {
       barracks: 0,
       stable: 0,
@@ -16,23 +19,34 @@ class RecruitModule {
   }
 
   /**
+   * Získá username pro logging
+   */
+  getAccountName() {
+    if (!this.accountName) {
+      const account = this.db.getAccountById(this.accountId);
+      this.accountName = account?.username || `ID:${this.accountId}`;
+    }
+    return this.accountName;
+  }
+
+  /**
    * Získá URL světa (podporuje CZ i SK)
    */
   getWorldUrl() {
     const currentUrl = this.page.url();
-    
+
     // Zkus najít CZ svět
     let match = currentUrl.match(/\/\/([^.]+)\.divokekmeny\.cz/);
     if (match) {
       return `https://${match[1]}.divokekmeny.cz`;
     }
-    
+
     // Zkus najít SK svět
     match = currentUrl.match(/\/\/([^.]+)\.divoke-kmene\.sk/);
     if (match) {
       return `https://${match[1]}.divoke-kmene.sk`;
     }
-    
+
     throw new Error('Nepodařilo se zjistit svět (ani CZ ani SK)');
   }
 
@@ -44,14 +58,14 @@ class RecruitModule {
       const template = this.db.getTemplate('recruit', templateName);
 
       if (!template) {
-        console.error(`❌ Šablona ${templateName} neexistuje v databázi`);
+        logger.error(`Šablona ${templateName} neexistuje`, this.getAccountName());
         return null;
       }
 
       // Vrátíme units z šablony
       return template.units || {};
     } catch (error) {
-      console.error('❌ Chyba při načítání šablony:', error.message);
+      logger.error(`Chyba při načítání šablony`, this.getAccountName(), error);
       return null;
     }
   }
@@ -76,18 +90,17 @@ class RecruitModule {
 
   /**
    * Získá informace o jednotkách ve vesnici
+   * DEPRECATED - používá se support modul místo toho
    */
   async getVillageUnits() {
     try {
-      console.log('📊 Zjišťuji jednotky ve vesnici...');
-
       const worldUrl = this.getWorldUrl();
 
       await this.page.goto(`${worldUrl}/game.php?screen=train`, {
         waitUntil: 'domcontentloaded'
       });
 
-      await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
+      await this.page.waitForTimeout(1500);
 
       const unitsData = await this.page.evaluate(() => {
         const units = {};
@@ -124,17 +137,16 @@ class RecruitModule {
         return units;
       });
 
-      console.log('✅ Informace o jednotkách získány');
       return unitsData;
 
     } catch (error) {
-      console.error('❌ Chyba při zjišťování jednotek:', error.message);
       return null;
     }
   }
 
   /**
    * Uloží informace o jednotkách do databáze
+   * DEPRECATED - používá se support modul místo toho
    */
   async saveUnitsToDatabase(unitsData) {
     if (!unitsData) return;
@@ -143,33 +155,20 @@ class RecruitModule {
       this.db.updateAccountInfo(this.accountId, {
         units_info: JSON.stringify(unitsData)
       });
-
-      console.log('✅ Informace o jednotkách uloženy do databáze');
     } catch (error) {
-      console.error('❌ Chyba při ukládání jednotek:', error.message);
+      // Tichá chyba
     }
   }
 
   /**
    * Získá a uloží kompletní informace o jednotkách
+   * DEPRECATED - používá se support modul místo toho
    */
   async collectUnitsInfo() {
     const unitsData = await this.getVillageUnits();
     if (unitsData) {
       await this.saveUnitsToDatabase(unitsData);
-      
-      console.log('\n' + '='.repeat(60));
-      console.log('⚔️  PŘEHLED JEDNOTEK');
-      console.log('='.repeat(60));
-      
-      Object.keys(unitsData).forEach(unitType => {
-        const unit = unitsData[unitType];
-        console.log(`${unitType}: ${unit.inVillage} ve vesnici / ${unit.total} celkem`);
-      });
-      
-      console.log('='.repeat(60));
     }
-
     return unitsData;
   }
 
@@ -178,7 +177,24 @@ class RecruitModule {
    */
   async checkWhatToRecruit(template) {
     try {
-      const unitsData = await this.getVillageUnits();
+      // Načteme units_info z databáze (nastavené support modulem)
+      const account = this.db.getAccountById(this.accountId);
+      let unitsData = null;
+
+      if (account?.units_info) {
+        try {
+          unitsData = typeof account.units_info === 'string'
+            ? JSON.parse(account.units_info)
+            : account.units_info;
+        } catch (e) {
+          // Pokud se nepodaří parsovat, zkusíme fallback
+          unitsData = await this.getVillageUnits();
+        }
+      } else {
+        // Fallback pokud support modul ještě neběžel
+        unitsData = await this.getVillageUnits();
+      }
+
       if (!unitsData) return null;
 
       const toRecruit = {};
@@ -199,7 +215,7 @@ class RecruitModule {
 
       return toRecruit;
     } catch (error) {
-      console.error('❌ Chyba při kontrole:', error.message);
+      logger.error(`Chyba při kontrole jednotek`, this.getAccountName(), error);
       return null;
     }
   }
@@ -210,7 +226,7 @@ class RecruitModule {
   async checkBuildingQueue(building) {
     try {
       const queueId = building === 'workshop' ? 'trainqueue_garage' : `trainqueue_${building}`;
-      
+
       const hasQueue = await this.page.evaluate((queueId) => {
         const queueElement = document.getElementById(queueId);
         if (!queueElement) return false;
@@ -230,8 +246,6 @@ class RecruitModule {
    */
   async recruitUnit(unitType) {
     try {
-      console.log(`🔨 Rekrutuji: ${unitType}`);
-
       const worldUrl = this.getWorldUrl();
 
       // Přejdeme na stránku s rekrutováním
@@ -243,7 +257,7 @@ class RecruitModule {
         waitUntil: 'domcontentloaded'
       });
 
-      await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
+      await this.page.waitForTimeout(1500);
 
       // Najdeme input pro jednotku a nastavíme hodnotu 1
       const recruited = await this.page.evaluate((unitType) => {
@@ -269,14 +283,17 @@ class RecruitModule {
       }, unitType);
 
       if (recruited) {
-        await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
-        console.log(`✅ ${unitType} narekrutováno`);
+        await this.page.waitForTimeout(1500);
+
+        // LOGUJ AKCI
+        logger.recruit(this.getAccountName(), unitType, 1);
+
         return true;
       }
 
       return false;
     } catch (error) {
-      console.error(`❌ Chyba při rekrutování ${unitType}:`, error.message);
+      logger.error(`Chyba při rekrutování ${unitType}`, this.getAccountName(), error);
       return false;
     }
   }
@@ -286,12 +303,9 @@ class RecruitModule {
    */
   async startRecruiting(templateName) {
     try {
-      console.log(`🚀 Spouštím rekrutování podle šablony: ${templateName}`);
-
       const template = this.getTemplate(templateName);
 
       if (!template) {
-        console.error(`❌ Šablona ${templateName} neexistuje v databázi`);
         return false;
       }
 
@@ -299,24 +313,18 @@ class RecruitModule {
       const toRecruit = await this.checkWhatToRecruit(template);
 
       if (!toRecruit || Object.keys(toRecruit).length === 0) {
-        console.log('✅ Všechny jednotky jsou na cílovém počtu');
+        // Tichý návrat - nic není potřeba rekrutovat
         return true;
       }
-
-      console.log('\n📋 Potřeba narekrutovat:');
-      Object.keys(toRecruit).forEach(unitType => {
-        const data = toRecruit[unitType];
-        console.log(`   ${unitType}: ${data.current}/${data.target} (chybí: ${data.needed})`);
-      });
 
       // Projdeme všechny jednotky a zkusíme je narekrutovat
       for (const unitType of Object.keys(toRecruit)) {
         const building = this.getBuildingForUnit(unitType);
-        
+
         // Zkontrolujeme, zda právě něco neběží v této budově
         const hasQueue = await this.checkBuildingQueue(building);
         if (hasQueue) {
-          console.log(`⏳ ${building}: Již běží rekrutování, přeskakuji`);
+          // Tichý skip - již běží rekrutování
           continue;
         }
 
@@ -325,11 +333,10 @@ class RecruitModule {
         await this.page.waitForTimeout(1000);
       }
 
-      console.log('✅ Rekrutování dokončeno');
       return true;
 
     } catch (error) {
-      console.error(`❌ Chyba při rekrutování:`, error.message);
+      logger.error(`Chyba při rekrutování`, this.getAccountName(), error);
       return false;
     }
   }
@@ -338,8 +345,6 @@ class RecruitModule {
    * Alias pro zpětnou kompatibilitu
    */
   async setTemplate(templateName) {
-    // Už se nepoužívá, ale necháme pro kompatibilitu
-    console.log(`📋 Šablona nastavena: ${templateName}`);
     return true;
   }
 

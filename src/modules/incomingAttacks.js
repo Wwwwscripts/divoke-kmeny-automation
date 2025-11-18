@@ -3,11 +3,25 @@
  * Zjišťuje detaily o útocích z overview stránky
  */
 
+import logger from '../logger.js';
+
 class IncomingAttacksModule {
   constructor(page, db, accountId) {
     this.page = page;
     this.db = db;
     this.accountId = accountId;
+    this.accountName = null;
+  }
+
+  /**
+   * Získá username pro logging
+   */
+  getAccountName() {
+    if (!this.accountName) {
+      const account = this.db.getAccountById(this.accountId);
+      this.accountName = account?.username || `ID:${this.accountId}`;
+    }
+    return this.accountName;
   }
 
   /**
@@ -15,8 +29,6 @@ class IncomingAttacksModule {
    */
   async execute() {
     try {
-      console.log('🔍 Zjišťuji příchozí útoky...');
-
       // Přejdeme na overview screen pokud tam nejsme
       const currentUrl = this.page.url();
       if (!currentUrl.includes('screen=overview')) {
@@ -90,7 +102,6 @@ class IncomingAttacksModule {
                 impact: name  // Název útoku = typ dopadu
               };
             } catch (e) {
-              console.error('Chyba při parsování řádku útoku:', e);
               return null;
             }
           })
@@ -99,21 +110,12 @@ class IncomingAttacksModule {
         return { count, attacks };
       });
 
-      console.log(`📊 Zjištěno útoků: ${attacksData.count}`);
-
       // Uložíme data do databáze
       if (attacksData.count > 0) {
         this.saveAttacksData(attacksData.count, attacksData.attacks);
-        console.log(`💾 Uloženo ${attacksData.attacks.length} detailů útoků`);
-
-        // Výpis pro debug
-        attacksData.attacks.forEach((attack, index) => {
-          console.log(`   ${index + 1}. ${attack.name} | ${attack.attacker} | ${attack.arrival_date} | ${attack.countdown}`);
-        });
       } else {
         // Pokud nejsou útoky, vymažeme data
         this.saveAttacksData(0, []);
-        console.log('✅ Žádné příchozí útoky');
       }
 
       return {
@@ -123,7 +125,7 @@ class IncomingAttacksModule {
       };
 
     } catch (error) {
-      console.error('❌ Chyba při detekci příchozích útoků:', error.message);
+      logger.error('Chyba při detekci příchozích útoků', this.getAccountName(), error);
       return { success: false, error: error.message };
     }
   }
@@ -142,7 +144,7 @@ class IncomingAttacksModule {
         this.db._saveAccounts(data);
       }
     } catch (error) {
-      console.error('❌ Chyba při ukládání dat útoků:', error.message);
+      logger.error('Chyba při ukládání dat útoků', this.getAccountName(), error);
     }
   }
 
@@ -165,7 +167,7 @@ class IncomingAttacksModule {
       }
       return JSON.parse(account.attacks_info);
     } catch (error) {
-      console.error('❌ Chyba při načítání detailů útoků:', error.message);
+      logger.error('Chyba při načítání detailů útoků', this.getAccountName(), error);
       return [];
     }
   }

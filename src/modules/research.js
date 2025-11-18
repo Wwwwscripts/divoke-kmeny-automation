@@ -3,11 +3,14 @@
  * S podporou CZ i SK světů
  */
 
+import logger from '../logger.js';
+
 class ResearchModule {
   constructor(page, db, accountId) {
     this.page = page;
     this.db = db;
     this.accountId = accountId;
+    this.accountName = null;
 
     // Aktuální šablona
     this.activeTemplate = this.loadTemplate();
@@ -18,6 +21,17 @@ class ResearchModule {
       'spy', 'light', 'marcher', 'heavy',
       'ram', 'catapult'
     ];
+  }
+
+  /**
+   * Získá username pro logging
+   */
+  getAccountName() {
+    if (!this.accountName) {
+      const account = this.db.getAccountById(this.accountId);
+      this.accountName = account?.username || `ID:${this.accountId}`;
+    }
+    return this.accountName;
   }
 
   /**
@@ -61,7 +75,7 @@ class ResearchModule {
         }
       };
     } catch (error) {
-      console.error('❌ Chyba při načítání šablony:', error.message);
+      logger.error('Chyba při načítání šablony výzkumu', this.getAccountName(), error);
       return {
         name: 'FARM',
         levels: {
@@ -80,12 +94,11 @@ class ResearchModule {
       this.db.updateResearchSettings(this.accountId, {
         researchTemplate: template.name || 'CUSTOM'
       });
-      
+
       this.activeTemplate = template;
-      console.log('✅ Šablona výzkumu uložena');
       return true;
     } catch (error) {
-      console.error('❌ Chyba při ukládání šablony:', error.message);
+      logger.error('Chyba při ukládání šablony výzkumu', this.getAccountName(), error);
       return false;
     }
   }
@@ -96,7 +109,7 @@ class ResearchModule {
   setTemplateByName(templateName) {
     const template = this.db.getTemplate('research', templateName);
     if (!template) {
-      console.error(`❌ Šablona ${templateName} neexistuje v databázi`);
+      logger.error(`Šablona ${templateName} neexistuje v databázi`, this.getAccountName());
       return false;
     }
     return this.saveTemplate({
@@ -138,7 +151,7 @@ class ResearchModule {
       await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
       return true;
     } catch (error) {
-      console.error('❌ Chyba při přechodu do kovárny:', error.message);
+      logger.error('Chyba při přechodu do kovárny', this.getAccountName(), error);
       return false;
     }
   }
@@ -173,7 +186,7 @@ class ResearchModule {
         };
       });
     } catch (error) {
-      console.error('❌ Chyba při kontrole fronty:', error.message);
+      logger.error('Chyba při kontrole fronty výzkumu', this.getAccountName(), error);
       return { isResearching: false, units: [] };
     }
   }
@@ -231,7 +244,7 @@ class ResearchModule {
         return result;
       });
     } catch (error) {
-      console.error('❌ Chyba při získávání stavu:', error.message);
+      logger.error('Chyba při získávání stavu výzkumu', this.getAccountName(), error);
       return {};
     }
   }
@@ -241,31 +254,32 @@ class ResearchModule {
    */
   async research(unitType) {
     try {
-      console.log(`🔬 Spouštím výzkum: ${unitType}`);
-
       const success = await this.page.evaluate((unit) => {
         try {
-          if (typeof BuildingSmith !== 'undefined' && 
+          if (typeof BuildingSmith !== 'undefined' &&
               typeof BuildingSmith.research === 'function') {
             return BuildingSmith.research(unit);
           }
           return false;
         } catch (e) {
-          console.error('Chyba při volání BuildingSmith.research:', e);
           return false;
         }
       }, unitType);
 
       if (success) {
-        await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
-        console.log(`✅ Výzkum ${unitType} spuštěn`);
+        await this.page.waitForTimeout(1500);
+
+        // Zjistíme cílovou úroveň z šablony
+        const targetLevel = this.activeTemplate.levels[unitType] || 0;
+
+        // LOGUJ AKCI
+        logger.research(this.getAccountName(), unitType, targetLevel);
         return true;
       }
 
-      console.log(`❌ Nepodařilo se spustit výzkum ${unitType}`);
       return false;
     } catch (error) {
-      console.error(`❌ Chyba při spouštění výzkumu:`, error.message);
+      logger.error(`Chyba při spouštění výzkumu ${unitType}`, this.getAccountName(), error);
       return false;
     }
   }
@@ -303,55 +317,15 @@ class ResearchModule {
         research_status: JSON.stringify(status)
       });
     } catch (error) {
-      console.error('❌ Chyba při ukládání stavu:', error.message);
+      // Silent error
     }
   }
 
   /**
-   * Zobrazí přehled výzkumů
+   * Zobrazí přehled výzkumů (DEPRECATED - nepoužívá se)
    */
   displayStatus(status) {
-    console.log('\n' + '='.repeat(70));
-    console.log(`🔬 PŘEHLED VÝZKUMŮ - Šablona: ${this.activeTemplate.name}`);
-    console.log('='.repeat(70));
-
-    Object.keys(status).forEach(unitType => {
-      const unit = status[unitType];
-      const target = this.activeTemplate.levels[unitType] || 0;
-      
-      if (target === 0) return; // Přeskočit jednotky s cílem 0
-
-      let emoji = '❓';
-      let statusText = '';
-
-      if (unit.maxReached) {
-        emoji = '🏁';
-        statusText = 'Max úroveň';
-      } else if (unit.isResearching) {
-        emoji = '⏳';
-        statusText = 'Zkoumá se';
-      } else if (unit.requirementsNotMet) {
-        emoji = '🔒';
-        statusText = 'Nesplněné požadavky';
-      } else if (unit.currentLevel >= target) {
-        emoji = '✅';
-        statusText = 'Hotovo';
-      } else if (unit.canResearch) {
-        emoji = '🔨';
-        statusText = 'Připraveno';
-      } else {
-        emoji = '❌';
-        statusText = 'Nelze zkoumat';
-      }
-
-      console.log(
-        `${emoji} ${unitType.padEnd(10)} | ` +
-        `${unit.currentLevel}/${target} | ` +
-        `${statusText}`
-      );
-    });
-
-    console.log('='.repeat(70));
+    // Silent - no output
   }
 
   /**
@@ -359,15 +333,13 @@ class ResearchModule {
    */
   async autoResearch() {
     try {
-      console.log('🚀 Spouštím automatický výzkum...');
-
       // Načti šablonu
       this.activeTemplate = this.loadTemplate();
 
       // Přejdi do kovárny
       if (!await this.goToSmith()) {
-        return { 
-          success: false, 
+        return {
+          success: false,
           message: 'Nepodařilo se přejít do kovárny',
           waitTime: 5 * 60 * 1000 // 5 minut
         };
@@ -376,10 +348,9 @@ class ResearchModule {
       // Zkontroluj frontu
       const queue = await this.checkQueue();
       if (queue.isResearching) {
-        console.log(`⏳ Právě probíhá výzkum: ${queue.units.join(', ')}`);
-        return { 
-          success: true, 
-          message: `Probíhá: ${queue.units.join(', ')}`, 
+        return {
+          success: true,
+          message: `Probíhá: ${queue.units.join(', ')}`,
           status: 'researching',
           waitTime: 10 * 60 * 1000 // 10 minut
         };
@@ -388,37 +359,30 @@ class ResearchModule {
       // Získej stav
       const status = await this.getStatus();
       this.saveStatus(status);
-      this.displayStatus(status);
 
       // Najdi, co zkoumat
       const next = this.findNextToResearch(status);
-      
+
       if (!next) {
-        console.log('✅ Všechny jednotky jsou na cílové úrovni');
-        return { 
-          success: true, 
-          message: 'Vše hotovo', 
-          status: 'completed', 
+        return {
+          success: true,
+          message: 'Vše hotovo',
+          status: 'completed',
           data: status,
           waitTime: 30 * 60 * 1000 // 30 minut
         };
       }
 
-      console.log(
-        `📋 Další k výzkumu: ${next.unitType} ` +
-        `(${next.currentLevel} → ${next.targetLevel})`
-      );
-
-      // Spusť výzkum
+      // Spusť výzkum (logger.research() je volán uvnitř research())
       const success = await this.research(next.unitType);
-      
+
       if (success) {
-        await this.page.waitForTimeout(1500) // Sníženo z 2000ms;
+        await this.page.waitForTimeout(1500);
         const updatedStatus = await this.getStatus();
         this.saveStatus(updatedStatus);
-        
-        return { 
-          success: true, 
+
+        return {
+          success: true,
           message: `Spuštěn výzkum: ${next.unitType}`,
           status: 'started',
           unit: next.unitType,
@@ -427,16 +391,16 @@ class ResearchModule {
         };
       }
 
-      return { 
-        success: false, 
+      return {
+        success: false,
         message: 'Nepodařilo se spustit výzkum',
         waitTime: 5 * 60 * 1000 // 5 minut
       };
 
     } catch (error) {
-      console.error('❌ Chyba při automatickém výzkumu:', error.message);
-      return { 
-        success: false, 
+      logger.error('Chyba při automatickém výzkumu', this.getAccountName(), error);
+      return {
+        success: false,
         message: error.message,
         waitTime: 5 * 60 * 1000 // 5 minut
       };

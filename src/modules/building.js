@@ -3,16 +3,30 @@
  * S inteligentní detekcí skladu a farmy + ochranou proti opakování
  */
 
+import logger from '../logger.js';
+
 class BuildingModule {
   constructor(page, db, accountId) {
     this.page = page;
     this.db = db;
     this.accountId = accountId;
-    
+    this.accountName = null;
+
     // 🆕 Paměť pro zamezení opakovaného stavění
     this.lastWarehouseAttempt = 0;
     this.lastFarmAttempt = 0;
     this.attemptCooldown = 10 * 60 * 1000; // 10 minut cooldown
+  }
+
+  /**
+   * Získá username pro logging
+   */
+  getAccountName() {
+    if (!this.accountName) {
+      const account = this.db.getAccountById(this.accountId);
+      this.accountName = account?.username || `ID:${this.accountId}`;
+    }
+    return this.accountName;
   }
 
   /**
@@ -330,7 +344,6 @@ class BuildingModule {
       if (!worldUrl) return null;
 
       if (!currentUrl.includes('screen=main')) {
-        console.log('🌐 Přecházím na hlavní obrazovku...');
         await this.page.goto(`${worldUrl}/game.php?screen=main`, {
           waitUntil: 'domcontentloaded'
         });
@@ -477,10 +490,9 @@ class BuildingModule {
         return buildingsList;
       });
 
-      console.log('📋 Nalezené budovy (včetně fronty):', buildings);
       return buildings;
     } catch (error) {
-      console.error('❌ Chyba při zjišťování budov:', error.message);
+      logger.error('Chyba při zjišťování budov', this.getAccountName(), error);
       return null;
     }
   }
@@ -534,7 +546,7 @@ class BuildingModule {
 
       return queueInfo;
     } catch (error) {
-      console.error('❌ Chyba při kontrole fronty:', error.message);
+      logger.error('Chyba při kontrole fronty', this.getAccountName(), error);
       return { hasQueue: false, buildings: [] };
     }
   }
@@ -558,15 +570,12 @@ class BuildingModule {
    */
   async collectAllRewards() {
     try {
-      console.log('🎁 Odebírám odměny...');
-
       const hasQuests = await this.page.evaluate(() => {
         const questBtn = document.querySelector('#new_quest');
         return questBtn !== null;
       });
 
       if (!hasQuests) {
-        console.log('⚠️  Žádné odměny k odebrání');
         return 0;
       }
 
@@ -605,13 +614,9 @@ class BuildingModule {
 
       await this.page.waitForTimeout(1000);
 
-      if (collected > 0) {
-        console.log(`✅ Odebráno ${collected} odměn`);
-      }
-
       return collected;
     } catch (error) {
-      console.error('❌ Chyba při odebírání odměn:', error.message);
+      logger.error('Chyba při odebírání odměn', this.getAccountName(), error);
       return 0;
     }
   }
@@ -651,7 +656,7 @@ class BuildingModule {
 
       return checks;
     } catch (error) {
-      console.error('❌ Chyba při kontrole populace:', error.message);
+      logger.error('Chyba při kontrole populace', this.getAccountName(), error);
       return { needsFarm: false, farmPercent: 100 };
     }
   }
@@ -690,7 +695,7 @@ class BuildingModule {
 
       return needsWarehouse;
     } catch (error) {
-      console.error('❌ Chyba při kontrole skladu:', error.message);
+      logger.error('Chyba při kontrole skladu', this.getAccountName(), error);
       return false;
     }
   }
@@ -701,7 +706,6 @@ class BuildingModule {
   async buildBuilding(buildingName, level) {
     try {
       const internalName = this.getBuildingInternalName(buildingName);
-      console.log(`🔨 Stavím: ${buildingName} úroveň ${level} (${internalName})`);
 
       const canBuild = await this.page.evaluate((internalName) => {
         const buildRow = document.getElementById(`main_buildrow_${internalName}`);
@@ -739,10 +743,7 @@ class BuildingModule {
       }, internalName);
 
       if (!canBuild.canBuild) {
-        console.log(`⚠️  ${canBuild.reason}`);
-        if (canBuild.needed) {
-          console.log(`   Chybí: 🪵${canBuild.needed.wood} 🧱${canBuild.needed.stone} ⛏️${canBuild.needed.iron}`);
-        }
+        // Tichý fail - nedostatek surovin je normální
         return { success: false, reason: canBuild.reason, waitTime: 5 * 60 * 1000 };
       }
 
@@ -773,30 +774,33 @@ class BuildingModule {
       }, { internalName, villageId: gameData.villageId, csrf: gameData.csrf });
 
       if (result.error) {
-        console.log(`❌ Chyba při stavbě: ${result.error[0]}`);
+        logger.error(`Chyba při stavbě ${buildingName}`, this.getAccountName());
         return { success: false, reason: result.error[0], waitTime: 5 * 60 * 1000 };
       }
 
       if (result.response && result.response.success) {
-        console.log(`✅ ${buildingName} úroveň ${level} se staví`);
-
-        await this.page.waitForTimeout(1500); // Sníženo z 2000ms
+        // LOGUJ AKCI - skutečná výstavba
+        await this.page.waitForTimeout(1500);
         const queueInfo = await this.checkBuildQueue();
+
+        let buildTime = '?';
+        let waitTimeMs = 5 * 60 * 1000;
 
         if (queueInfo.hasQueue && queueInfo.buildings.length > 0) {
           const lastBuilding = queueInfo.buildings[queueInfo.buildings.length - 1];
-          const buildTime = this.parseTimeToMs(lastBuilding.time);
-          console.log(`⏱️  Čas stavby: ${lastBuilding.time}`);
-          return { success: true, waitTime: buildTime };
+          buildTime = lastBuilding.time;
+          waitTimeMs = this.parseTimeToMs(lastBuilding.time);
         }
 
-        return { success: true, waitTime: 5 * 60 * 1000 };
+        logger.building(this.getAccountName(), buildingName, level, buildTime);
+
+        return { success: true, waitTime: waitTimeMs };
       }
 
       return { success: false, reason: 'Neznámá chyba', waitTime: 5 * 60 * 1000 };
 
     } catch (error) {
-      console.error(`❌ Chyba při stavbě:`, error.message);
+      logger.error(`Chyba při stavbě ${buildingName}`, this.getAccountName(), error);
       return { success: false, reason: error.message, waitTime: 5 * 60 * 1000 };
     }
   }
@@ -806,13 +810,11 @@ class BuildingModule {
    */
   async startBuilding(templateName) {
     try {
-      console.log(`🏗️  Spouštím výstavbu podle šablony: ${templateName}`);
-
       const templates = this.getTemplates();
       const template = templates[templateName];
 
       if (!template) {
-        console.error(`❌ Šablona ${templateName} neexistuje`);
+        logger.error(`Šablona ${templateName} neexistuje`, this.getAccountName());
         return { success: false, waitTime: 5 * 60 * 1000 };
       }
 
@@ -820,24 +822,15 @@ class BuildingModule {
 
       const currentBuildings = await this.getCurrentBuildings();
       if (!currentBuildings) {
-        console.error('❌ Nepodařilo se získat aktuální budovy');
+        logger.error(`Nepodařilo se získat aktuální budovy`, this.getAccountName());
         return { success: false, waitTime: 5 * 60 * 1000 };
       }
-
-      console.log(`📋 Aktuální budovy ve vesnici: ${currentBuildings.length}`);
 
       const queueInfo = await this.checkBuildQueue();
 
       if (queueInfo.hasQueue && queueInfo.buildings.length > 0) {
-        console.log(`⏳ Ve frontě je ${queueInfo.buildings.length} budov`);
-        queueInfo.buildings.forEach(b => {
-          console.log(`   ${b.name} - ${b.time}`);
-        });
-
         const firstBuilding = queueInfo.buildings[0];
         const waitTime = this.parseTimeToMs(firstBuilding.time);
-        console.log(`⏰ Další kontrola za: ${firstBuilding.time}`);
-
         return { success: true, waitTime: waitTime };
       }
 
@@ -848,25 +841,23 @@ class BuildingModule {
       // Priorita 1: Populace < 10%
       if (popCheck.needsFarm) {
         if (now - this.lastFarmAttempt < this.attemptCooldown) {
-          const remainingMinutes = Math.ceil((this.attemptCooldown - (now - this.lastFarmAttempt)) / 60000);
-          console.log(`⏭️  Málo populace (${popCheck.farmPercent.toFixed(1)}%), ale nedávno jsem to už zkoušel (za ${remainingMinutes} min zkusím znovu)`);
+          // Cooldown - skip for now
         } else {
-          console.log(`⚠️  Málo volné populace (${popCheck.farmPercent.toFixed(1)}%) - stavím farmu!`);
-          const farm = currentBuildings.find(b => 
-            b.name.includes('Farm') || 
-            b.name.includes('Selský dvůr') || 
+          const farm = currentBuildings.find(b =>
+            b.name.includes('Farm') ||
+            b.name.includes('Selský dvůr') ||
             b.name.includes('Sedliacky dvor')
           );
           const nextLevel = (farm?.level || 0) + 1;
-          
+
           this.lastFarmAttempt = now;
-          
+
           const buildResult = await this.buildBuilding('Farm', nextLevel);
-          
+
           if (buildResult.success) {
             this.lastFarmAttempt = 0;
           }
-          
+
           return buildResult;
         }
       }
@@ -878,8 +869,6 @@ class BuildingModule {
         );
 
         if (!existing || existing.level < item.level) {
-          console.log(`🎯 Další na řadě: ${item.building} úroveň ${item.level}`);
-
           // 🆕 KONTROLA SKLADU PRO TUTO KONKRÉTNÍ BUDOVU
           const internalName = this.getBuildingInternalName(item.building);
           const needsWarehouse = await this.checkWarehouseForBuilding(internalName);
@@ -887,27 +876,23 @@ class BuildingModule {
           if (needsWarehouse) {
             // Zkontroluj cooldown
             if (now - this.lastWarehouseAttempt < this.attemptCooldown) {
-              const remainingMinutes = Math.ceil((this.attemptCooldown - (now - this.lastWarehouseAttempt)) / 60000);
-              console.log(`⏭️  ${item.building} potřebuje větší sklad, ale nedávno jsem to už zkoušel (za ${remainingMinutes} min zkusím znovu)`);
-              console.log(`   Mezitím přeskakuji na další budovu...`);
               continue; // Přeskoč tuto budovu a zkus další
             } else {
-              console.log(`⚠️  ${item.building} potřebuje větší sklad - stavím sklad!`);
-              const warehouse = currentBuildings.find(b => 
-                b.name.includes('Warehouse') || 
-                b.name.includes('Skladiště') || 
+              const warehouse = currentBuildings.find(b =>
+                b.name.includes('Warehouse') ||
+                b.name.includes('Skladiště') ||
                 b.name.includes('Sklad')
               );
               const nextLevel = (warehouse?.level || 0) + 1;
-              
+
               this.lastWarehouseAttempt = now;
-              
+
               const buildResult = await this.buildBuilding('Warehouse', nextLevel);
-              
+
               if (buildResult.success) {
                 this.lastWarehouseAttempt = 0;
               }
-              
+
               return buildResult;
             }
           }
@@ -918,11 +903,10 @@ class BuildingModule {
         }
       }
 
-      console.log('✅ Všechny budovy ze šablony jsou postaveny');
       return { success: true, waitTime: 30 * 60 * 1000 };
 
     } catch (error) {
-      console.error(`❌ Chyba při výstavbě:`, error.message);
+      logger.error(`Chyba při výstavbě`, this.getAccountName(), error);
       return { success: false, waitTime: 5 * 60 * 1000 };
     }
   }

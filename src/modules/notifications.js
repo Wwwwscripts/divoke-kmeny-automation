@@ -4,11 +4,25 @@
  * Note: V Node.js 18+ je fetch nativně dostupné jako globální funkce
  */
 
+import logger from '../logger.js';
+
 class NotificationsModule {
   constructor(page, db, accountId) {
     this.page = page;
     this.db = db;
     this.accountId = accountId;
+    this.accountName = null;
+  }
+
+  /**
+   * Získá username pro logging
+   */
+  getAccountName() {
+    if (!this.accountName) {
+      const account = this.db.getAccountById(this.accountId);
+      this.accountName = account?.username || `ID:${this.accountId}`;
+    }
+    return this.accountName;
   }
 
   /**
@@ -18,13 +32,8 @@ class NotificationsModule {
     try {
       const currentUrl = this.page.url();
 
-      console.log(`🔍 Kontrola URL pro dobytí vesnice: ${currentUrl}`);
-
       // Zkontroluj zda URL obsahuje create_village.php
       if (currentUrl.includes('create_village.php')) {
-        console.log('⚠️  VESNICE DOBYTA! Přesměrováno na vytvoření nové vesnice');
-        console.log(`   URL: ${currentUrl}`);
-
         // Zkontroluj, jestli už jsme poslali notifikaci
         const lastConqueredNotification = this.getLastNotification('conquered');
         const now = Date.now();
@@ -33,8 +42,6 @@ class NotificationsModule {
         if (!lastConqueredNotification || (now - lastConqueredNotification) > 10 * 60 * 1000) {
           await this.sendDiscordNotification('conquered');
           this.saveLastNotification('conquered', now);
-        } else {
-          console.log('⏭️  Conquered notifikace již odeslána - přeskakuji');
         }
 
         return true;
@@ -42,7 +49,7 @@ class NotificationsModule {
 
       return false;
     } catch (error) {
-      console.error('❌ Chyba při detekci dobytí vesnice:', error.message);
+      logger.error('Chyba při detekci dobytí vesnice', this.getAccountName(), error);
       return false;
     }
   }
@@ -66,26 +73,22 @@ class NotificationsModule {
       });
 
       if (hasCaptcha) {
-        console.log('⚠️  CAPTCHA DETEKOVÁNA!');
-        
         // Zkontroluj, jestli už jsme poslali notifikaci pro CAPTCHA
         const lastCaptchaNotification = this.getLastNotification('captcha');
         const now = Date.now();
-        
+
         // Pošli notifikaci pouze pokud od poslední uplynulo více než 10 minut
         if (!lastCaptchaNotification || (now - lastCaptchaNotification) > 10 * 60 * 1000) {
           await this.sendDiscordNotification('captcha');
           this.saveLastNotification('captcha', now);
-        } else {
-          console.log('⏭️  CAPTCHA notifikace již odeslána - přeskakuji');
         }
-        
+
         return true;
       }
 
       return false;
     } catch (error) {
-      console.error('❌ Chyba při detekci CAPTCHA:', error.message);
+      logger.error('Chyba při detekci CAPTCHA', this.getAccountName(), error);
       return false;
     }
   }
@@ -178,12 +181,8 @@ class NotificationsModule {
                 impact: name  // Název útoku = dopad
               };
 
-              // Debug log pro parsování
-              console.log(`   Parsován útok: ${attacker} z ${origin}, dopad: ${arrivalTime}`);
-
               return attackData;
             } catch (e) {
-              console.error('Chyba při parsování řádku útoku:', e);
               return null;
             }
           })
@@ -198,17 +197,13 @@ class NotificationsModule {
       // Získáme poslední uložený počet útoků
       const lastAttackCount = this.getLastAttackCount();
 
-      console.log(`📊 Útoky: Aktuálně ${currentCount}, Předchozí ${lastAttackCount}`);
-
       // Uložíme detaily útoků do databáze
       if (attacks.length > 0) {
         this.saveAttacksInfo(attacks);
-        console.log(`📋 Uloženo ${attacks.length} detailů útoků`);
       }
 
       // Pošleme notifikaci POUZE pokud počet STOUPL
       if (currentCount > lastAttackCount) {
-        console.log(`⚔️  NOVÝ ÚTOK! Počet útoků vzrostl z ${lastAttackCount} na ${currentCount}`);
         await this.sendDiscordNotification('attack', {
           count: currentCount,
           attacks: attacks
@@ -220,7 +215,7 @@ class NotificationsModule {
 
       return attackInfo;
     } catch (error) {
-      console.error('❌ Chyba při detekci útoků:', error.message);
+      logger.error('Chyba při detekci útoků', this.getAccountName(), error);
       return null;
     }
   }
@@ -246,7 +241,7 @@ class NotificationsModule {
         this.db._saveAccounts(data);
       }
     } catch (error) {
-      console.error('❌ Chyba při ukládání počtu útoků:', error.message);
+      logger.error('Chyba při ukládání počtu útoků', this.getAccountName(), error);
     }
   }
 
@@ -263,7 +258,7 @@ class NotificationsModule {
         this.db._saveAccounts(data);
       }
     } catch (error) {
-      console.error('❌ Chyba při ukládání detailů útoků:', error.message);
+      logger.error('Chyba při ukládání detailů útoků', this.getAccountName(), error);
     }
   }
 
@@ -290,7 +285,7 @@ class NotificationsModule {
         this.db._saveAccounts(data);
       }
     } catch (error) {
-      console.error('❌ Chyba při ukládání času notifikace:', error.message);
+      logger.error('Chyba při ukládání času notifikace', this.getAccountName(), error);
     }
   }
 
@@ -301,15 +296,12 @@ class NotificationsModule {
     try {
       const account = this.db.getAccountWithStats(this.accountId);
       if (!account) {
-        console.log('⚠️  Účet nenalezen pro notifikaci');
         return;
       }
 
       // Získáme Discord webhook URL podle typu (CAPTCHA nebo ATTACK)
       const webhookUrl = this.getDiscordWebhook(type);
       if (!webhookUrl) {
-        console.log(`⚠️  Discord webhook pro ${type} není nakonfigurován`);
-        console.log(`💡 Vytvořte .env soubor a nastavte DISCORD_WEBHOOK_${type.toUpperCase()}`);
         return;
       }
 
@@ -429,17 +421,13 @@ class NotificationsModule {
         })
       });
 
-      if (response.ok) {
-        console.log(`✅ Discord notifikace (${type}) odeslána`);
-      } else {
+      if (!response.ok) {
         const errorText = await response.text();
-        console.log(`⚠️  Nepodařilo se odeslat Discord notifikaci (${type})`);
-        console.log(`   Status: ${response.status} ${response.statusText}`);
-        console.log(`   Chyba: ${errorText}`);
+        logger.error(`Nepodařilo se odeslat Discord notifikaci (${type}) - ${response.status}: ${errorText}`, this.getAccountName());
       }
 
     } catch (error) {
-      console.error('❌ Chyba při odesílání Discord notifikace:', error.message);
+      logger.error('Chyba při odesílání Discord notifikace', this.getAccountName(), error);
     }
   }
 
