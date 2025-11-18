@@ -135,8 +135,14 @@ class DatabaseManager {
         return null;
       }
 
+      // Bezpečné určení ID - najdi max ID + 1 (ochrana proti corrupted nextId)
+      const maxId = data.accounts.length > 0
+        ? Math.max(...data.accounts.map(a => a.id))
+        : 0;
+      const newId = Math.max(maxId + 1, data.nextId);
+
       const newAccount = {
-        id: data.nextId,
+        id: newId,
         username,
         password,
         world,
@@ -165,7 +171,7 @@ class DatabaseManager {
       };
 
       data.accounts.push(newAccount);
-      data.nextId++;
+      data.nextId = newId + 1; // Nastav nextId na další volné číslo
       this._saveAccounts(data);
 
       const server = this.getServerFromWorld(world);
