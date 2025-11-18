@@ -194,10 +194,16 @@ class SupportSender {
       // Přejít na rally point
       const placeUrl = `${worldUrl}/game.php?village=${villageId}&screen=place`;
       await this.page.goto(placeUrl, { waitUntil: 'domcontentloaded' });
-      await this.page.waitForTimeout(1000);
+
+      // Počkat na načtení formuláře (input pro jednotky)
+      await this.page.waitForSelector('input[name="x"]', { timeout: 10000 });
+      await this.page.waitForTimeout(1500); // Další čekání pro jistotu
 
       // Vyplnit formulář pro všechny jednotky
-      await this.page.evaluate((units, x, y) => {
+      const filled = await this.page.evaluate((units, x, y) => {
+        let filledUnits = [];
+        let filledCoords = false;
+
         // Vyplnit všechny jednotky
         units.forEach(unit => {
           const unitInput = document.querySelector(`input[name="${unit}"]`);
@@ -209,6 +215,7 @@ class SupportSender {
               if (match) {
                 const availableCount = parseInt(match[1]);
                 unitInput.value = availableCount; // Poslat všechny dostupné
+                filledUnits.push(`${unit}:${availableCount}`);
               }
             }
           }
@@ -217,12 +224,19 @@ class SupportSender {
         // Vyplnit souřadnice
         const xInput = document.querySelector('input[name="x"]');
         const yInput = document.querySelector('input[name="y"]');
-        if (xInput) xInput.value = x;
-        if (yInput) yInput.value = y;
+        if (xInput) {
+          xInput.value = x;
+          filledCoords = true;
+        }
+        if (yInput) {
+          yInput.value = y;
+        }
+
+        return { filledUnits, filledCoords, x, y };
       }, unitTypes, targetX, targetY);
 
-      logger.success(`✅ Formulář vyplněn: ${unitTypes.join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
-      return { success: true, unitTypes, targetX, targetY };
+      logger.success(`✅ Formulář vyplněn: ${filled.filledUnits.join(', ')} na ${filled.x}|${filled.y}`, this.getAccountName());
+      return { success: true, unitTypes, targetX, targetY, filled };
 
     } catch (error) {
       logger.error(`Chyba při otevírání ručního odeslání: ${error.message}`, this.getAccountName());
