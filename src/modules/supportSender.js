@@ -140,7 +140,7 @@ class SupportSender {
       });
 
       if (!isSupport) {
-        logger.warning('Detekován útok místo podpory - přerušuji', this.getAccountName());
+        logger.error('Detekován útok místo podpory - přerušuji', this.getAccountName());
         throw new Error('Detekován útok místo podpory');
       }
 
@@ -227,7 +227,7 @@ class SupportSender {
       await this.page.goto(placeUrl, { waitUntil: 'domcontentloaded' });
       await this.page.waitForTimeout(1000);
 
-      logger.success(`✅ Formulář vyplněn přes URL: ${Object.entries(unitCounts).map(([u,c]) => `${u}:${c}`).join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
+      logger.action(`Formulář vyplněn přes URL: ${Object.entries(unitCounts).map(([u,c]) => `${u}:${c}`).join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
       return { success: true, unitTypes, targetX, targetY, unitCounts };
 
     } catch (error) {
@@ -315,7 +315,7 @@ class SupportSender {
       });
 
       if (!isSupport) {
-        logger.warning('Detekován útok místo podpory - přerušuji', this.getAccountName());
+        logger.error('Detekován útok místo podpory - přerušuji', this.getAccountName());
         throw new Error('Detekován útok místo podpory');
       }
 
@@ -330,18 +330,24 @@ class SupportSender {
       }
 
       await confirmButton.click();
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(3000);
 
       // Ověřit úspěch
-      const success = await this.page.evaluate(() => {
+      const successInfo = await this.page.evaluate(() => {
         const bodyText = document.body.innerText;
-        return bodyText.includes('Command sent') ||
+        const hasSuccess = bodyText.includes('Command sent') ||
                bodyText.includes('Příkaz odeslán') ||
                bodyText.includes('Rozkaz odoslaný');
+
+        // Debug - vrátit i část textu pro kontrolu
+        const snippet = bodyText.substring(0, 200);
+        return { success: hasSuccess, snippet };
       });
 
-      if (success) {
-        logger.success(`✅ Komplexní podpora odeslána: ${unitTypes.join(', ')} (${Object.entries(unitCounts).map(([u,c]) => `${u}:${c}`).join(', ')}) na ${targetX}|${targetY}`, this.getAccountName());
+      logger.info(`Ověření odeslání: ${successInfo.success} | Text: "${successInfo.snippet}"`, this.getAccountName());
+
+      if (successInfo.success) {
+        logger.action(`Komplexní podpora odeslána: ${unitTypes.join(', ')} (${Object.entries(unitCounts).map(([u,c]) => `${u}:${c}`).join(', ')}) na ${targetX}|${targetY}`, this.getAccountName());
         return { success: true, unitTypes, targetX, targetY, unitCounts };
       } else {
         logger.error('Podpora nebyla odeslána', this.getAccountName());
