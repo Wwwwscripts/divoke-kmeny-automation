@@ -23,7 +23,7 @@ class BuildingModule {
    */
   getAccountName() {
     if (!this.accountName) {
-      const account = this.db.getAccountById(this.accountId);
+      const account = this.db.getAccount(this.accountId);
       this.accountName = account?.username || `ID:${this.accountId}`;
     }
     return this.accountName;

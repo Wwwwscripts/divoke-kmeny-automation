@@ -23,7 +23,7 @@ class RecruitModule {
    */
   getAccountName() {
     if (!this.accountName) {
-      const account = this.db.getAccountById(this.accountId);
+      const account = this.db.getAccount(this.accountId);
       this.accountName = account?.username || `ID:${this.accountId}`;
     }
     return this.accountName;
@@ -178,7 +178,7 @@ class RecruitModule {
   async checkWhatToRecruit(template) {
     try {
       // Načteme units_info z databáze (nastavené support modulem)
-      const account = this.db.getAccountById(this.accountId);
+      const account = this.db.getAccount(this.accountId);
       let unitsData = null;
 
       if (account?.units_info) {
