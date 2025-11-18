@@ -629,10 +629,18 @@
                                     return speed >= fastestSpeed && count > 0;
                                 });
 
-                                // Spočítat cestovní čas pro NEJPOMALEJŠÍ jednotku (ta určuje kdy všechny dorazí)
-                                const slowestSpeed = Math.max(...unitsToSend.map(u => UNIT_SPEEDS[u]));
+                                // Spočítat cestovní čas:
+                                // - Pokud jde paladin, VŠECHNY jednotky jedou rychlostí paladina (10)
+                                // - Jinak jedou rychlostí nejpomalejší jednotky
+                                let effectiveSpeed;
+                                if (unitsToSend.includes('knight')) {
+                                    effectiveSpeed = UNIT_SPEEDS['knight']; // Paladin určuje rychlost
+                                } else {
+                                    effectiveSpeed = Math.max(...unitsToSend.map(u => UNIT_SPEEDS[u])); // Nejpomalejší jednotka
+                                }
+
                                 const boostMultiplier = 1 + (supportBoost / 100);
-                                travelTime = (distance * slowestSpeed) / (worldSpeed * boostMultiplier * unitSpeedModifier);
+                                travelTime = (distance * effectiveSpeed) / (worldSpeed * boostMultiplier * unitSpeedModifier);
 
                                 break;
                             }
