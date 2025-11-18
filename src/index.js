@@ -10,6 +10,7 @@ import ResearchModule from './modules/research.js';
 import NotificationsModule from './modules/notifications.js';
 import PaladinModule from './modules/paladin.js';
 import SupportModule from './modules/support.js';
+import DailyRewardsModule from './modules/dailyRewards.js';
 import logger from './logger.js';
 
 /**
@@ -17,13 +18,14 @@ import logger from './logger.js';
  *
  * Architektura:
  * - Globální WorkerPool (max 100 procesů)
- * - 6 nezávislých smyček:
+ * - 7 nezávislých smyček:
  *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
  *   2. Build - každých 5s po 5 účtech (COOLDOWN režim) [P1]
  *   3. Rekrut - každé 2 minuty po 5 účtech [P3]
  *   4. Výzkum - každých 120 minut po 5 účtech [P4]
  *   5. Paladin - každých 120 minut po 5 účtech [P5]
  *   6. Jednotky - každých 20 minut po 2 účtech [P6]
+ *   7. Denní odměny - jednou denně ve 4:00 nebo při startu [P6]
  */
 class Automator {
   constructor() {
@@ -44,18 +46,20 @@ class Automator {
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
       paladin: 120 * 60 * 1000,   // 120 minut (2 hodiny)
       units: 20 * 60 * 1000,      // 20 minut (kontrola jednotek)
-      accountInfo: 20 * 60 * 1000 // 20 minut (sběr statistik)
+      accountInfo: 20 * 60 * 1000, // 20 minut (sběr statistik)
+      dailyRewards: 24 * 60 * 60 * 1000 // 24 hodin (denní odměny)
     };
 
     // Priority (nižší = vyšší priorita)
     this.priorities = {
-      checks: 1,    // Útoky/CAPTCHA
-      building: 1,  // Výstavba - STEJNÁ PRIORITA jako kontroly
-      recruit: 3,   // Rekrutování
-      research: 4,  // Výzkum
-      paladin: 5,   // Paladin
-      units: 6,     // Kontrola jednotek
-      stats: 7      // Statistiky
+      checks: 1,        // Útoky/CAPTCHA
+      building: 1,      // Výstavba - STEJNÁ PRIORITA jako kontroly
+      recruit: 3,       // Rekrutování
+      research: 4,      // Výzkum
+      paladin: 5,       // Paladin
+      units: 6,         // Kontrola jednotek
+      dailyRewards: 6,  // Denní odměny - stejná priorita jako jednotky
+      stats: 7          // Statistiky
     };
   }
 
@@ -105,13 +109,14 @@ class Automator {
     console.log('='.repeat(70));
     console.log('🤖 Spouštím Event-Driven automatizaci');
     console.log('⚡ Worker Pool: Max 100 procesů');
-    console.log('🔄 6 nezávislých smyček:');
+    console.log('🔄 7 nezávislých smyček:');
     console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P1] Build: každých 5s po 5 účtech - COOLDOWN režim (VYSOKÁ PRIORITA)');
     console.log('   [P3] Rekrut: každé 2 min po 5 účtech');
     console.log('   [P4] Výzkum: každých 120 min po 5 účtech (2 hod)');
     console.log('   [P5] Paladin: každých 120 min po 5 účtech (2 hod)');
     console.log('   [P6] Jednotky: každých 20 min po 2 účtech (~10 min/cyklus pro 100 účtů)');
+    console.log('   [P6] Denní odměny: jednou denně ve 4:00 nebo při startu');
     console.log('   [P7] Statistiky: každých 20 min');
     console.log('='.repeat(70));
 
@@ -119,13 +124,14 @@ class Automator {
 
     // Spusť všechny smyčky paralelně
     await Promise.all([
-      this.checksLoop(),      // P1: Neustále po 2 účtech
-      this.buildingLoop(),    // P1: Každých 5s po 5 účtech (COOLDOWN režim)
-      this.recruitLoop(),     // P3: Každé 2 min po 5 účtech
-      this.researchLoop(),    // P4: Každých 120 min po 5 účtech
-      this.paladinLoop(),     // P5: Každých 120 min po 5 účtech
-      this.unitsLoop(),       // P6: Každých 20 min po 2 účtech
-      this.statsMonitor()     // Monitoring
+      this.checksLoop(),       // P1: Neustále po 2 účtech
+      this.buildingLoop(),     // P1: Každých 5s po 5 účtech (COOLDOWN režim)
+      this.recruitLoop(),      // P3: Každé 2 min po 5 účtech
+      this.researchLoop(),     // P4: Každých 120 min po 5 účtech
+      this.paladinLoop(),      // P5: Každých 120 min po 5 účtech
+      this.unitsLoop(),        // P6: Každých 20 min po 2 účtech
+      this.dailyRewardsLoop(), // P6: Jednou denně ve 4:00 nebo při startu
+      this.statsMonitor()      // Monitoring
     ]);
   }
 
@@ -390,6 +396,99 @@ class Automator {
 
       // Počkej 20 minut
       await new Promise(resolve => setTimeout(resolve, this.intervals.units));
+    }
+  }
+
+  /**
+   * SMYČKA 7: Denní odměny
+   * Běží jednou denně ve 4:00 nebo při prvním spuštění
+   * Priorita: 6
+   */
+  async dailyRewardsLoop() {
+    console.log('🔄 [P6] Smyčka DENNÍ ODMĚNY spuštěna');
+
+    // Při startu zpracuj denní odměny pro všechny účty (pokud ještě nebyly dnes zpracovány)
+    await this.processDailyRewardsForAllAccounts(true);
+
+    while (this.isRunning) {
+      // Čekej až do 4:00 ráno příštího dne
+      const now = new Date();
+      const next4AM = new Date();
+      next4AM.setHours(4, 0, 0, 0);
+
+      // Pokud je aktuální čas po 4:00, nastav na zítřejší 4:00
+      if (now.getHours() >= 4) {
+        next4AM.setDate(next4AM.getDate() + 1);
+      }
+
+      const timeUntil4AM = next4AM.getTime() - now.getTime();
+      console.log(`⏰ Denní odměny: další spuštění za ${Math.round(timeUntil4AM / 1000 / 60)} minut (ve ${next4AM.toLocaleString('cs-CZ')})`);
+
+      // Počkej až do 4:00
+      await new Promise(resolve => setTimeout(resolve, timeUntil4AM));
+
+      // Zpracuj denní odměny pro všechny účty
+      await this.processDailyRewardsForAllAccounts(false);
+    }
+  }
+
+  /**
+   * Zpracuj denní odměny pro všechny účty
+   * @param {boolean} isStartup - true pokud je to první spuštění programu
+   */
+  async processDailyRewardsForAllAccounts(isStartup = false) {
+    try {
+      const accounts = this.db.getAllActiveAccounts();
+
+      // Filtruj pouze účty, které mají denní odměny povoleny na jejich světě
+      const accountsToProcess = accounts.filter(account => {
+        const worldSettings = this.db.getWorldSettings(account.world);
+        if (!worldSettings || !worldSettings.dailyRewardsEnabled) {
+          return false;
+        }
+
+        // Při startu zkontroluj, zda už nebyly dnes zpracovány
+        if (isStartup) {
+          const dailyRewardsKey = `dailyRewards_${account.id}`;
+          const lastRun = this.accountWaitTimes[dailyRewardsKey];
+
+          // Pokud bylo spuštěno dnes (méně než 12 hodin od poslední), přeskoč
+          if (lastRun && (Date.now() - lastRun < 12 * 60 * 60 * 1000)) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+
+      if (accountsToProcess.length === 0) {
+        console.log('⏭️  Žádné účty s povolenými denními odměnami k zpracování');
+        return;
+      }
+
+      console.log(`🎁 Zpracovávám denní odměny pro ${accountsToProcess.length} účtů...`);
+
+      // Zpracuj po 2 účtech paralelně (jako unitsLoop)
+      for (let i = 0; i < accountsToProcess.length; i += 2) {
+        const batch = accountsToProcess.slice(i, i + 2);
+
+        await Promise.all(
+          batch.map(account =>
+            this.workerPool.run(
+              () => this.processDailyRewards(account),
+              this.priorities.dailyRewards,
+              `Denní odměny: ${account.username}`
+            )
+          )
+        );
+
+        // Malá pauza mezi dávkami (500ms)
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      console.log(`✅ Denní odměny zpracovány pro všechny účty`);
+    } catch (error) {
+      console.error('❌ Chyba při zpracování denních odměn:', error.message);
     }
   }
 
@@ -701,6 +800,42 @@ class Automator {
 
     } catch (error) {
       logger.error(`Chyba při kontrole jednotek: ${error.message}`, account.username);
+      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+    }
+  }
+
+  /**
+   * Zpracuj denní odměny
+   */
+  async processDailyRewards(account) {
+    let context, browserKey;
+
+    try {
+      ({ context, browserKey } = await this.browserPool.createContext(account.id));
+      const page = await context.newPage();
+
+      const loginSuccess = await this.loginToGame(page, account);
+      if (!loginSuccess) {
+        await this.browserPool.closeContext(context, browserKey);
+        return;
+      }
+
+      const dailyRewardsModule = new DailyRewardsModule(page, this.db, account.id);
+      const result = await dailyRewardsModule.execute();
+
+      if (result && result.success) {
+        console.log(`✅ [${account.username}] Denní odměny: ${result.message || 'Dokončeno'}`);
+      }
+
+      // Nastav wait time na další den (24 hodin)
+      this.accountWaitTimes[`dailyRewards_${account.id}`] = Date.now();
+
+      // Ulož cookies
+      await this.browserPool.saveCookies(context, account.id);
+      await this.browserPool.closeContext(context, browserKey);
+
+    } catch (error) {
+      logger.error(`Chyba při výběru denních odměn: ${error.message}`, account.username);
       if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
     }
   }

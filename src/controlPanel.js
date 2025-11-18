@@ -416,7 +416,7 @@ app.get('/api/world-settings', (req, res) => {
 app.put('/api/world-settings/:world', (req, res) => {
   try {
     const world = req.params.world;
-    const { speed, unitSpeedModifier } = req.body;
+    const { speed, unitSpeedModifier, dailyRewardsEnabled } = req.body;
 
     if (!speed || speed <= 0) {
       return res.status(400).json({ error: 'Neplatná rychlost světa' });
@@ -426,7 +426,11 @@ app.put('/api/world-settings/:world', (req, res) => {
       return res.status(400).json({ error: 'Neplatný modifikátor rychlosti jednotek' });
     }
 
-    db.saveWorldSettings(world, { speed, unitSpeedModifier: unitSpeedModifier || 1 });
+    db.saveWorldSettings(world, {
+      speed,
+      unitSpeedModifier: unitSpeedModifier || 1,
+      dailyRewardsEnabled: dailyRewardsEnabled || false
+    });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

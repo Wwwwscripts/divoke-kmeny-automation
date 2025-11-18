@@ -482,7 +482,7 @@ class DatabaseManager {
   getWorldSettings(world) {
     const templates = this._loadTemplates();
     if (!templates.worlds) templates.worlds = {};
-    return templates.worlds[world] || { speed: 1, unitSpeedModifier: 1 }; // Výchozí rychlost 1x
+    return templates.worlds[world] || { speed: 1, unitSpeedModifier: 1, dailyRewardsEnabled: false }; // Výchozí rychlost 1x
   }
 
   // Uložit/aktualizovat nastavení světa
@@ -492,7 +492,8 @@ class DatabaseManager {
 
     templates.worlds[world] = {
       speed: settings.speed || 1,
-      unitSpeedModifier: settings.unitSpeedModifier || 1
+      unitSpeedModifier: settings.unitSpeedModifier || 1,
+      dailyRewardsEnabled: settings.dailyRewardsEnabled || false
     };
 
     this._saveTemplates(templates);
