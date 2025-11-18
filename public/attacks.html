@@ -403,6 +403,11 @@
             return `<img src="https://cs107.divokekmeny.cz/graphic/unit/unit_${unitType}.png" style="width: 18px; height: 18px; vertical-align: middle; margin-right: 2px;" alt="${unitType}">`;
         }
 
+        // Helper funkce pro ikonu hradeb z Tribal Wars
+        function getWallIcon() {
+            return `<img src="https://cs107.divokekmeny.cz/graphic/buildings/wall.png" style="width: 18px; height: 18px; vertical-align: middle; margin-right: 2px;" alt="wall">`;
+        }
+
         // Dropdown menu
         function toggleDropdown() {
             document.getElementById('moreMenu').classList.toggle('active');
@@ -664,7 +669,7 @@
                         <td><span class="world-badge">${acc.world || '-'}</span></td>
                         <td class="coord">${coord}</td>
                         <td class="resources">${resources}</td>
-                        <td class="wall-level">🏰 Lvl ${acc.wall_level || 0}</td>
+                        <td class="wall-level">${getWallIcon()} Lvl ${acc.wall_level || 0}</td>
                         <td>${unitsDisplay}</td>
                         <td>${attacksDisplay}</td>
                         <td>
