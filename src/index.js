@@ -110,7 +110,7 @@ class Automator {
     console.log('   [P3] Rekrut: každé 4 min');
     console.log('   [P4] Výzkum: každých 120 min (2 hod)');
     console.log('   [P5] Paladin: každých 120 min (2 hod)');
-    console.log('   [P6] Jednotky: každých 20 min po 5 účtech (~4 min/cyklus pro 100 účtů)');
+    console.log('   [P6] Jednotky: každých 20 min po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P7] Statistiky: každých 20 min');
     console.log('='.repeat(70));
 
@@ -166,7 +166,7 @@ class Automator {
   /**
    * SMYČKA 2: Výstavba
    * Každých 5 sekund projde účty - COOLDOWN režim (kontroluje hned jak vyprší čas)
-   * Zpracovává po 10 účtech paralelně
+   * Zpracovává po 5 účtech paralelně
    * Priorita: 1
    */
   async buildingLoop() {
@@ -187,9 +187,9 @@ class Automator {
         return !buildingWaitUntil || Date.now() >= buildingWaitUntil;
       });
 
-      // Zpracuj po 10 účtech paralelně
-      for (let i = 0; i < accountsToProcess.length; i += 10) {
-        const batch = accountsToProcess.slice(i, i + 10);
+      // Zpracuj po 5 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 5) {
+        const batch = accountsToProcess.slice(i, i + 5);
 
         await Promise.all(
           batch.map(account => {
@@ -203,7 +203,7 @@ class Automator {
         );
 
         // Malá pauza mezi dávkami (50ms)
-        if (i + 10 < accountsToProcess.length) {
+        if (i + 5 < accountsToProcess.length) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
@@ -216,7 +216,7 @@ class Automator {
   /**
    * SMYČKA 3: Rekrutování
    * Každé 4 minuty projde účty a zkontroluje timing
-   * Zpracovává po 10 účtech paralelně
+   * Zpracovává po 5 účtech paralelně
    * Priorita: 3
    */
   async recruitLoop() {
@@ -237,9 +237,9 @@ class Automator {
         return !recruitWaitUntil || Date.now() >= recruitWaitUntil;
       });
 
-      // Zpracuj po 10 účtech paralelně
-      for (let i = 0; i < accountsToProcess.length; i += 10) {
-        const batch = accountsToProcess.slice(i, i + 10);
+      // Zpracuj po 5 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 5) {
+        const batch = accountsToProcess.slice(i, i + 5);
 
         await Promise.all(
           batch.map(account => {
@@ -253,7 +253,7 @@ class Automator {
         );
 
         // Malá pauza mezi dávkami (50ms)
-        if (i + 10 < accountsToProcess.length) {
+        if (i + 5 < accountsToProcess.length) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
@@ -266,7 +266,7 @@ class Automator {
   /**
    * SMYČKA 4: Výzkum
    * Každé 2 hodiny projde účty a zkontroluje timing
-   * Zpracovává po 10 účtech paralelně
+   * Zpracovává po 5 účtech paralelně
    * Priorita: 4
    */
   async researchLoop() {
@@ -287,9 +287,9 @@ class Automator {
         return !researchWaitUntil || Date.now() >= researchWaitUntil;
       });
 
-      // Zpracuj po 10 účtech paralelně
-      for (let i = 0; i < accountsToProcess.length; i += 10) {
-        const batch = accountsToProcess.slice(i, i + 10);
+      // Zpracuj po 5 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 5) {
+        const batch = accountsToProcess.slice(i, i + 5);
 
         await Promise.all(
           batch.map(account => {
@@ -303,7 +303,7 @@ class Automator {
         );
 
         // Malá pauza mezi dávkami (50ms)
-        if (i + 10 < accountsToProcess.length) {
+        if (i + 5 < accountsToProcess.length) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
@@ -316,7 +316,7 @@ class Automator {
   /**
    * SMYČKA 5: Paladin
    * Každé 2 hodiny projde účty a zkontroluje paladina
-   * Zpracovává po 10 účtech paralelně
+   * Zpracovává po 5 účtech paralelně
    * Priorita: 5
    */
   async paladinLoop() {
@@ -332,9 +332,9 @@ class Automator {
         return !paladinWaitUntil || Date.now() >= paladinWaitUntil;
       });
 
-      // Zpracuj po 10 účtech paralelně
-      for (let i = 0; i < accountsToProcess.length; i += 10) {
-        const batch = accountsToProcess.slice(i, i + 10);
+      // Zpracuj po 5 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 5) {
+        const batch = accountsToProcess.slice(i, i + 5);
 
         await Promise.all(
           batch.map(account =>
@@ -347,7 +347,7 @@ class Automator {
         );
 
         // Malá pauza mezi dávkami (50ms)
-        if (i + 10 < accountsToProcess.length) {
+        if (i + 5 < accountsToProcess.length) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
@@ -359,7 +359,7 @@ class Automator {
 
   /**
    * SMYČKA 6: Kontrola jednotek
-   * Každých 20 minut projde účty a zkontroluje jednotky (po 5 účtech)
+   * Každých 20 minut projde účty a zkontroluje jednotky (po 2 účtech)
    * Priorita: 6
    */
   async unitsLoop() {
@@ -368,9 +368,9 @@ class Automator {
     while (this.isRunning) {
       const accounts = this.db.getAllActiveAccounts();
 
-      // Zpracuj po 5 účtech
-      for (let i = 0; i < accounts.length; i += 5) {
-        const batch = accounts.slice(i, i + 5);
+      // Zpracuj po 2 účtech
+      for (let i = 0; i < accounts.length; i += 2) {
+        const batch = accounts.slice(i, i + 2);
 
         // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
         await Promise.all(
