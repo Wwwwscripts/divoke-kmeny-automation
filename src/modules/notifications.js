@@ -18,9 +18,25 @@ class NotificationsModule {
     try {
       const currentUrl = this.page.url();
 
+      console.log(`🔍 Kontrola URL pro dobytí vesnice: ${currentUrl}`);
+
       // Zkontroluj zda URL obsahuje create_village.php
       if (currentUrl.includes('create_village.php')) {
         console.log('⚠️  VESNICE DOBYTA! Přesměrováno na vytvoření nové vesnice');
+        console.log(`   URL: ${currentUrl}`);
+
+        // Zkontroluj, jestli už jsme poslali notifikaci
+        const lastConqueredNotification = this.getLastNotification('conquered');
+        const now = Date.now();
+
+        // Pošli Discord notifikaci pouze pokud od poslední uplynulo více než 10 minut
+        if (!lastConqueredNotification || (now - lastConqueredNotification) > 10 * 60 * 1000) {
+          await this.sendDiscordNotification('conquered');
+          this.saveLastNotification('conquered', now);
+        } else {
+          console.log('⏭️  Conquered notifikace již odeslána - přeskakuji');
+        }
+
         return true;
       }
 
@@ -322,6 +338,28 @@ class NotificationsModule {
             text: '⚠️ Prohlížeč zůstane otevřený pro vyřešení'
           }
         };
+      } else if (type === 'conquered') {
+        content = '@everyone';
+        embed = {
+          title: '🏴 VESNICE DOBYTA!',
+          description: `Účet **${account.username}** přišel o vesnici!`,
+          color: 0xFF4500, // Oranžovo-červená
+          fields: [
+            {
+              name: '🌍 Svět',
+              value: account.world || 'Neznámý',
+              inline: true
+            },
+            {
+              name: '⏰ Čas dobytí',
+              value: new Date().toLocaleString('cs-CZ'),
+              inline: true
+            }
+          ],
+          footer: {
+            text: '⚠️ Prohlížeč otevřen pro vytvoření nové vesnice'
+          }
+        };
       } else if (type === 'attack') {
         content = '@everyone';
 
@@ -413,6 +451,9 @@ class NotificationsModule {
       return process.env.DISCORD_WEBHOOK_CAPTCHA || null;
     } else if (type === 'attack') {
       return process.env.DISCORD_WEBHOOK_ATTACK || null;
+    } else if (type === 'conquered') {
+      // Pro dobytí vesnice použijeme CAPTCHA webhook (stejná urgentnost)
+      return process.env.DISCORD_WEBHOOK_CAPTCHA || null;
     }
     return null;
   }
