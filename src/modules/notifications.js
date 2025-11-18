@@ -79,6 +79,18 @@ class NotificationsModule {
               const arrivalCountdown = arrivalSpan?.textContent.trim() || '-';
               const arrivalTimestamp = arrivalSpan?.dataset.endtime || null;
 
+              // Převedení timestampu na čitelný formát
+              const arrivalTime = arrivalTimestamp
+                ? new Date(Number(arrivalTimestamp) * 1000).toLocaleString('cs-CZ', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                  })
+                : '-';
+
               // Útočník - hledáme link s jménem hráče
               let attacker = 'Neznámý';
               const attackerLink = row.querySelector('a[href*="info_player"]');
@@ -102,6 +114,8 @@ class NotificationsModule {
                 origin: origin,
                 arrival_countdown: arrivalCountdown,
                 arrival_timestamp: arrivalTimestamp,
+                arrival_time: arrivalTime,  // Formátovaný čas pro Discord
+                countdown: arrivalCountdown, // Alias pro Discord
                 impact: name  // Název útoku = dopad
               };
             } catch (e) {
