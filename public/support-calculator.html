@@ -730,10 +730,17 @@
                 let actions = '';
 
                 if (hasUnits) {
-                    // Zobrazit všechny jednotky, které se pošlou
-                    const unitsDisplay = result.unitsToSend.map(unit => `
-                        <img src="/images/unit_${unit}.png" class="unit-icon" alt="${UNIT_NAMES[unit]}" title="${UNIT_NAMES[unit]}">
-                    `).join('');
+                    // Zobrazit všechny jednotky, které se pošlou včetně počtu
+                    const unitsInfo = account.units_info ? JSON.parse(account.units_info) : {};
+                    const unitsDisplay = result.unitsToSend.map(unit => {
+                        const count = unitsInfo[unit]?.inVillages || 0;
+                        return `
+                            <div style="display: inline-flex; align-items: center; margin-right: 10px;">
+                                <img src="/images/unit_${unit}.png" class="unit-icon" alt="${UNIT_NAMES[unit]}" title="${UNIT_NAMES[unit]}">
+                                <span style="margin-left: 4px; font-weight: 600;">${count}</span>
+                            </div>
+                        `;
+                    }).join('');
 
                     unitDisplay = `
                         <div class="unit-info">
