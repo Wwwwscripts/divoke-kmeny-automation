@@ -7,11 +7,25 @@
  * Language-independent implementation
  */
 
+import logger from '../logger.js';
+
 class PaladinModule {
   constructor(page, db, accountId) {
     this.page = page;
     this.db = db;
     this.accountId = accountId;
+    this.accountName = null;
+  }
+
+  /**
+   * Získá username pro logging
+   */
+  getAccountName() {
+    if (!this.accountName) {
+      const account = this.db.getAccountById(this.accountId);
+      this.accountName = account?.username || `ID:${this.accountId}`;
+    }
+    return this.accountName;
   }
 
   /**
@@ -47,7 +61,7 @@ class PaladinModule {
       await this.page.waitForTimeout(1500);
       return true;
     } catch (error) {
-      console.error('❌ Error navigating to statue:', error.message);
+      logger.error('Chyba při přechodu do sochy', this.getAccountName(), error);
       return false;
     }
   }
@@ -98,7 +112,7 @@ class PaladinModule {
         return { state: 'unknown', details: 'Could not determine paladin state' };
       });
     } catch (error) {
-      console.error('❌ Error detecting paladin state:', error.message);
+      logger.error('Chyba při detekci stavu paladina', this.getAccountName(), error);
       return { state: 'error', details: error.message };
     }
   }
@@ -108,8 +122,6 @@ class PaladinModule {
    */
   async recruitPaladin() {
     try {
-      console.log('🎖️  Recruiting new paladin...');
-
       const success = await this.page.evaluate(() => {
         const recruitButton = document.querySelector('a.knight_recruit_launch');
         if (recruitButton) {
@@ -130,27 +142,24 @@ class PaladinModule {
       });
 
       if (!success) {
-        console.log('❌ Recruit button not found');
         return { success: false, action: 'recruit' };
       }
 
-      console.log('✅ Recruit button clicked');
-      console.log('⏳ Waiting for confirmation popup...');
       await this.page.waitForTimeout(1500);
 
       // Confirm recruitment
       const confirmed = await this.confirmPopup();
 
       if (confirmed) {
-        console.log('✅ Paladin recruitment started');
+        // LOGUJ AKCI
+        logger.paladin(this.getAccountName(), 'Rekrutování', 'Zahájeno');
         return { success: true, action: 'recruit', message: 'Recruitment started' };
       }
 
-      console.log('❌ Confirmation failed');
       return { success: false, action: 'recruit', message: 'Confirmation failed' };
 
     } catch (error) {
-      console.error('❌ Error recruiting paladin:', error.message);
+      logger.error('Chyba při rekrutování paladina', this.getAccountName(), error);
       return { success: false, action: 'recruit', error: error.message };
     }
   }
@@ -160,8 +169,6 @@ class PaladinModule {
    */
   async revivePaladin() {
     try {
-      console.log('💀 Reviving dead paladin...');
-
       const success = await this.page.evaluate(() => {
         const reviveButton = document.querySelector('a.knight_revive_launch');
         if (reviveButton) {
@@ -182,27 +189,24 @@ class PaladinModule {
       });
 
       if (!success) {
-        console.log('❌ Revive button not found');
         return { success: false, action: 'revive' };
       }
 
-      console.log('✅ Revive button clicked');
-      console.log('⏳ Waiting for confirmation popup...');
       await this.page.waitForTimeout(1500);
 
       // Confirm revival
       const confirmed = await this.confirmPopup();
 
       if (confirmed) {
-        console.log('✅ Paladin revival started');
+        // LOGUJ AKCI
+        logger.paladin(this.getAccountName(), 'Oživení', 'Zahájeno');
         return { success: true, action: 'revive', message: 'Revival started' };
       }
 
-      console.log('❌ Confirmation failed');
       return { success: false, action: 'revive', message: 'Confirmation failed' };
 
     } catch (error) {
-      console.error('❌ Error reviving paladin:', error.message);
+      logger.error('Chyba při oživování paladina', this.getAccountName(), error);
       return { success: false, action: 'revive', error: error.message };
     }
   }
@@ -213,31 +217,8 @@ class PaladinModule {
   async confirmPopup() {
     try {
       // Wait for popup to appear
-      console.log('⏳ Waiting for popup to appear...');
       await this.page.waitForSelector('.popup_box_container, .popup_box', { timeout: 5000 });
       await this.page.waitForTimeout(1000); // Extra wait for popup to fully load
-
-      // Debug: Check what's in the popup
-      const debugInfo = await this.page.evaluate(() => {
-        const popup = document.querySelector('.popup_box_container, .popup_box');
-        const allButtons = popup ? popup.querySelectorAll('a, button') : [];
-
-        const buttons = Array.from(allButtons).map(btn => ({
-          tag: btn.tagName,
-          className: btn.className,
-          id: btn.id,
-          text: btn.textContent.trim(),
-          href: btn.href || null
-        }));
-
-        return { popupFound: !!popup, buttons };
-      });
-
-      console.log(`📋 Popup found: ${debugInfo.popupFound}`);
-      console.log(`📋 Buttons in popup: ${debugInfo.buttons.length}`);
-      debugInfo.buttons.forEach((btn, i) => {
-        console.log(`  ${i + 1}. ${btn.tag} class="${btn.className}" id="${btn.id}" text="${btn.text}"`);
-      });
 
       // Try to click the confirmation button
       const result = await this.page.evaluate(() => {
@@ -271,29 +252,13 @@ class PaladinModule {
       });
 
       if (result.success) {
-        console.log(`✅ Clicked confirmation button: ${result.selector}`);
         await this.page.waitForTimeout(2000); // Wait for action to process
-
-        // Check if popup closed (success indicator)
-        const popupStillExists = await this.page.evaluate(() => {
-          const popup = document.querySelector('.popup_box_container, .popup_box');
-          return !!popup;
-        });
-
-        if (!popupStillExists) {
-          console.log('✅ Popup closed - action confirmed');
-          return true;
-        } else {
-          console.log('⚠️  Popup still open - checking if action was processed...');
-          await this.page.waitForTimeout(1000);
-          return true; // Assume success even if popup didn't close immediately
-        }
+        return true;
       }
 
-      console.log('❌ No confirmation button found');
       return false;
     } catch (error) {
-      console.error('❌ Error confirming popup:', error.message);
+      logger.error('Chyba při potvrzování popup', this.getAccountName(), error);
       return false;
     }
   }
@@ -318,7 +283,6 @@ class PaladinModule {
 
       return confirmed;
     } catch (error) {
-      console.error('❌ Error confirming skill learning:', error.message);
       return false;
     }
   }
@@ -359,7 +323,6 @@ class PaladinModule {
         return skills;
       });
     } catch (error) {
-      console.error('❌ Error getting available skills:', error.message);
       return [];
     }
   }
@@ -367,10 +330,8 @@ class PaladinModule {
   /**
    * Learn a specific skill
    */
-  async learnSkill(skillIndex) {
+  async learnSkill(skillIndex, skillInfo) {
     try {
-      console.log(`📚 Learning skill ${skillIndex}...`);
-
       // Click on the skill
       const clicked = await this.page.evaluate((index) => {
         const learnableSkills = document.querySelectorAll('.skill_node.learnable');
@@ -382,7 +343,6 @@ class PaladinModule {
       }, skillIndex);
 
       if (!clicked) {
-        console.log(`❌ Skill ${skillIndex} not found or not clickable`);
         return false;
       }
 
@@ -393,18 +353,31 @@ class PaladinModule {
       const confirmed = await this.confirmSkillLearning();
 
       if (confirmed) {
-        console.log(`✅ Skill ${skillIndex} learned`);
+        // LOGUJ AKCI
+        const skillName = this.getSkillName(skillInfo.type);
+        logger.paladin(this.getAccountName(), skillName, 'Naučeno');
         await this.page.waitForTimeout(1000);
         return true;
       }
 
-      console.log(`❌ Failed to confirm skill ${skillIndex}`);
       return false;
 
     } catch (error) {
-      console.error(`❌ Error learning skill ${skillIndex}:`, error.message);
+      logger.error('Chyba při učení skillu paladina', this.getAccountName(), error);
       return false;
     }
+  }
+
+  /**
+   * Přeloží typ skillu na lidsky čitelný název
+   */
+  getSkillName(skillType) {
+    const names = {
+      'attack': 'Útok',
+      'defense': 'Obrana',
+      'village': 'Vesnice'
+    };
+    return names[skillType] || skillType;
   }
 
   /**
@@ -412,8 +385,6 @@ class PaladinModule {
    */
   async learnAllSkills() {
     try {
-      console.log('🎓 Checking for available skills...');
-
       let totalLearned = 0;
       let maxAttempts = 20; // Prevent infinite loops
       let attempts = 0;
@@ -430,20 +401,15 @@ class PaladinModule {
         const skills = await this.getAvailableSkills();
 
         if (skills.length === 0) {
-          console.log('✅ No more skills to learn');
           break;
         }
 
-        console.log(`📋 Found ${skills.length} available skill(s)`);
-
-        // Learn the first available skill
-        const success = await this.learnSkill(0);
+        // Learn the first available skill (pass skill info for logging)
+        const success = await this.learnSkill(0, skills[0]);
 
         if (success) {
           totalLearned++;
-          console.log(`✅ Total skills learned: ${totalLearned}`);
         } else {
-          console.log('❌ Failed to learn skill, stopping');
           break;
         }
 
@@ -458,7 +424,7 @@ class PaladinModule {
       };
 
     } catch (error) {
-      console.error('❌ Error learning skills:', error.message);
+      logger.error('Chyba při učení skillů paladina', this.getAccountName(), error);
       return { success: false, error: error.message };
     }
   }
@@ -488,7 +454,6 @@ class PaladinModule {
         return null;
       });
     } catch (error) {
-      console.error('❌ Error getting skill points:', error.message);
       return null;
     }
   }
@@ -498,8 +463,6 @@ class PaladinModule {
    */
   async execute() {
     try {
-      console.log('🎖️  Starting Paladin module...');
-
       // Navigate to statue
       if (!await this.goToStatue()) {
         return {
@@ -511,7 +474,6 @@ class PaladinModule {
 
       // Detect paladin state
       const stateInfo = await this.detectPaladinState();
-      console.log(`🔍 Paladin state: ${stateInfo.state} - ${stateInfo.details}`);
 
       // Save state to database
       this.db.updateAccountInfo(this.accountId, {
@@ -522,7 +484,7 @@ class PaladinModule {
       // Handle different states
       switch (stateInfo.state) {
         case 'not_recruited':
-          // Recruit new paladin
+          // Recruit new paladin (logger.paladin() je volán uvnitř recruitPaladin())
           const recruitResult = await this.recruitPaladin();
           return {
             ...recruitResult,
@@ -532,7 +494,6 @@ class PaladinModule {
 
         case 'recruiting':
           // Paladin is being recruited, wait
-          console.log('⏳ Paladin is being recruited, waiting...');
           return {
             success: true,
             state: 'recruiting',
@@ -541,7 +502,7 @@ class PaladinModule {
           };
 
         case 'dead':
-          // Revive paladin
+          // Revive paladin (logger.paladin() je volán uvnitř revivePaladin())
           const reviveResult = await this.revivePaladin();
           return {
             ...reviveResult,
@@ -551,7 +512,6 @@ class PaladinModule {
 
         case 'reviving':
           // Paladin is being revived, wait
-          console.log('⏳ Paladin is being revived, waiting...');
           return {
             success: true,
             state: 'reviving',
@@ -560,14 +520,8 @@ class PaladinModule {
           };
 
         case 'alive':
-          // Learn available skills
-          console.log('✅ Paladin is alive, checking skills...');
-
+          // Learn available skills (logger.paladin() je volán uvnitř learnSkill())
           const skillPoints = await this.getSkillPoints();
-          if (skillPoints) {
-            console.log(`📊 Skill points: ${skillPoints.available} available (${skillPoints.used}/${skillPoints.total} used)`);
-          }
-
           const learnResult = await this.learnAllSkills();
 
           return {
@@ -578,7 +532,6 @@ class PaladinModule {
           };
 
         default:
-          console.log('❓ Unknown paladin state');
           return {
             success: false,
             state: 'unknown',
@@ -588,7 +541,7 @@ class PaladinModule {
       }
 
     } catch (error) {
-      console.error('❌ Error in Paladin module:', error.message);
+      logger.error('Chyba v Paladin modulu', this.getAccountName(), error);
       return {
         success: false,
         error: error.message,

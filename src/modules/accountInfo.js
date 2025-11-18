@@ -2,11 +2,25 @@
  * Modul pro zjišťování informací o účtu
  */
 
+import logger from '../logger.js';
+
 class AccountInfoModule {
   constructor(page, db, accountId) {
     this.page = page;
     this.db = db;
     this.accountId = accountId;
+    this.accountName = null;
+  }
+
+  /**
+   * Získá username pro logging
+   */
+  getAccountName() {
+    if (!this.accountName) {
+      const account = this.db.getAccountById(this.accountId);
+      this.accountName = account?.username || `ID:${this.accountId}`;
+    }
+    return this.accountName;
   }
 
   /**
@@ -24,7 +38,7 @@ class AccountInfoModule {
 
       return resources;
     } catch (error) {
-      console.error('❌ Chyba při zjišťování surovin:', error.message);
+      logger.error('Chyba při zjišťování surovin', this.getAccountName(), error);
       return { wood: 0, clay: 0, iron: 0 };
     }
   }
@@ -48,7 +62,7 @@ class AccountInfoModule {
 
       return population;
     } catch (error) {
-      console.error('❌ Chyba při zjišťování populace:', error.message);
+      logger.error('Chyba při zjišťování populace', this.getAccountName(), error);
       return '0/0';
     }
   }
@@ -63,8 +77,7 @@ class AccountInfoModule {
         const rankingLink = document.querySelector('a[href*="screen=ranking"]');
         if (rankingLink && rankingLink.parentElement) {
           const text = rankingLink.parentElement.textContent;
-          console.log('Text parent elementu žebříčku:', text);
-          
+
           // Pattern: "Žebříček (pozice|body P)"
           // Příklad: "Žebříček (26.|21.909 P)"
           const match = text.match(/Žebříček\s*\([^|]*\|([0-9.]+)\s*P\)/);
@@ -72,19 +85,16 @@ class AccountInfoModule {
             // Odstraníme tečky (tisícové oddělovače) a převedeme na číslo
             const pointsStr = match[1].replace(/\./g, '');
             const points = parseInt(pointsStr);
-            console.log('Nalezeny body:', points);
             return points;
           }
         }
 
-        console.log('⚠️ Body nebyly nalezeny');
         return 0;
       });
 
-      console.log('⭐ Body:', points);
       return points;
     } catch (error) {
-      console.error('❌ Chyba při zjišťování bodů:', error.message);
+      logger.error('Chyba při zjišťování bodů', this.getAccountName(), error);
       return 0;
     }
   }
@@ -106,10 +116,9 @@ class AccountInfoModule {
         };
       });
 
-      console.log(`📍 Souřadnice: ${villageInfo.coord} (${villageInfo.continent})`);
       return villageInfo;
     } catch (error) {
-      console.error('❌ Chyba při zjišťování souřadnic:', error.message);
+      logger.error('Chyba při zjišťování souřadnic', this.getAccountName(), error);
       return null;
     }
   }
@@ -128,7 +137,6 @@ class AccountInfoModule {
       const domain = worldMatch[2];
 
       if (!currentUrl.includes('screen=main')) {
-        console.log('🌐 Přecházím na hlavní obrazovku pro zjištění hradeb...');
         await this.page.goto(`https://${world}.${domain}/game.php?screen=main`, {
           waitUntil: 'domcontentloaded'
         });
@@ -141,32 +149,27 @@ class AccountInfoModule {
       const wallLevel = await this.page.evaluate(() => {
         const wallRow = document.querySelector('[id*="main_buildrow_wall"]');
         if (!wallRow) {
-          console.log('Hradby nenalezeny v buildings');
           return 0;
         }
 
         const text = wallRow.textContent;
-        console.log('Text řádku hradeb:', text);
-        
+
         // Pattern: "Stupeň 20" nebo "Úroveň 20" nebo "Level 20"
-        const match = text.match(/Stupeň\s+(\d+)/i) || 
+        const match = text.match(/Stupeň\s+(\d+)/i) ||
                       text.match(/Úroveň\s+(\d+)/i) ||
                       text.match(/Level\s+(\d+)/i);
-        
+
         if (match) {
           const level = parseInt(match[1]);
-          console.log('Nalezena úroveň hradeb:', level);
           return level;
         }
 
-        console.log('Nepodařilo se parsovat úroveň hradeb');
         return 0;
       });
 
-      console.log('🏰 Úroveň hradeb:', wallLevel);
       return wallLevel;
     } catch (error) {
-      console.error('❌ Chyba při zjišťování hradeb:', error.message);
+      logger.error('Chyba při zjišťování hradeb', this.getAccountName(), error);
       return 0;
     }
   }
@@ -176,18 +179,10 @@ class AccountInfoModule {
    */
   async collectInfo() {
     try {
-      console.log('📊 Sbírám informace o účtu...');
-
       const villageInfo = await this.getVillageCoordinates();
-
       const resources = await this.getResources();
-      console.log('📦 Suroviny:', resources);
-
       const population = await this.getPopulation();
-      console.log('👥 Populace:', population);
-
       const points = await this.getPoints();
-
       const wallLevel = await this.getWallLevel();
 
       const [popCurrent, popMax] = population.split('/').map(p => parseInt(p.trim()) || 0);
@@ -210,8 +205,6 @@ class AccountInfoModule {
         continent: villageInfo?.continent
       });
 
-      console.log('✅ Statistiky aktualizovány pro účet ID:', this.accountId);
-
       return {
         resources,
         population,
@@ -220,7 +213,7 @@ class AccountInfoModule {
         villageInfo
       };
     } catch (error) {
-      console.error('❌ Chyba při sbírání informací:', error.message);
+      logger.error('Chyba při sbírání informací', this.getAccountName(), error);
       return null;
     }
   }
