@@ -300,12 +300,13 @@ class Automator {
         // Zavři headless browser
         await this.browserPool.closeContext(context, browserKey);
 
-        // Otevři viditelný prohlížeč pro manuální přihlášení
+        // Otevři viditelný prohlížeč pro manuální přihlášení (NOVÝ ÚČET)
         if (!this.openBrowserWindows.has(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro přihlášení: ${account.username}`);
           this.openBrowserWindows.add(account.id);
 
-          const browserInfo = await this.browserManager.testConnection(account.id);
+          // autoSaveAndClose = true (automaticky zavře po přihlášení)
+          const browserInfo = await this.browserManager.testConnection(account.id, true);
           if (browserInfo) {
             // Sleduj zavření browseru
             browserInfo.browser.on('disconnected', () => {
@@ -314,8 +315,6 @@ class Automator {
               console.log(`✅ Účet ${account.username} odebrán z otevřených oken`);
             });
           }
-
-          console.log(`⚠️  Viditelný prohlížeč otevřen - přihlaste se a zavřete okno`);
         } else {
           console.log(`⏭️  Viditelný prohlížeč už je otevřený pro ${account.username} - přeskakuji`);
         }
@@ -354,12 +353,13 @@ class Automator {
         // Zavři headless browser
         await this.browserPool.closeContext(context, browserKey);
 
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený
+        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (CAPTCHA)
         if (!this.openBrowserWindows.has(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
           this.openBrowserWindows.add(account.id);
 
-          const browserInfo = await this.browserManager.testConnection(account.id);
+          // autoSaveAndClose = false (uživatel musí ručně zavřít)
+          const browserInfo = await this.browserManager.testConnection(account.id, false);
           if (browserInfo) {
             // Sleduj zavření browseru
             browserInfo.browser.on('disconnected', () => {
@@ -388,12 +388,13 @@ class Automator {
           village_conquered_at: new Date().toISOString()
         });
 
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený
+        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (DOBYTÁ VESNICE)
         if (!this.openBrowserWindows.has(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro vytvoření nové vesnice`);
           this.openBrowserWindows.add(account.id);
 
-          const browserInfo = await this.browserManager.testConnection(account.id);
+          // autoSaveAndClose = false (uživatel musí ručně zavřít)
+          const browserInfo = await this.browserManager.testConnection(account.id, false);
           if (browserInfo) {
             // Sleduj zavření browseru
             browserInfo.browser.on('disconnected', () => {
