@@ -6,7 +6,8 @@ import RecruitModule from './modules/recruit.js';
 import BuildingModule from './modules/building.js';
 import ResearchModule from './modules/research.js';
 import NotificationsModule from './modules/notifications.js';
-import IncomingAttacksModule from './modules/incomingAttacks.js'; 
+import IncomingAttacksModule from './modules/incomingAttacks.js';
+import SupportModule from './modules/support.js'; 
 
 class Automator {
   constructor() {
@@ -210,9 +211,11 @@ class Automator {
         if (!recruitWaitUntil || Date.now() >= recruitWaitUntil) {
           console.log(`🎯 Rekrutování zapnuto - šablona: ${recruitSettings.template}`);
 
-          // Nejdřív získáme aktuální stav jednotek (jen když se bude rekrutovat)
+          // Nejdřív získáme aktuální stav jednotek (pomocí vylepšeného support modulu)
+          const supportModule = new SupportModule(page, this.db, account.id);
+          await supportModule.execute();
+
           const recruitModule = new RecruitModule(page, this.db, account.id);
-          await recruitModule.collectUnitsInfo();
 
           const recruitResult = await recruitModule.startRecruiting(recruitSettings.template);
 
