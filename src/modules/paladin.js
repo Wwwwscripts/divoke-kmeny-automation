@@ -112,9 +112,18 @@ class PaladinModule {
 
       const success = await this.page.evaluate(() => {
         const recruitButton = document.querySelector('a.knight_recruit_launch');
-        console.log('Found recruit button:', !!recruitButton);
         if (recruitButton) {
+          // Use both click methods to ensure it works
           recruitButton.click();
+
+          // Alternative: trigger click event
+          const clickEvent = new MouseEvent('click', {
+            view: window,
+            bubbles: true,
+            cancelable: true
+          });
+          recruitButton.dispatchEvent(clickEvent);
+
           return true;
         }
         return false;
@@ -125,8 +134,9 @@ class PaladinModule {
         return { success: false, action: 'recruit' };
       }
 
+      console.log('✅ Recruit button clicked');
       console.log('⏳ Waiting for confirmation popup...');
-      await this.page.waitForTimeout(2000); // Increased wait time
+      await this.page.waitForTimeout(1500);
 
       // Confirm recruitment
       const confirmed = await this.confirmPopup();
@@ -154,9 +164,18 @@ class PaladinModule {
 
       const success = await this.page.evaluate(() => {
         const reviveButton = document.querySelector('a.knight_revive_launch');
-        console.log('Found revive button:', !!reviveButton);
         if (reviveButton) {
+          // Use both click methods to ensure it works
           reviveButton.click();
+
+          // Alternative: trigger click event
+          const clickEvent = new MouseEvent('click', {
+            view: window,
+            bubbles: true,
+            cancelable: true
+          });
+          reviveButton.dispatchEvent(clickEvent);
+
           return true;
         }
         return false;
@@ -167,8 +186,9 @@ class PaladinModule {
         return { success: false, action: 'revive' };
       }
 
+      console.log('✅ Revive button clicked');
       console.log('⏳ Waiting for confirmation popup...');
-      await this.page.waitForTimeout(2000); // Increased wait time
+      await this.page.waitForTimeout(1500);
 
       // Confirm revival
       const confirmed = await this.confirmPopup();
