@@ -600,7 +600,7 @@ class Automator {
         // Otevři viditelný prohlížeč pro manuální přihlášení (NOVÝ ÚČET) - přidej do fronty
         if (!this.isBrowserActive(account.id)) {
           console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro přihlášení: ${account.username}`);
-          await this.browserQueue.enqueue(account.id, 'new_account', true);
+          await this.browserQueue.enqueue(account.id, 'new_account', false); // false = browser se NEZAVŘE automaticky
         } else {
           console.log(`⏭️  Viditelný prohlížeč už je otevřený pro ${account.username} - přeskakuji`);
         }
