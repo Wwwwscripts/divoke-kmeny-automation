@@ -11,6 +11,11 @@ class BrowserQueue {
     this.activeBrowsers = new Map(); // accountId => { browser, context, page, reason }
     this.processing = false;
     this.onCloseCallback = null; // Callback volaný při zavření browseru
+
+    // Spusť periodický cleanup každých 30 sekund
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupDisconnectedBrowsers();
+    }, 30000);
   }
 
   /**
@@ -28,6 +33,9 @@ class BrowserQueue {
    * @param {boolean} autoClose - Zda automaticky zavřít po přihlášení
    */
   async enqueue(accountId, reason = 'manual', autoClose = false) {
+    // Nejdřív vyčisti odpojené browsery
+    this.cleanupDisconnectedBrowsers();
+
     // Zkontroluj zda už není v aktivních browserech
     if (this.activeBrowsers.has(accountId)) {
       logger.info(`[BrowserQueue] Browser pro účet ${accountId} je již otevřený, ignoruji`);
@@ -63,6 +71,9 @@ class BrowserQueue {
     this.processing = true;
 
     try {
+      // Nejdřív vyčisti odpojené browsery
+      this.cleanupDisconnectedBrowsers();
+
       while (this.queue.length > 0 && this.activeBrowsers.size < this.maxConcurrent) {
         const item = this.queue.shift();
         await this.openBrowser(item);
@@ -167,9 +178,38 @@ class BrowserQueue {
   }
 
   /**
+   * Vyčistí odpojené browsery z activeBrowsers
+   */
+  cleanupDisconnectedBrowsers() {
+    let cleaned = 0;
+    for (const [accountId, browserInfo] of this.activeBrowsers.entries()) {
+      // Zkontroluj jestli je browser stále připojený
+      if (!browserInfo.browser || !browserInfo.browser.isConnected()) {
+        logger.info(`[BrowserQueue] 🧹 Čistím odpojený browser pro účet ${accountId}`);
+        this.activeBrowsers.delete(accountId);
+        cleaned++;
+      }
+    }
+    if (cleaned > 0) {
+      logger.info(`[BrowserQueue] 🧹 Vyčištěno ${cleaned} odpojených browserů, aktivní: ${this.activeBrowsers.size}/${this.maxConcurrent}`);
+    }
+    return cleaned;
+  }
+
+  /**
+   * Zkontroluje zda je browser ve frontě
+   */
+  isInQueue(accountId) {
+    return this.queue.some(item => item.accountId === accountId);
+  }
+
+  /**
    * Zkontroluje zda je browser aktivní pro daný účet
    */
   isBrowserActive(accountId) {
+    // Nejdřív vyčisti odpojené browsery
+    this.cleanupDisconnectedBrowsers();
+
     const browserInfo = this.activeBrowsers.get(accountId);
 
     if (!browserInfo) {
@@ -208,6 +248,12 @@ class BrowserQueue {
    */
   async closeAll() {
     logger.info(`[BrowserQueue] Zavírám všechny aktivní browsery (${this.activeBrowsers.size})`);
+
+    // Zastaví periodický cleanup
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
 
     const closePromises = [];
     for (const [accountId, browserInfo] of this.activeBrowsers) {
