@@ -198,6 +198,20 @@ app.delete('/api/accounts/:id', async (req, res) => {
   }
 });
 
+// Pozastavit/obnovit účet
+app.put('/api/accounts/:id/pause', async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    const { paused } = req.body;
+
+    db.updateAccountPause(accountId, paused);
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.put('/api/accounts/:id/recruit', async (req, res) => {
   try {
     const accountId = parseInt(req.params.id);
