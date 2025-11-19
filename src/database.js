@@ -220,8 +220,7 @@ class DatabaseManager {
   // Získat všechny aktivní účty
   getAllActiveAccounts() {
     const data = this._loadAccounts();
-    // TEST: Omezit na prvních 10 účtů
-    return data.accounts.filter(a => a.active === 1 && !a.paused).slice(0, 10);
+    return data.accounts.filter(a => a.active === 1 && !a.paused);
   }
 
   // Aktualizovat cookies pro účet

@@ -2,7 +2,7 @@
  * Shared Browser Pool - Sdílení browser instancí podle proxy
  * Pro účty se stejnou proxy sdílí browser (šetří RAM)
  */
-import { chromium } from 'playwright';
+import { webkit } from 'playwright';
 
 class SharedBrowserPool {
   constructor(db) {
@@ -24,15 +24,11 @@ class SharedBrowserPool {
     // Vytvoř nový browser
     const launchOptions = {
       headless: true,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--disable-dev-shm-usage',
-        '--no-sandbox'
-      ]
+      // WebKit nepotřebuje Chrome-specific args
     };
 
     // Proxy se nastavuje až na context level
-    const browser = await chromium.launch(launchOptions);
+    const browser = await webkit.launch(launchOptions);
 
     this.browsers.set(key, {
       browser,
@@ -55,7 +51,7 @@ class SharedBrowserPool {
 
     const contextOptions = {
       viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
       locale: 'cs-CZ',
       timezoneId: 'Europe/Prague',
     };
@@ -73,7 +69,27 @@ class SharedBrowserPool {
     // Vytvoř nový context
     const context = await browser.newContext(contextOptions);
 
-    // NEPOUŽÍVAT cookies z DB - spoléháme na perzistentní session v browseru
+    // Přidej cookies
+    if (account.cookies && account.cookies !== 'null') {
+      try {
+        let cookies = JSON.parse(account.cookies);
+        // Zajistit že cookies jsou pole (Playwright vyžaduje array)
+        if (!Array.isArray(cookies)) {
+          // Pokud jsou cookies null nebo undefined, přeskoč
+          if (cookies === null || cookies === undefined) {
+            console.warn(`⚠️  Cookies pro ${account.username} jsou null/undefined - přeskakuji`);
+          } else {
+            console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
+            cookies = Object.values(cookies);
+            await context.addCookies(cookies);
+          }
+        } else {
+          await context.addCookies(cookies);
+        }
+      } catch (error) {
+        console.error('❌ Chyba při načítání cookies:', error.message);
+      }
+    }
 
     // Zaznamenej context (s accountId pro pozdější ukládání cookies)
     const browserData = this.browsers.get(browserKey);
