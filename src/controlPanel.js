@@ -307,10 +307,21 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
     // Ulož browser do mapy aktivních browserů
     setBrowser(accountId, { browser, context, page, account });
 
-    // Při zavření browseru ho odstraň z mapy
-    browser.on('disconnected', () => {
-      console.log(`🔌 Browser pro účet ${accountId} (${account.username}) byl zavrén`);
-      removeBrowser(accountId);
+    // Při zavření browseru ulož cookies a odstraň ho z mapy
+    browser.on('disconnected', async () => {
+      try {
+        // Ulož cookies před zavřením
+        const cookies = await context.cookies();
+        if (cookies && cookies.length > 0) {
+          db.updateCookies(accountId, cookies);
+          console.log(`💾 Cookies uloženy pro účet ${accountId} (${account.username})`);
+        }
+      } catch (error) {
+        console.error(`❌ Chyba při ukládání cookies při zavření browseru:`, error.message);
+      } finally {
+        console.log(`🔌 Browser pro účet ${accountId} (${account.username}) byl zavrén`);
+        removeBrowser(accountId);
+      }
     });
 
     res.json({ success: true });
