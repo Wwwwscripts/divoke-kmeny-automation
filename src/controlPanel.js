@@ -2,14 +2,15 @@ import express from 'express';
 import { chromium } from 'playwright';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
-import BrowserQueue from './browserQueue.js';
 
 const app = express();
 const db = new DatabaseManager();
 const browserManager = new BrowserManager(db);
-const browserQueue = new BrowserQueue(browserManager, 5); // Max 5 visible browserů najednou
 
-// Mapa aktivních browserů (accountId => { browser, context, page })
+// Mapa aktivních visible browserů (accountId => { browser, context, page })
+const visibleBrowsers = new Map();
+
+// Mapa aktivních headless browserů (accountId => { browser, context, page })
 const activeBrowsers = new Map();
 
 // Pomocná funkce pro získání aktivního browseru
@@ -271,30 +272,40 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
       return res.status(404).json({ error: 'Account not found' });
     }
 
-    // Zkontroluj zda už není browser aktivní nebo ve frontě
-    if (browserQueue.isBrowserActive(accountId)) {
+    // Zkontroluj zda už není browser aktivní
+    const existingBrowser = visibleBrowsers.get(accountId);
+    if (existingBrowser && existingBrowser.browser && existingBrowser.browser.isConnected()) {
       return res.json({
         success: true,
-        message: 'Browser is already open',
-        queued: false
+        message: 'Browser is already open'
       });
     }
 
-    // Přidej do fronty - automaticky se otevře když je místo
-    await browserQueue.enqueue(accountId, 'manual', false);
+    // Otevři browser přímo
+    console.log(`🖥️  [Control Panel] Otevírám visible browser pro účet ${accountId}`);
 
-    // Vrať status fronty
-    const status = browserQueue.getStatus();
-    const isActive = browserQueue.isBrowserActive(accountId);
+    const browserInfo = await browserManager.testConnection(accountId, false); // false = manuální kontrola
 
-    res.json({
-      success: true,
-      queued: !isActive,
-      queuePosition: isActive ? 0 : status.queued,
-      message: isActive
-        ? 'Browser opened successfully'
-        : `Browser queued (${status.active}/${status.maxConcurrent} active, ${status.queued} waiting)`
-    });
+    if (browserInfo) {
+      const { browser } = browserInfo;
+      visibleBrowsers.set(accountId, browserInfo);
+
+      // Sleduj zavření browseru
+      browser.on('disconnected', () => {
+        visibleBrowsers.delete(accountId);
+        console.log(`🔒 [Control Panel] Browser pro účet ${accountId} zavřen`);
+      });
+
+      res.json({
+        success: true,
+        message: 'Browser opened successfully'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to open browser'
+      });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

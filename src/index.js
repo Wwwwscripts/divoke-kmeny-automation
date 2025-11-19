@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
-import BrowserQueue from './browserQueue.js';
 import SharedBrowserPool from './sharedBrowserPool.js';
 import WorkerPool from './workerPool.js';
 import AccountInfoModule from './modules/accountInfo.js';
@@ -34,22 +33,12 @@ class Automator {
   constructor() {
     this.db = new DatabaseManager();
     this.browserManager = new BrowserManager(this.db);
-    this.browserQueue = new BrowserQueue(this.browserManager, 5); // Max 5 visible browserů najednou
     this.browserPool = new SharedBrowserPool(this.db);
     this.workerPool = new WorkerPool(100); // Max 100 procesů
     this.isRunning = false;
     this.accountWaitTimes = {}; // Per-account per-module timing
-    this.openBrowserWindows = new Map(); // DEPRECATED - používá se browserQueue.activeBrowsers
     this.captchaDetected = new Set(); // Účty s detekovanou CAPTCHA (aby se nespamovalo)
-
-    // Nastav callback pro zavření browseru - vyčisti captchaDetected
-    this.browserQueue.setOnCloseCallback((accountId, reason) => {
-      if (reason === 'captcha') {
-        this.captchaDetected.delete(accountId);
-        const account = this.db.getAccount(accountId);
-        console.log(`✅ [${account?.username || accountId}] CAPTCHA vyřešena - odebrán z CAPTCHA tracku`);
-      }
-    });
+    this.openBrowsers = new Map(); // Tracking otevřených visible browserů (accountId => browser)
 
     // Intervaly pro smyčky
     this.intervals = {
@@ -93,28 +82,28 @@ class Automator {
 
   /**
    * Zkontroluje jestli je browser pro daný účet opravdu ještě otevřený a připojený
-   * Používá browserQueue místo openBrowserWindows
    * @returns {boolean} true pokud je browser aktivní, false pokud ne
    */
   isBrowserActive(accountId) {
-    return this.browserQueue.isBrowserActive(accountId);
+    const browserInfo = this.openBrowsers.get(accountId);
+    if (!browserInfo) return false;
+
+    // Zkontroluj jestli je browser stále připojený
+    if (!browserInfo.browser || !browserInfo.browser.isConnected()) {
+      this.openBrowsers.delete(accountId);
+      return false;
+    }
+
+    return true;
   }
 
   /**
    * Zpracuj selhání přihlášení - smaž cookies a otevři browser
    */
   async handleFailedLogin(account) {
-    // Zkontroluj jestli už není browser otevřený NEBO ve frontě
-    const isActive = this.isBrowserActive(account.id);
-    const isQueued = this.browserQueue.isInQueue(account.id);
-
-    if (isActive) {
+    // Zkontroluj jestli už není browser otevřený
+    if (this.isBrowserActive(account.id)) {
       console.log(`⏭️  [${account.username}] Viditelný prohlížeč už je otevřený - přeskakuji`);
-      return;
-    }
-
-    if (isQueued) {
-      console.log(`⏭️  [${account.username}] Browser už je ve frontě - přeskakuji`);
       return;
     }
 
@@ -127,9 +116,26 @@ class Automator {
       this.db.updateCookies(account.id, null);
     }
 
-    // Otevři viditelný prohlížeč pro manuální přihlášení - přidej do fronty
-    console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro přihlášení: ${account.username}`);
-    await this.browserQueue.enqueue(account.id, 'bad_cookies', true); // true = browser se zavře automaticky po přihlášení
+    // Otevři viditelný prohlížeč přímo
+    console.log(`🖥️  Otevírám viditelný prohlížeč pro přihlášení: ${account.username}`);
+
+    try {
+      const browserInfo = await this.browserManager.testConnection(account.id, true); // true = auto-close po přihlášení
+
+      if (browserInfo) {
+        const { browser } = browserInfo;
+        this.openBrowsers.set(account.id, browserInfo);
+
+        // Sleduj zavření browseru
+        browser.on('disconnected', () => {
+          this.openBrowsers.delete(account.id);
+          this.captchaDetected.delete(account.id);
+          console.log(`🔒 [${account.username}] Browser zavřen`);
+        });
+      }
+    } catch (error) {
+      console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, error.message);
+    }
   }
 
   /**
@@ -653,12 +659,29 @@ class Automator {
           this.captchaDetected.add(account.id);
         }
 
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (CAPTCHA) - přidej do fronty
+        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (CAPTCHA)
         if (!this.isBrowserActive(account.id)) {
           if (isNewCaptcha) {
-            console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro vyřešení CAPTCHA`);
+            console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+
+            try {
+              const browserInfo = await this.browserManager.testConnection(account.id, false); // false = nezavře se auto
+
+              if (browserInfo) {
+                const { browser } = browserInfo;
+                this.openBrowsers.set(account.id, browserInfo);
+
+                // Sleduj zavření browseru
+                browser.on('disconnected', () => {
+                  this.openBrowsers.delete(account.id);
+                  this.captchaDetected.delete(account.id);
+                  console.log(`✅ [${account.username}] CAPTCHA vyřešena - browser zavřen`);
+                });
+              }
+            } catch (error) {
+              console.error(`❌ [${account.username}] Chyba při otevírání browseru pro CAPTCHA:`, error.message);
+            }
           }
-          await this.browserQueue.enqueue(account.id, 'captcha', false);
         }
         return;
       }
@@ -675,10 +698,26 @@ class Automator {
           village_conquered_at: new Date().toISOString()
         });
 
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (DOBYTÁ VESNICE) - přidej do fronty
+        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (DOBYTÁ VESNICE)
         if (!this.isBrowserActive(account.id)) {
-          console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro vytvoření nové vesnice`);
-          await this.browserQueue.enqueue(account.id, 'conquered', false);
+          console.log(`🖥️  Otevírám viditelný prohlížeč pro vytvoření nové vesnice`);
+
+          try {
+            const browserInfo = await this.browserManager.testConnection(account.id, false); // false = nezavře se auto
+
+            if (browserInfo) {
+              const { browser } = browserInfo;
+              this.openBrowsers.set(account.id, browserInfo);
+
+              // Sleduj zavření browseru
+              browser.on('disconnected', () => {
+                this.openBrowsers.delete(account.id);
+                console.log(`🔒 [${account.username}] Browser zavřen - vesnice vyřešena`);
+              });
+            }
+          } catch (error) {
+            console.error(`❌ [${account.username}] Chyba při otevírání browseru pro conquered:`, error.message);
+          }
         } else {
           console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
         }
