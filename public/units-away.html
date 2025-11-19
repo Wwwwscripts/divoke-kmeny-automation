@@ -625,19 +625,22 @@
         // Otevřít účet na stránce jednotek
         async function openAccount(accountId) {
             try {
-                const response = await fetch(`/api/accounts/${accountId}/browser`, {
-                    method: 'POST'
+                const response = await fetch(`/api/accounts/${accountId}/open-browser`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        url: '/game.php?screen=place&mode=units'
+                    })
                 });
 
                 const result = await response.json();
 
                 if (result.success) {
-                    // Přejdi na správnou stránku v browseru
                     const account = allAccounts.find(acc => acc.id === accountId);
                     if (account) {
-                        // Otevře se v prohlížeči - musíme poslat požadavek na backend
-                        // aby otevřel browser na správné URL
-                        alert(`✅ Prohlížeč otevřen pro ${account.username}\nPřejděte na screen=place&mode=units`);
+                        console.log(`✅ Prohlížeč otevřen pro ${account.username} na stránce jednotek`);
                     }
                 } else {
                     alert(`❌ Chyba: ${result.error}`);
