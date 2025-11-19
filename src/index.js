@@ -1091,12 +1091,12 @@ class Automator {
     console.log('='.repeat(70));
 
     // 1. Zastaví smyčky (nebudou spouštět nové úlohy)
-    console.log('\n📍 Krok 1/5: Zastavuji smyčky...');
+    console.log('\n📍 Krok 1/4: Zastavuji smyčky...');
     this.isRunning = false;
     console.log('✅ Smyčky zastaveny (nebudou spouštět nové úlohy)');
 
     // 2. Počkej na dokončení běžících úloh (max 30s)
-    console.log('\n📍 Krok 2/5: Čekám na dokončení běžících úloh...');
+    console.log('\n📍 Krok 2/4: Čekám na dokončení běžících úloh...');
     const completed = await this.workerPool.waitForCompletion(30000);
 
     if (!completed) {
@@ -1105,24 +1105,17 @@ class Automator {
       console.log(`   Vymazáno ${clearedCount} čekajících úloh`);
     }
 
-    // 3. Ulož cookies pro všechny otevřené headless contexty
-    console.log('\n📍 Krok 3/5: Ukládám cookies...');
-    try {
-      await this.browserPool.saveAllCookies();
-    } catch (error) {
-      console.error('❌ Chyba při ukládání cookies:', error.message);
-    }
-
-    // 4. Zavři všechny headless browsery
-    console.log('\n📍 Krok 4/5: Zavírám headless browsery...');
+    // 3. Zavři všechny headless browsery (bez ukládání cookies!)
+    console.log('\n📍 Krok 3/4: Zavírám headless browsery...');
+    console.log('ℹ️  Cookies se NEUKLÁDAJÍ - ukládá se pouze při manuálním přihlášení');
     try {
       await this.browserPool.closeAll();
     } catch (error) {
       console.error('❌ Chyba při zavírání browserů:', error.message);
     }
 
-    // 5. Zavři všechny visible browsery
-    console.log('\n📍 Krok 5/5: Zavírám visible browsery...');
+    // 4. Zavři všechny visible browsery
+    console.log('\n📍 Krok 4/4: Zavírám visible browsery...');
     let closedVisible = 0;
     for (const [accountId, browserInfo] of this.openBrowsers.entries()) {
       try {
