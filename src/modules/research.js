@@ -216,7 +216,9 @@ class ResearchModule {
           const hasCancelButton = !!row.querySelector('a.btn-cancel');
           const isGrey = sprite?.className.includes('_grey');
           const hasCross = sprite?.className.includes('_cross');
-          const hasMaxText = row.innerText.includes('Maximální počet výzkumů dosažen');
+          // Detekce max levelu - CZ: "Maximální počet výzkumů dosažen", SK: "Maximálny počet výskumov dosiahnutý"
+          const hasMaxText = row.innerText.includes('Maximální počet výzkumů dosažen') ||
+                             row.innerText.includes('Maximálny počet výskumov dosiahnutý');
 
           let canResearch = false;
           let isResearching = false;
