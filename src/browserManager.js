@@ -130,7 +130,7 @@ class BrowserManager {
     console.log('ℹ️  Prohlížeče se zavírají automaticky po zpracování každého účtu');
   }
 
-  async testConnection(accountId, autoSaveAndClose = false) {
+  async testConnection(accountId, autoSaveAndClose = false, targetUrl = null) {
     const account = this.db.getAccount(accountId);
 
     if (!account) {
@@ -203,8 +203,10 @@ class BrowserManager {
           sessionStorage.clear();
         });
 
-        console.log(`🌐 Načítám svět: ${account.world} (${domain}, ${locale})`);
-        await page.goto(`https://${account.world}.${domain}/game.php`, {
+        // Použij targetUrl pokud je zadaná, jinak game.php
+        const finalUrl = targetUrl || '/game.php';
+        console.log(`🌐 Načítám svět: ${account.world} (${domain}, ${locale}) - URL: ${finalUrl}`);
+        await page.goto(`https://${account.world}.${domain}${finalUrl}`, {
           waitUntil: 'domcontentloaded',
           timeout: 30000
         });

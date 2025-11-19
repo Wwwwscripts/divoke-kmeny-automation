@@ -267,6 +267,7 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
   try {
     const accountId = parseInt(req.params.id);
     const account = db.getAccount(accountId);
+    const { url } = req.body || {}; // Získej URL z body (pro navigaci na specifickou stránku)
 
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
@@ -283,6 +284,14 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
     // Zkontroluj zda už není browser aktivní
     const existingBrowser = visibleBrowsers.get(accountId);
     if (existingBrowser && existingBrowser.browser && existingBrowser.browser.isConnected()) {
+      // Pokud je browser už otevřený a máme URL, naviguj na ni
+      if (url && existingBrowser.page) {
+        const domain = db.getDomainForAccount(account);
+        const fullUrl = `https://${account.world}.${domain}${url}`;
+        console.log(`🔄 [Control Panel] Navigace na ${fullUrl}`);
+        await existingBrowser.page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      }
+
       return res.json({
         success: true,
         message: 'Browser is already open'
@@ -292,7 +301,7 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
     // Otevři browser přímo
     console.log(`🖥️  [Control Panel] Otevírám visible browser pro účet ${accountId}`);
 
-    const browserInfo = await browserManager.testConnection(accountId, false); // false = manuální kontrola
+    const browserInfo = await browserManager.testConnection(accountId, false, url); // false = manuální kontrola, url = navigace
 
     if (browserInfo) {
       const { browser } = browserInfo;

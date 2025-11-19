@@ -39,6 +39,7 @@ class Automator {
     this.accountWaitTimes = {}; // Per-account per-module timing
     this.captchaDetected = new Set(); // Účty s detekovanou CAPTCHA (aby se nespamovalo)
     this.openBrowsers = new Map(); // Tracking otevřených visible browserů (accountId => browser)
+    this.openingBrowsers = new Set(); // Tracking účtů pro které se právě otevírá browser (race condition protection)
 
     // Intervaly pro smyčky
     this.intervals = {
@@ -101,25 +102,33 @@ class Automator {
    * Zpracuj selhání přihlášení - smaž cookies a otevři browser
    */
   async handleFailedLogin(account) {
-    // Zkontroluj jestli už není browser otevřený
+    // Zkontroluj jestli už není browser otevřený nebo se právě otevírá
     if (this.isBrowserActive(account.id)) {
       console.log(`⏭️  [${account.username}] Viditelný prohlížeč už je otevřený - přeskakuji`);
       return;
     }
 
-    console.log(`❌ [${account.username}] Přihlášení selhalo - otevírám viditelný browser`);
-
-    // Smaž neplatné cookies (pokud existují)
-    const accountData = this.db.getAccount(account.id);
-    if (accountData && accountData.cookies && accountData.cookies !== 'null') {
-      console.log(`🗑️  [${account.username}] Mažu neplatné cookies`);
-      this.db.updateCookies(account.id, null);
+    if (this.openingBrowsers.has(account.id)) {
+      console.log(`⏭️  [${account.username}] Viditelný prohlížeč se právě otevírá - přeskakuji`);
+      return;
     }
 
-    // Otevři viditelný prohlížeč přímo
-    console.log(`🖥️  Otevírám viditelný prohlížeč pro přihlášení: ${account.username}`);
+    console.log(`❌ [${account.username}] Přihlášení selhalo - otevírám viditelný browser`);
+
+    // Označ že se browser otevírá (race condition protection)
+    this.openingBrowsers.add(account.id);
 
     try {
+      // Smaž neplatné cookies (pokud existují)
+      const accountData = this.db.getAccount(account.id);
+      if (accountData && accountData.cookies && accountData.cookies !== 'null') {
+        console.log(`🗑️  [${account.username}] Mažu neplatné cookies`);
+        this.db.updateCookies(account.id, null);
+      }
+
+      // Otevři viditelný prohlížeč přímo
+      console.log(`🖥️  Otevírám viditelný prohlížeč pro přihlášení: ${account.username}`);
+
       const browserInfo = await this.browserManager.testConnection(account.id, true); // true = auto-close po přihlášení
 
       if (browserInfo) {
@@ -129,12 +138,16 @@ class Automator {
         // Sleduj zavření browseru
         browser.on('disconnected', () => {
           this.openBrowsers.delete(account.id);
+          this.openingBrowsers.delete(account.id);
           this.captchaDetected.delete(account.id);
           console.log(`🔒 [${account.username}] Browser zavřen`);
         });
       }
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, error.message);
+    } finally {
+      // Vždy odstraň z openingBrowsers (i při chybě)
+      this.openingBrowsers.delete(account.id);
     }
   }
 
@@ -659,10 +672,13 @@ class Automator {
           this.captchaDetected.add(account.id);
         }
 
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (CAPTCHA)
-        if (!this.isBrowserActive(account.id)) {
+        // Otevři viditelný prohlížeč POUZE pokud už není otevřený nebo se neotvírá (CAPTCHA)
+        if (!this.isBrowserActive(account.id) && !this.openingBrowsers.has(account.id)) {
           if (isNewCaptcha) {
             console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+
+            // Označ že se browser otevírá
+            this.openingBrowsers.add(account.id);
 
             try {
               const browserInfo = await this.browserManager.testConnection(account.id, false); // false = nezavře se auto
@@ -674,12 +690,16 @@ class Automator {
                 // Sleduj zavření browseru
                 browser.on('disconnected', () => {
                   this.openBrowsers.delete(account.id);
+                  this.openingBrowsers.delete(account.id);
                   this.captchaDetected.delete(account.id);
                   console.log(`✅ [${account.username}] CAPTCHA vyřešena - browser zavřen`);
                 });
               }
             } catch (error) {
               console.error(`❌ [${account.username}] Chyba při otevírání browseru pro CAPTCHA:`, error.message);
+            } finally {
+              // Vždy odstraň z openingBrowsers
+              this.openingBrowsers.delete(account.id);
             }
           }
         }
@@ -698,9 +718,12 @@ class Automator {
           village_conquered_at: new Date().toISOString()
         });
 
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (DOBYTÁ VESNICE)
-        if (!this.isBrowserActive(account.id)) {
+        // Otevři viditelný prohlížeč POUZE pokud už není otevřený nebo se neotvírá (DOBYTÁ VESNICE)
+        if (!this.isBrowserActive(account.id) && !this.openingBrowsers.has(account.id)) {
           console.log(`🖥️  Otevírám viditelný prohlížeč pro vytvoření nové vesnice`);
+
+          // Označ že se browser otevírá
+          this.openingBrowsers.add(account.id);
 
           try {
             const browserInfo = await this.browserManager.testConnection(account.id, false); // false = nezavře se auto
@@ -712,14 +735,18 @@ class Automator {
               // Sleduj zavření browseru
               browser.on('disconnected', () => {
                 this.openBrowsers.delete(account.id);
+                this.openingBrowsers.delete(account.id);
                 console.log(`🔒 [${account.username}] Browser zavřen - vesnice vyřešena`);
               });
             }
           } catch (error) {
             console.error(`❌ [${account.username}] Chyba při otevírání browseru pro conquered:`, error.message);
+          } finally {
+            // Vždy odstraň z openingBrowsers
+            this.openingBrowsers.delete(account.id);
           }
         } else {
-          console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
+          console.log(`⏭️  Viditelný prohlížeč už je otevřený nebo se otevírá - přeskakuji`);
         }
         return;
       }
