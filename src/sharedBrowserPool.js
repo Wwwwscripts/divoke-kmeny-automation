@@ -72,7 +72,12 @@ class SharedBrowserPool {
     // Přidej cookies
     if (account.cookies) {
       try {
-        const cookies = JSON.parse(account.cookies);
+        let cookies = JSON.parse(account.cookies);
+        // Zajistit že cookies jsou pole (Playwright vyžaduje array)
+        if (!Array.isArray(cookies)) {
+          console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
+          cookies = Object.values(cookies);
+        }
         await context.addCookies(cookies);
       } catch (error) {
         console.error('❌ Chyba při načítání cookies:', error.message);

@@ -80,7 +80,12 @@ async function getOrOpenBrowser(accountId) {
     throw new Error('Účet nemá uložené cookies. Nejprve se přihlaste přes "Otevřít browser" v hlavním menu.');
   }
 
-  const cookies = JSON.parse(account.cookies);
+  let cookies = JSON.parse(account.cookies);
+  // Zajistit že cookies jsou pole (Playwright vyžaduje array)
+  if (!Array.isArray(cookies)) {
+    console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
+    cookies = Object.values(cookies);
+  }
   await context.addCookies(cookies);
   console.log(`🍪 Cookies načteny pro účet ${accountId} (${account.username})`);
 
