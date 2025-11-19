@@ -357,6 +357,7 @@ class BuildingModule {
         const buildingsList = [];
         
         const czechToEnglish = {
+          // České názvy
           'Hlavní budova': 'Headquarters',
           'Kasárna': 'Barracks',
           'Stáj': 'Stable',
@@ -373,6 +374,22 @@ class BuildingModule {
           'Skladiště': 'Warehouse',
           'Skrýš': 'Hiding place',
           'Hradby': 'Wall',
+          // Slovenské názvy
+          'Hlavná budova': 'Headquarters',
+          'Kasárne': 'Barracks',
+          'Stajňa': 'Stable',
+          'Dielňa': 'Workshop',
+          'Panský dvor': 'Academy',
+          'Kováčňa': 'Smithy',
+          'Nádvorie': 'Rally point',
+          'Tržisko': 'Market',
+          'Drevorubač': 'Timber camp',
+          'Hliníkový lom': 'Clay pit',
+          'Baňa na železo': 'Iron mine',
+          'Sedliacky dvor': 'Farm',
+          'Sklad': 'Warehouse',
+          'Úkryt': 'Hiding place',
+          // Anglické názvy (fallback)
           'Headquarters': 'Headquarters',
           'Barracks': 'Barracks',
           'Stable': 'Stable',
