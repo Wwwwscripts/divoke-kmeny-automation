@@ -218,7 +218,7 @@ class DatabaseManager {
   // Získat všechny aktivní účty
   getAllActiveAccounts() {
     const data = this._loadAccounts();
-    return data.accounts.filter(a => a.active === 1);
+    return data.accounts.filter(a => a.active === 1 && !a.paused);
   }
 
   // Aktualizovat cookies pro účet
@@ -286,11 +286,23 @@ class DatabaseManager {
     this._saveStats(data);
   }
 
+  // Pozastavit/obnovit účet
+  updateAccountPause(accountId, paused) {
+    const data = this._loadAccounts();
+    const account = data.accounts.find(a => a.id === accountId);
+
+    if (account) {
+      account.paused = paused ? 1 : 0;
+      this._saveAccounts(data);
+      console.log(`✅ Účet ${paused ? 'POZASTAVEN' : 'OBNOVEN'} ID: ${accountId}`);
+    }
+  }
+
   // Aktualizovat informace o rekrutování
   updateRecruitSettings(accountId, settings) {
     const data = this._loadAccounts();
     const account = data.accounts.find(a => a.id === accountId);
-    
+
     if (account) {
       if (settings.recruitEnabled !== undefined) account.recruit_enabled = settings.recruitEnabled ? 1 : 0;
       if (settings.recruitTemplate !== undefined) account.recruit_template = settings.recruitTemplate;

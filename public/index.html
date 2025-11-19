@@ -353,6 +353,30 @@
             background: #2ea043;
         }
 
+        .btn-pause {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 4px 8px;
+            opacity: 0.7;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+
+        .btn-pause:hover {
+            opacity: 1;
+            transform: scale(1.15);
+        }
+
+        .btn-pause.paused {
+            opacity: 1;
+        }
+
+        tr.paused {
+            background: rgba(139, 148, 158, 0.1);
+            opacity: 0.6;
+        }
+
         .loading {
             text-align: center;
             padding: 60px;
@@ -502,6 +526,7 @@
             <table id="accountsTable">
                 <thead>
                     <tr>
+                        <th style="width: 40px;"></th>
                         <th class="sortable" onclick="sortBy('username')">Účet</th>
                         <th class="sortable" onclick="sortBy('tribe_name')">Kmen</th>
                         <th class="sortable" onclick="sortBy('world')">Svět</th>
@@ -655,6 +680,13 @@
                 if (acc.village_conquered) {
                     return `
                         <tr style="background: rgba(248, 81, 73, 0.1); border-left: 3px solid #f85149;">
+                            <td>
+                                <button class="btn-pause ${acc.paused ? 'paused' : ''}"
+                                        onclick="togglePause(${acc.id}, ${!acc.paused})"
+                                        title="${acc.paused ? 'Obnovit účet' : 'Pozastavit účet'}">
+                                    ${acc.paused ? '▶️' : '⏸️'}
+                                </button>
+                            </td>
                             <td><span class="account-name">${acc.username}</span></td>
                             <td>${acc.tribe_name || '-'}</td>
                             <td><span class="world-badge">${acc.world || '-'}</span></td>
@@ -676,7 +708,14 @@
 
                 // Normální řádek
                 return `
-                    <tr>
+                    <tr class="${acc.paused ? 'paused' : ''}">
+                        <td>
+                            <button class="btn-pause ${acc.paused ? 'paused' : ''}"
+                                    onclick="togglePause(${acc.id}, ${!acc.paused})"
+                                    title="${acc.paused ? 'Obnovit účet' : 'Pozastavit účet'}">
+                                ${acc.paused ? '▶️' : '⏸️'}
+                            </button>
+                        </td>
                         <td><span class="account-name">${acc.username}</span></td>
                         <td>${acc.tribe_name || '-'}</td>
                         <td><span class="world-badge">${acc.world || '-'}</span></td>
@@ -880,6 +919,25 @@
         }
 
         // API volání
+        async function togglePause(accountId, paused) {
+            try {
+                const response = await fetch(`/api/accounts/${accountId}/pause`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ paused })
+                });
+
+                if ((await response.json()).success) {
+                    const acc = allAccounts.find(a => a.id === accountId);
+                    acc.paused = paused;
+                    renderAccounts(filteredAccounts);
+                    updateStats();
+                }
+            } catch (error) {
+                console.error('❌ Chyba:', error);
+            }
+        }
+
         async function toggleRecruit(accountId, enabled) {
             try {
                 const response = await fetch(`/api/accounts/${accountId}/recruit`, {
