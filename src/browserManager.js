@@ -1,4 +1,4 @@
-import { firefox } from 'playwright';
+import { chromium } from 'playwright';
 import DatabaseManager from './database.js';
 
 class BrowserManager {
@@ -17,7 +17,7 @@ class BrowserManager {
 
     const contextOptions = {
       viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       locale: 'cs-CZ',
       timezoneId: 'Europe/Prague',
     };
@@ -37,35 +37,18 @@ class BrowserManager {
       console.log('👻 Spouštím v tichém režimu (headless)');
     }
 
-    const browser = await firefox.launch({
+    const browser = await chromium.launch({
       headless: headless,
-      // Firefox nepotřebuje Chrome-specific args
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--no-sandbox'
+      ]
     });
 
     const context = await browser.newContext(contextOptions);
 
-    if (account.cookies && account.cookies !== 'null') {
-      try {
-        let cookies = JSON.parse(account.cookies);
-        // Zajistit že cookies jsou pole (Playwright vyžaduje array)
-        if (!Array.isArray(cookies)) {
-          // Pokud jsou cookies null nebo undefined, přeskoč
-          if (cookies === null || cookies === undefined) {
-            console.warn(`⚠️  Cookies pro ${account.username} jsou null/undefined - přeskakuji`);
-          } else {
-            console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
-            cookies = Object.values(cookies);
-            await context.addCookies(cookies);
-            console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
-          }
-        } else {
-          await context.addCookies(cookies);
-          console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
-        }
-      } catch (error) {
-        console.error('❌ Chyba při načítání cookies:', error.message);
-      }
-    }
+    // NEPOUŽÍVAT cookies z DB - spoléháme na perzistentní session v browseru
 
     return { browser, context, account };
   }
@@ -146,7 +129,7 @@ class BrowserManager {
 
     const contextOptions = {
       viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       locale,
       timezoneId,
       ignoreHTTPSErrors: true,
@@ -158,35 +141,18 @@ class BrowserManager {
       console.log(`🔐 Používám proxy: ${proxy.server}`);
     }
 
-    const browser = await firefox.launch({
+    const browser = await chromium.launch({
       headless: false,
-      // Firefox nepotřebuje Chrome-specific args
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--no-sandbox'
+      ]
     });
 
     const context = await browser.newContext(contextOptions);
 
-    if (account.cookies && account.cookies !== 'null') {
-      try {
-        let cookies = JSON.parse(account.cookies);
-        // Zajistit že cookies jsou pole (Playwright vyžaduje array)
-        if (!Array.isArray(cookies)) {
-          // Pokud jsou cookies null nebo undefined, přeskoč
-          if (cookies === null || cookies === undefined) {
-            console.warn(`⚠️  Cookies pro ${account.username} jsou null/undefined - přeskakuji`);
-          } else {
-            console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
-            cookies = Object.values(cookies);
-            await context.addCookies(cookies);
-            console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
-          }
-        } else {
-          await context.addCookies(cookies);
-          console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
-        }
-      } catch (error) {
-        console.error('❌ Chyba při načítání cookies:', error.message);
-      }
-    }
+    // NEPOUŽÍVAT cookies z DB - spoléháme na perzistentní session v browseru
 
     try {
       const page = await context.newPage();

@@ -1044,7 +1044,11 @@ class Automator {
   async loginToGame(page, account) {
     try {
       const domain = this.getWorldDomain(account.world);
-      await page.goto(`https://${account.world}.${domain}/game.php`, {
+
+      // Sko na /page/play/cs107 (nebo sk107) místo game.php
+      // Spoléháme na perzistentní session v browseru (bez načítání cookies z DB)
+      const playPath = domain.includes('divoke-kmene.sk') ? '/page/play/sk107' : '/page/play/cs107';
+      await page.goto(`https://www.${domain}${playPath}`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000
       });
