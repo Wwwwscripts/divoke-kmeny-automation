@@ -1,5 +1,5 @@
 import express from 'express';
-import { chromium } from 'playwright';
+import { firefox } from 'playwright';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
 
@@ -55,14 +55,14 @@ async function getOrOpenBrowser(accountId) {
   const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
   const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
 
-  const browser = await chromium.launch({
+  const browser = await firefox.launch({
     headless: true,  // Headless pro automatické operace
-    args: ['--disable-blink-features=AutomationControlled']
+    // Firefox nepotřebuje Chrome-specific args
   });
 
   const contextOptions = {
     viewport: { width: 1280, height: 720 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
     locale,
     timezoneId,
     ignoreHTTPSErrors: true,
@@ -562,14 +562,14 @@ app.post('/api/support/open-manual', async (req, res) => {
       const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
       const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
 
-      const browser = await chromium.launch({
+      const browser = await firefox.launch({
         headless: false,  // VIDITELNÝ pro ruční kontrolu
-        args: ['--disable-blink-features=AutomationControlled']
+        // Firefox nepotřebuje Chrome-specific args
       });
 
       const contextOptions = {
         viewport: { width: 1280, height: 720 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
         locale,
         timezoneId,
         ignoreHTTPSErrors: true,
