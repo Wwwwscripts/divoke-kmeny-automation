@@ -210,20 +210,42 @@ class BrowserManager {
         });
 
         // Vyplň username a heslo pokud je přihlašovací formulář
-        await page.waitForTimeout(1000);
-        const loginFormExists = await page.evaluate(() => {
-          return document.querySelector('input[name="username"]') !== null;
-        });
+        await page.waitForTimeout(2000); // Počkej 2 sekundy na načtení
 
-        if (loginFormExists) {
-          console.log(`📝 Vyplňuji přihlašovací údaje pro: ${account.username}`);
-          await page.evaluate(({ username, password }) => {
-            const usernameInput = document.querySelector('input[name="username"]');
-            const passwordInput = document.querySelector('input[name="password"]');
-            if (usernameInput) usernameInput.value = username;
-            if (passwordInput) passwordInput.value = password;
-          }, { username: account.username, password: account.password });
-          console.log(`✅ Údaje vyplněny - stiskněte tlačítko přihlásit`);
+        const loginFormFilled = await page.evaluate(({ username, password }) => {
+          // Hledej username input (různé varianty)
+          const usernameInput =
+            document.querySelector('input[name="username"]') ||
+            document.querySelector('input[name="user"]') ||
+            document.querySelector('input[type="text"]');
+
+          // Hledej password input
+          const passwordInput =
+            document.querySelector('input[name="password"]') ||
+            document.querySelector('input[type="password"]');
+
+          if (!usernameInput || !passwordInput) {
+            return { success: false, reason: 'inputs_not_found' };
+          }
+
+          // Vyplň údaje
+          usernameInput.value = username;
+          passwordInput.value = password;
+
+          // Trigger input events pro případné validace
+          usernameInput.dispatchEvent(new Event('input', { bubbles: true }));
+          passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
+          usernameInput.dispatchEvent(new Event('change', { bubbles: true }));
+          passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+          return { success: true, reason: 'filled' };
+        }, { username: account.username, password: account.password });
+
+        if (loginFormFilled.success) {
+          console.log(`✅ [${account.username}] Přihlašovací údaje vyplněny`);
+          console.log(`⚠️  Klikněte na tlačítko "Přihlásit se" nebo stiskněte Enter`);
+        } else {
+          console.log(`⚠️  [${account.username}] Přihlašovací formulář nenalezen - vyplňte ručně`);
         }
       } else {
         console.log(`🌐 Načítám hlavní stránku (${domain})...`);
