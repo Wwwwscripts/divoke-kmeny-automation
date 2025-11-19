@@ -747,7 +747,7 @@
                                     👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span>
                                     📍 <span style="color: #8b949e; font-weight: 600;">Z: ${source}</span>
                                     🕐 <span style="color: #ffa657; font-weight: 600;">Dopad: ${arrivalTime}</span>
-                                    <span style="color: #8b949e; font-weight: 600;">DOPADL</span>
+                                    ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span>
                                 </div>
                                 <button onclick="deleteCompletedAttack(${acc.id}, '${timestamp}')"
                                     style="background: none; border: none; color: #8b949e; cursor: pointer; font-size: 14px; padding: 0 4px; opacity: 0.7; transition: opacity 0.2s;"
@@ -761,6 +761,7 @@
                         attackDisplay = `
                             👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span>
                             📍 <span style="color: ${attackerColor}; font-weight: 600;">Z: ${source}</span>
+                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span>
                             🕐 <span style="color: #ffa657; font-weight: 600;">Dopad: ${arrivalTime}</span>
                             ⏱️ <span style="color: #ffa657; font-weight: 600;">Odpočet:</span> <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
                         `;
