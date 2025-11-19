@@ -403,8 +403,15 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="world-select">Svět</label>
-                    <select id="world-select">
+                    <select id="world-select" onchange="loadTribes()">
                         <option value="">Vyberte svět...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="tribe-select">Kmen</label>
+                    <select id="tribe-select">
+                        <option value="">Nejprve vyberte svět...</option>
                     </select>
                 </div>
 
@@ -501,20 +508,49 @@
         const UNIT_ORDER_NO_SPY = ['knight', 'light', 'marcher', 'heavy', 'spear', 'axe', 'archer', 'sword', 'ram', 'catapult', 'snob'];
 
         let calculationResults = [];
+        let allAccounts = []; // Všechny účty pro filtrování podle světa a kmene
 
         // Načíst světy při načtení stránky
         window.addEventListener('DOMContentLoaded', async () => {
             await loadWorlds();
             setDefaultArrivalTime();
+            loadPreferences();
         });
+
+        // Načíst uložené preference
+        function loadPreferences() {
+            const savedWorld = localStorage.getItem('support_calc_world');
+            const savedTribe = localStorage.getItem('support_calc_tribe');
+
+            if (savedWorld) {
+                document.getElementById('world-select').value = savedWorld;
+                loadTribes(); // Načti kmeny pro uložený svět
+
+                // Po načtení kmenů nastav uložený kmen
+                setTimeout(() => {
+                    if (savedTribe) {
+                        document.getElementById('tribe-select').value = savedTribe;
+                    }
+                }, 100);
+            }
+        }
+
+        // Uložit preference
+        function savePreferences() {
+            const world = document.getElementById('world-select').value;
+            const tribe = document.getElementById('tribe-select').value;
+
+            if (world) localStorage.setItem('support_calc_world', world);
+            if (tribe) localStorage.setItem('support_calc_tribe', tribe);
+        }
 
         async function loadWorlds() {
             try {
                 const response = await fetch('/api/accounts');
-                const accounts = await response.json();
+                allAccounts = await response.json();
 
                 // Získat unikátní světy
-                const worlds = [...new Set(accounts.map(acc => acc.world).filter(w => w))];
+                const worlds = [...new Set(allAccounts.map(acc => acc.world).filter(w => w))];
 
                 const select = document.getElementById('world-select');
                 select.innerHTML = '<option value="">Vyberte svět...</option>' +
@@ -523,6 +559,30 @@
             } catch (error) {
                 showMessage('Chyba při načítání světů: ' + error.message, 'error');
             }
+        }
+
+        // Načíst kmeny pro vybraný svět
+        function loadTribes() {
+            const world = document.getElementById('world-select').value;
+            const tribeSelect = document.getElementById('tribe-select');
+
+            if (!world) {
+                tribeSelect.innerHTML = '<option value="">Nejprve vyberte svět...</option>';
+                return;
+            }
+
+            // Filtrovat účty podle světa
+            const worldAccounts = allAccounts.filter(acc => acc.world === world);
+
+            // Získat unikátní kmeny (tribe_name)
+            const tribes = [...new Set(worldAccounts.map(acc => acc.tribe_name).filter(t => t))];
+            tribes.sort(); // Seřadit abecedně
+
+            tribeSelect.innerHTML = '<option value="">Vše (všechny kmeny)</option>' +
+                tribes.map(tribe => `<option value="${tribe}">${tribe}</option>`).join('');
+
+            // Uložit preferenci
+            savePreferences();
         }
 
         function setDefaultArrivalTime() {
@@ -534,6 +594,7 @@
 
         async function calculateSupport() {
             const world = document.getElementById('world-select').value;
+            const tribe = document.getElementById('tribe-select').value;
             const coords = document.getElementById('target-coords').value;
             const arrivalTime = document.getElementById('arrival-time').value;
             const supportBoost = parseFloat(document.getElementById('support-boost').value) || 0;
@@ -581,10 +642,21 @@
                 // Získat účty na daném světě
                 const accountsRes = await fetch('/api/accounts');
                 const accounts = await accountsRes.json();
-                const worldAccounts = accounts.filter(acc => acc.world === world && acc.coord_x && acc.coord_y);
+
+                // Filtrovat podle světa a kmene
+                let worldAccounts = accounts.filter(acc => acc.world === world && acc.coord_x && acc.coord_y);
+
+                // Pokud je vybrán konkrétní kmen, filtruj podle něj
+                if (tribe) {
+                    worldAccounts = worldAccounts.filter(acc => acc.tribe_name === tribe);
+                }
+
+                // Uložit preferenci
+                savePreferences();
 
                 if (worldAccounts.length === 0) {
-                    showMessage('Žádné vesnice na světě ' + world, 'error');
+                    const tribePart = tribe ? ` v kmeni ${tribe}` : '';
+                    showMessage(`Žádné vesnice na světě ${world}${tribePart}`, 'error');
                     return;
                 }
 
@@ -803,7 +875,9 @@
             }).join('');
 
             // Aktualizovat nadpis s počtem vesnic a jednotek
-            document.querySelector('.results-header h2').textContent = `📊 Dostupné možnosti podpory (${canSendCount}/${totalCount} vesnic stihne${totalUnitsText})`;
+            const tribe = document.getElementById('tribe-select').value;
+            const tribePart = tribe ? ` - Kmen: ${tribe}` : '';
+            document.querySelector('.results-header h2').textContent = `📊 Dostupné možnosti podpory (${canSendCount}/${totalCount} vesnic stihne${totalUnitsText})${tribePart}`;
         }
 
         function formatDateTime(date) {
