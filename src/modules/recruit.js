@@ -318,20 +318,28 @@ class RecruitModule {
         return true;
       }
 
-      // Projdeme všechny jednotky a zkusíme je narekrutovat
-      for (const unitType of Object.keys(toRecruit)) {
+      // ROVNOMĚRNÉ REKRUTOVÁNÍ: Seřadíme jednotky podle deficitu (od největšího)
+      const sortedUnits = Object.entries(toRecruit)
+        .sort((a, b) => b[1].needed - a[1].needed)
+        .map(([unitType]) => unitType);
+
+      // Projdeme jednotky podle priority (největší deficit = nejvyšší priorita)
+      for (const unitType of sortedUnits) {
         const building = this.getBuildingForUnit(unitType);
 
         // Zkontrolujeme, zda právě něco neběží v této budově
         const hasQueue = await this.checkBuildingQueue(building);
         if (hasQueue) {
-          // Tichý skip - již běží rekrutování
+          // Tichý skip - již běží rekrutování, zkus další jednotku
           continue;
         }
 
-        // Narekrutujeme jednu jednotku
+        // Narekrutujeme jednu jednotku s největším deficitem
         await this.recruitUnit(unitType);
         await this.page.waitForTimeout(1000);
+
+        // Narekrutovali jsme jednotku, končíme (každý běh rekrutuje max 1 jednotku)
+        break;
       }
 
       return true;
