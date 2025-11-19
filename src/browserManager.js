@@ -48,7 +48,28 @@ class BrowserManager {
 
     const context = await browser.newContext(contextOptions);
 
-    // NEPOUŽÍVAT cookies z DB - spoléháme na perzistentní session v browseru
+    if (account.cookies && account.cookies !== 'null') {
+      try {
+        let cookies = JSON.parse(account.cookies);
+        // Zajistit že cookies jsou pole (Playwright vyžaduje array)
+        if (!Array.isArray(cookies)) {
+          // Pokud jsou cookies null nebo undefined, přeskoč
+          if (cookies === null || cookies === undefined) {
+            console.warn(`⚠️  Cookies pro ${account.username} jsou null/undefined - přeskakuji`);
+          } else {
+            console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
+            cookies = Object.values(cookies);
+            await context.addCookies(cookies);
+            console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
+          }
+        } else {
+          await context.addCookies(cookies);
+          console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
+        }
+      } catch (error) {
+        console.error('❌ Chyba při načítání cookies:', error.message);
+      }
+    }
 
     return { browser, context, account };
   }
@@ -152,7 +173,28 @@ class BrowserManager {
 
     const context = await browser.newContext(contextOptions);
 
-    // NEPOUŽÍVAT cookies z DB - spoléháme na perzistentní session v browseru
+    if (account.cookies && account.cookies !== 'null') {
+      try {
+        let cookies = JSON.parse(account.cookies);
+        // Zajistit že cookies jsou pole (Playwright vyžaduje array)
+        if (!Array.isArray(cookies)) {
+          // Pokud jsou cookies null nebo undefined, přeskoč
+          if (cookies === null || cookies === undefined) {
+            console.warn(`⚠️  Cookies pro ${account.username} jsou null/undefined - přeskakuji`);
+          } else {
+            console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
+            cookies = Object.values(cookies);
+            await context.addCookies(cookies);
+            console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
+          }
+        } else {
+          await context.addCookies(cookies);
+          console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
+        }
+      } catch (error) {
+        console.error('❌ Chyba při načítání cookies:', error.message);
+      }
+    }
 
     try {
       const page = await context.newPage();

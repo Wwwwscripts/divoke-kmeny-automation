@@ -73,7 +73,27 @@ class SharedBrowserPool {
     // Vytvoř nový context
     const context = await browser.newContext(contextOptions);
 
-    // NEPOUŽÍVAT cookies z DB - spoléháme na perzistentní session v browseru
+    // Přidej cookies
+    if (account.cookies && account.cookies !== 'null') {
+      try {
+        let cookies = JSON.parse(account.cookies);
+        // Zajistit že cookies jsou pole (Playwright vyžaduje array)
+        if (!Array.isArray(cookies)) {
+          // Pokud jsou cookies null nebo undefined, přeskoč
+          if (cookies === null || cookies === undefined) {
+            console.warn(`⚠️  Cookies pro ${account.username} jsou null/undefined - přeskakuji`);
+          } else {
+            console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
+            cookies = Object.values(cookies);
+            await context.addCookies(cookies);
+          }
+        } else {
+          await context.addCookies(cookies);
+        }
+      } catch (error) {
+        console.error('❌ Chyba při načítání cookies:', error.message);
+      }
+    }
 
     // Zaznamenej context (s accountId pro pozdější ukládání cookies)
     const browserData = this.browsers.get(browserKey);
