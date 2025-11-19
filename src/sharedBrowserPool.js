@@ -2,7 +2,7 @@
  * Shared Browser Pool - Sdílení browser instancí podle proxy
  * Pro účty se stejnou proxy sdílí browser (šetří RAM)
  */
-import { chromium } from 'playwright';
+import { webkit } from 'playwright';
 
 class SharedBrowserPool {
   constructor(db) {
@@ -24,15 +24,11 @@ class SharedBrowserPool {
     // Vytvoř nový browser
     const launchOptions = {
       headless: true,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--disable-dev-shm-usage',
-        '--no-sandbox'
-      ]
+      // WebKit nepotřebuje Chrome-specific args
     };
 
     // Proxy se nastavuje až na context level
-    const browser = await chromium.launch(launchOptions);
+    const browser = await webkit.launch(launchOptions);
 
     this.browsers.set(key, {
       browser,
@@ -55,7 +51,7 @@ class SharedBrowserPool {
 
     const contextOptions = {
       viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
       locale: 'cs-CZ',
       timezoneId: 'Europe/Prague',
     };
