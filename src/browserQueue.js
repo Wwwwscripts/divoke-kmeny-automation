@@ -167,6 +167,13 @@ class BrowserQueue {
   }
 
   /**
+   * Zkontroluje zda je browser ve frontě
+   */
+  isInQueue(accountId) {
+    return this.queue.some(item => item.accountId === accountId);
+  }
+
+  /**
    * Zkontroluje zda je browser aktivní pro daný účet
    */
   isBrowserActive(accountId) {

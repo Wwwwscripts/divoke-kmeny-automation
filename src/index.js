@@ -104,6 +104,20 @@ class Automator {
    * Zpracuj selhání přihlášení - smaž cookies a otevři browser
    */
   async handleFailedLogin(account) {
+    // Zkontroluj jestli už není browser otevřený NEBO ve frontě
+    const isActive = this.isBrowserActive(account.id);
+    const isQueued = this.browserQueue.isInQueue(account.id);
+
+    if (isActive) {
+      console.log(`⏭️  [${account.username}] Viditelný prohlížeč už je otevřený - přeskakuji`);
+      return;
+    }
+
+    if (isQueued) {
+      console.log(`⏭️  [${account.username}] Browser už je ve frontě - přeskakuji`);
+      return;
+    }
+
     console.log(`❌ [${account.username}] Přihlášení selhalo - otevírám viditelný browser`);
 
     // Smaž neplatné cookies (pokud existují)
@@ -114,12 +128,8 @@ class Automator {
     }
 
     // Otevři viditelný prohlížeč pro manuální přihlášení - přidej do fronty
-    if (!this.isBrowserActive(account.id)) {
-      console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro přihlášení: ${account.username}`);
-      await this.browserQueue.enqueue(account.id, 'bad_cookies', false); // false = browser se NEZAVŘE automaticky
-    } else {
-      console.log(`⏭️  Viditelný prohlížeč už je otevřený pro ${account.username} - přeskakuji`);
-    }
+    console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro přihlášení: ${account.username}`);
+    await this.browserQueue.enqueue(account.id, 'bad_cookies', false); // false = browser se NEZAVŘE automaticky
   }
 
   /**
