@@ -424,7 +424,7 @@
             <table id="attacksTable">
                 <thead>
                     <tr>
-                        <th>Účet / Útoky</th>
+                        <th>Účet</th>
                         <th>Kmen</th>
                         <th>Svět</th>
                         <th>Souřadnice</th>
@@ -678,9 +678,6 @@
                     }
                 }
 
-                // Rowspan = počet útoků + 1 řádek pro základní info (bez útoku)
-                const rowspan = attacks.length > 0 ? attacks.length + 1 : 1;
-
                 // Tlačítko podle typu útoků
                 let actionButton = '';
                 if (hasCompletedAttacks) {
@@ -691,17 +688,17 @@
                     actionButton = `<button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>`;
                 }
 
-                // První řádek: Jméno účtu + základní info s rowspan
+                // První řádek: Jméno účtu + všechny základní info (BEZ rowspan)
                 rows.push(`
                     <tr>
                         <td><span class="account-name">${acc.username}</span></td>
-                        <td rowspan="${rowspan}">${acc.tribe_name || '-'}</td>
-                        <td rowspan="${rowspan}"><span class="world-badge">${acc.world || '-'}</span></td>
-                        <td rowspan="${rowspan}" class="coord">${coord}</td>
-                        <td rowspan="${rowspan}" class="resources">${resources}</td>
-                        <td rowspan="${rowspan}" class="wall-level">${getWallIcon()} Lvl ${acc.wall_level || 0}</td>
-                        <td rowspan="${rowspan}">${unitsDisplay}</td>
-                        <td rowspan="${rowspan}">
+                        <td>${acc.tribe_name || '-'}</td>
+                        <td><span class="world-badge">${acc.world || '-'}</span></td>
+                        <td class="coord">${coord}</td>
+                        <td class="resources">${resources}</td>
+                        <td class="wall-level">${getWallIcon()} Lvl ${acc.wall_level || 0}</td>
+                        <td>${unitsDisplay}</td>
+                        <td>
                             ${actionButton}
                         </td>
                     </tr>
@@ -757,10 +754,12 @@
                         `;
                     }
 
-                    // Každý útok má vlastní řádek (pouze útok, bez základních info)
+                    // Každý útok přes celý řádek (colspan="8")
                     rows.push(`
                         <tr>
-                            <td>${attackDisplay}</td>
+                            <td colspan="8" style="padding: 8px 12px; background: rgba(139, 148, 158, 0.05);">
+                                ${attackDisplay}
+                            </td>
                         </tr>
                     `);
                 });

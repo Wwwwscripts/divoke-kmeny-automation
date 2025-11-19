@@ -173,6 +173,8 @@ class DatabaseManager {
         research_status: null,
         // 🆕 SCAVENGE - Nové pole pro sběr
         scavenge_enabled: 0,
+        // 🆕 PAUSE - Pozastavení účtu
+        paused: 0,
         last_login: null,
         active: 1,
         created_at: new Date().toISOString()

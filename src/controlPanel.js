@@ -151,10 +151,23 @@ app.post('/api/accounts/add', async (req, res) => {
   try {
     const { username, password, proxy, world } = req.body;
 
+    console.log('📝 Přidávám účet:', { username, hasPassword: !!password, proxy: proxy || 'žádná', world: world || 'neurčen' });
+
     if (!username || !password) {
+      console.error('❌ Chybí username nebo heslo');
       return res.status(400).json({
         success: false,
         error: 'Username a heslo jsou povinné'
+      });
+    }
+
+    // Zkontroluj jestli účet už existuje (pro lepší chybovou hlášku)
+    const existingAccount = db.getAccountByUsername(username);
+    if (existingAccount) {
+      console.error(`❌ Účet ${username} již existuje (ID: ${existingAccount.id})`);
+      return res.status(400).json({
+        success: false,
+        error: `Účet '${username}' již existuje`
       });
     }
 
@@ -166,18 +179,21 @@ app.post('/api/accounts/add', async (req, res) => {
     );
 
     if (accountId) {
+      console.log(`✅ Účet ${username} úspěšně přidán (ID: ${accountId})`);
       res.json({
         success: true,
         accountId,
         message: `Účet ${username} přidán`
       });
     } else {
+      console.error(`❌ Nepodařilo se přidat účet ${username} (addAccount vrátil null)`);
       res.status(400).json({
         success: false,
-        error: 'Účet již existuje nebo nastala chyba'
+        error: 'Nepodařilo se přidat účet - zkontrolujte logy serveru'
       });
     }
   } catch (error) {
+    console.error('❌ Chyba při přidávání účtu:', error);
     res.status(500).json({
       success: false,
       error: error.message
