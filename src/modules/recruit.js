@@ -222,23 +222,24 @@ class RecruitModule {
   }
 
   /**
-   * Zkontroluje, zda právě probíhá rekrutování v budově
+   * Zkontroluje, kolik jednotek je ve frontě rekrutování v budově
+   * @returns {number} Počet jednotek ve frontě (0-5)
    */
   async checkBuildingQueue(building) {
     try {
       const queueId = building === 'workshop' ? 'trainqueue_garage' : `trainqueue_${building}`;
 
-      const hasQueue = await this.page.evaluate((queueId) => {
+      const queueCount = await this.page.evaluate((queueId) => {
         const queueElement = document.getElementById(queueId);
-        if (!queueElement) return false;
+        if (!queueElement) return 0;
 
         const rows = queueElement.querySelectorAll('tr.sortable_row, tr.lit');
-        return rows.length > 0;
+        return rows.length;
       }, queueId);
 
-      return hasQueue;
+      return queueCount;
     } catch (error) {
-      return false;
+      return 0;
     }
   }
 
@@ -320,26 +321,43 @@ class RecruitModule {
 
       // ROVNOMĚRNÉ REKRUTOVÁNÍ: Seřadíme jednotky podle deficitu (od největšího)
       const sortedUnits = Object.entries(toRecruit)
-        .sort((a, b) => b[1].needed - a[1].needed)
-        .map(([unitType]) => unitType);
+        .sort((a, b) => b[1].needed - a[1].needed);
 
-      // Projdeme jednotky podle priority (největší deficit = nejvyšší priorita)
-      for (const unitType of sortedUnits) {
+      // Seskupíme jednotky podle budov
+      const buildingUnits = {
+        barracks: [],
+        stable: [],
+        workshop: []
+      };
+
+      sortedUnits.forEach(([unitType, data]) => {
         const building = this.getBuildingForUnit(unitType);
+        if (building) {
+          buildingUnits[building].push({ unitType, ...data });
+        }
+      });
 
-        // Zkontrolujeme, zda právě něco neběží v této budově
-        const hasQueue = await this.checkBuildingQueue(building);
-        if (hasQueue) {
-          // Tichý skip - již běží rekrutování, zkus další jednotku
+      // Pro každou budovu: naplníme frontu až do 5 jednotek
+      const MAX_QUEUE = 5;
+
+      for (const [building, units] of Object.entries(buildingUnits)) {
+        if (units.length === 0) continue;
+
+        // Zkontrolujeme kolik jednotek je ve frontě
+        const queueCount = await this.checkBuildingQueue(building);
+        const availableSlots = MAX_QUEUE - queueCount;
+
+        if (availableSlots <= 0) {
+          // Fronta plná, přeskočíme tuto budovu
           continue;
         }
 
-        // Narekrutujeme jednu jednotku s největším deficitem
-        await this.recruitUnit(unitType);
-        await this.page.waitForTimeout(1000);
-
-        // Narekrutovali jsme jednotku, končíme (každý běh rekrutuje max 1 jednotku)
-        break;
+        // Narekrutujeme jednotky podle priority, dokud není fronta plná
+        for (let i = 0; i < Math.min(availableSlots, units.length); i++) {
+          const unit = units[i];
+          await this.recruitUnit(unit.unitType);
+          await this.page.waitForTimeout(1000);
+        }
       }
 
       return true;
