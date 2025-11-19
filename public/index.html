@@ -542,6 +542,23 @@
             localStorage.setItem('index_worldPreference', currentWorld);
         }
 
+        // Načíst preferované řazení z localStorage
+        function loadSortPreference() {
+            const saved = localStorage.getItem('index_sortPreference');
+            if (saved) {
+                try {
+                    currentSort = JSON.parse(saved);
+                } catch (e) {
+                    currentSort = { column: null, ascending: true };
+                }
+            }
+        }
+
+        // Uložit preferované řazení do localStorage
+        function saveSortPreference() {
+            localStorage.setItem('index_sortPreference', JSON.stringify(currentSort));
+        }
+
         // Helper funkce pro ikony surovin z Tribal Wars
         function getResourceIcon(resourceType) {
             const resourceMap = { wood: 'holz', clay: 'lehm', iron: 'eisen' };
@@ -767,8 +784,8 @@
             filterAccounts();
         }
 
-        // Filtrování účtů
-        function filterAccounts() {
+        // Získat filtrované účty (podle světa a vyhledávání)
+        function getFilteredAccounts() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
 
             let filtered = allAccounts;
@@ -786,41 +803,28 @@
                 );
             }
 
-            renderAccounts(filtered);
+            return filtered;
         }
 
-        // Řazení
-        function sortBy(column) {
-            // Toggle direction pokud řadíme stejný sloupec
-            if (currentSort.column === column) {
-                currentSort.ascending = !currentSort.ascending;
-            } else {
-                currentSort.column = column;
-                currentSort.ascending = true;
+        // Seřadit účty podle aktuálního řazení
+        function sortAccounts(accounts) {
+            if (!currentSort.column) {
+                return accounts;
             }
 
-            // Aktualizovat vizuální indikátory
-            document.querySelectorAll('th').forEach(th => {
-                th.classList.remove('sorted-asc', 'sorted-desc');
-            });
-
-            const th = event.target;
-            th.classList.add(currentSort.ascending ? 'sorted-asc' : 'sorted-desc');
-
-            // Seřadit
-            const sorted = [...allAccounts].sort((a, b) => {
-                let aVal = a[column];
-                let bVal = b[column];
+            return [...accounts].sort((a, b) => {
+                let aVal = a[currentSort.column];
+                let bVal = b[currentSort.column];
 
                 // Pro čísla
-                if (column === 'points') {
-                    aVal = a[column] || 0;
-                    bVal = b[column] || 0;
+                if (currentSort.column === 'points') {
+                    aVal = a[currentSort.column] || 0;
+                    bVal = b[currentSort.column] || 0;
                 }
                 // Pro boolean hodnoty (zapnuto/vypnuto)
-                else if (column.endsWith('_enabled')) {
-                    aVal = a[column] ? 1 : 0;
-                    bVal = b[column] ? 1 : 0;
+                else if (currentSort.column.endsWith('_enabled')) {
+                    aVal = a[currentSort.column] ? 1 : 0;
+                    bVal = b[currentSort.column] ? 1 : 0;
                 }
                 // Pro string hodnoty
                 else {
@@ -834,8 +838,45 @@
                     return aVal < bVal ? 1 : -1;
                 }
             });
+        }
 
-            renderAccounts(sorted);
+        // Filtrování účtů
+        function filterAccounts() {
+            let filtered = getFilteredAccounts();
+            filtered = sortAccounts(filtered);
+            renderAccounts(filtered);
+        }
+
+        // Řazení
+        function sortBy(column) {
+            // Toggle direction pokud řadíme stejný sloupec
+            if (currentSort.column === column) {
+                currentSort.ascending = !currentSort.ascending;
+            } else {
+                currentSort.column = column;
+                currentSort.ascending = true;
+            }
+
+            // Uložit preferované řazení
+            saveSortPreference();
+
+            // Aktualizovat vizuální indikátory
+            updateSortIndicators();
+
+            // Znovu aplikuj filtrování + řazení
+            filterAccounts();
+        }
+
+        // Aktualizovat vizuální indikátory řazení
+        function updateSortIndicators() {
+            document.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sorted-asc', 'sorted-desc');
+            });
+
+            if (currentSort.column && event && event.target) {
+                const th = event.target;
+                th.classList.add(currentSort.ascending ? 'sorted-asc' : 'sorted-desc');
+            }
         }
 
         // API volání
@@ -1014,6 +1055,7 @@
         // Načíst při startu - update každé 2 minuty
         (async () => {
             loadWorldPreference(); // Načti preferovaný svět
+            loadSortPreference(); // Načti preferované řazení
             await loadTemplates();
             await loadAccounts();
             setInterval(loadAccounts, 120000); // 2 minuty

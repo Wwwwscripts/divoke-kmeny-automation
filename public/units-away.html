@@ -504,22 +504,8 @@
                 // Načti světy a vytvoř záložky
                 loadWorldTabs();
 
-                // Načti preference
-                loadSortPreference();
-                loadWorldPreference();
-
-                // Aplikuj uložené řazení
-                if (currentSort.column) {
-                    allAccounts.sort((a, b) => {
-                        const aVal = a[currentSort.column];
-                        const bVal = b[currentSort.column];
-                        const comparison = aVal > bVal ? 1 : (aVal < bVal ? -1 : 0);
-                        return currentSort.ascending ? comparison : -comparison;
-                    });
-                }
-
                 updateStats();
-                filterAccounts();
+                filterAccounts(); // Aplikuje i uložené řazení
 
             } catch (error) {
                 console.error('Chyba při načítání účtů:', error);
@@ -561,8 +547,8 @@
             filterAccounts();
         }
 
-        // Filtrovat účty
-        function filterAccounts() {
+        // Získat filtrované účty (podle světa a vyhledávání)
+        function getFilteredAccounts() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
 
             let filtered = allAccounts;
@@ -580,6 +566,34 @@
                 );
             }
 
+            return filtered;
+        }
+
+        // Seřadit účty podle aktuálního řazení
+        function sortAccounts(accounts) {
+            if (!currentSort.column) {
+                return accounts;
+            }
+
+            return [...accounts].sort((a, b) => {
+                let aVal = a[currentSort.column];
+                let bVal = b[currentSort.column];
+
+                // Speciální handling pro číselné hodnoty
+                if (currentSort.column === 'unitsAway') {
+                    aVal = parseInt(a.units_away) || 0;
+                    bVal = parseInt(b.units_away) || 0;
+                }
+
+                const comparison = aVal > bVal ? 1 : (aVal < bVal ? -1 : 0);
+                return currentSort.ascending ? comparison : -comparison;
+            });
+        }
+
+        // Filtrovat účty
+        function filterAccounts() {
+            let filtered = getFilteredAccounts();
+            filtered = sortAccounts(filtered);
             renderAccounts(filtered);
         }
 
@@ -643,22 +657,10 @@
                 currentSort.ascending = true;
             }
 
+            // Uložit preferované řazení
             saveSortPreference();
 
-            allAccounts.sort((a, b) => {
-                let aVal = a[column];
-                let bVal = b[column];
-
-                // Speciální handling pro číselné hodnoty
-                if (column === 'unitsAway') {
-                    aVal = parseInt(a.units_away) || 0;
-                    bVal = parseInt(b.units_away) || 0;
-                }
-
-                const comparison = aVal > bVal ? 1 : (aVal < bVal ? -1 : 0);
-                return currentSort.ascending ? comparison : -comparison;
-            });
-
+            // Znovu aplikuj filtrování + řazení
             filterAccounts();
         }
 
@@ -673,7 +675,9 @@
             document.getElementById('totalUnitsAway').textContent = totalUnitsAway;
         }
 
-        // Načíst účty při startu
+        // Načíst preference a účty při startu
+        loadWorldPreference();
+        loadSortPreference();
         loadAccounts();
     </script>
 </body>
