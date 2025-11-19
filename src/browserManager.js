@@ -1,4 +1,4 @@
-import { chromium } from 'playwright';
+import { firefox } from 'playwright';
 import DatabaseManager from './database.js';
 
 class BrowserManager {
@@ -17,7 +17,7 @@ class BrowserManager {
 
     const contextOptions = {
       viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
       locale: 'cs-CZ',
       timezoneId: 'Europe/Prague',
     };
@@ -37,9 +37,9 @@ class BrowserManager {
       console.log('👻 Spouštím v tichém režimu (headless)');
     }
 
-    const browser = await chromium.launch({
+    const browser = await firefox.launch({
       headless: headless,
-      args: ['--disable-blink-features=AutomationControlled']
+      // Firefox nepotřebuje Chrome-specific args
     });
 
     const context = await browser.newContext(contextOptions);
@@ -146,7 +146,7 @@ class BrowserManager {
 
     const contextOptions = {
       viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
       locale,
       timezoneId,
       ignoreHTTPSErrors: true,
@@ -158,9 +158,9 @@ class BrowserManager {
       console.log(`🔐 Používám proxy: ${proxy.server}`);
     }
 
-    const browser = await chromium.launch({
+    const browser = await firefox.launch({
       headless: false,
-      args: ['--disable-blink-features=AutomationControlled']
+      // Firefox nepotřebuje Chrome-specific args
     });
 
     const context = await browser.newContext(contextOptions);
