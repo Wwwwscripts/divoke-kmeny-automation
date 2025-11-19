@@ -241,6 +241,20 @@ class BrowserManager {
       } else {
         console.log('🖥️  Prohlížeč otevřen pro manuální kontrolu');
         console.log('⚠️  Browser se NEZAVŘE automaticky - zavřete ho ručně');
+        console.log('💾 Cookies se automaticky uloží při zavření browseru');
+
+        // Přidej listener pro ukládání cookies při zavření (i když autoClose = false)
+        browser.on('disconnected', async () => {
+          try {
+            const cookies = await context.cookies();
+            if (cookies && cookies.length > 0) {
+              this.db.updateCookies(account.id, cookies);
+              console.log(`💾 [${account.username}] Cookies uloženy při zavření (${cookies.length} cookies)`);
+            }
+          } catch (error) {
+            console.error(`⚠️  [${account.username}] Nepodařilo se uložit cookies:`, error.message);
+          }
+        });
       }
 
       // Vrať browser, context, page pro sledování zavření
