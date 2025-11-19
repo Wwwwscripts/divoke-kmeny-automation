@@ -98,6 +98,12 @@ class BrowserQueue {
 
       const { browser, context, page } = browserInfo;
 
+      // Nastav listener na zavření browseru HNED (před přidáním do aktivních)
+      browser.on('disconnected', () => {
+        logger.info(`[BrowserQueue] 🔔 Disconnected event pro účet ${accountId}`);
+        this.onBrowserClosed(accountId);
+      });
+
       // Přidej do aktivních browserů
       this.activeBrowsers.set(accountId, {
         browser,
@@ -110,13 +116,10 @@ class BrowserQueue {
 
       logger.info(`[BrowserQueue] Browser otevřen pro účet ${accountId}, aktivní: ${this.activeBrowsers.size}/${this.maxConcurrent}`);
 
-      // Nastav listener na zavření browseru
-      browser.on('disconnected', () => {
-        this.onBrowserClosed(accountId);
-      });
-
     } catch (error) {
       logger.error(`[BrowserQueue] Chyba při otevírání browseru pro účet ${accountId}:`, error);
+      // Pokud nastala chyba, zkus odstranit z aktivních browserů
+      this.activeBrowsers.delete(accountId);
     }
   }
 

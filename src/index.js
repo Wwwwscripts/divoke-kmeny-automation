@@ -101,6 +101,28 @@ class Automator {
   }
 
   /**
+   * Zpracuj selhání přihlášení - smaž cookies a otevři browser
+   */
+  async handleFailedLogin(account) {
+    console.log(`❌ [${account.username}] Přihlášení selhalo - otevírám viditelný browser`);
+
+    // Smaž neplatné cookies (pokud existují)
+    const accountData = this.db.getAccount(account.id);
+    if (accountData && accountData.cookies && accountData.cookies !== 'null') {
+      console.log(`🗑️  [${account.username}] Mažu neplatné cookies`);
+      this.db.updateCookies(account.id, null);
+    }
+
+    // Otevři viditelný prohlížeč pro manuální přihlášení - přidej do fronty
+    if (!this.isBrowserActive(account.id)) {
+      console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro přihlášení: ${account.username}`);
+      await this.browserQueue.enqueue(account.id, 'bad_cookies', false); // false = browser se NEZAVŘE automaticky
+    } else {
+      console.log(`⏭️  Viditelný prohlížeč už je otevřený pro ${account.username} - přeskakuji`);
+    }
+  }
+
+  /**
    * Spustí všechny smyčky
    */
   async start() {
@@ -585,25 +607,10 @@ class Automator {
       // Přihlásit se
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        console.log(`❌ [${account.username}] Přihlášení selhalo - otevírám viditelný browser`);
-
         // Zavři headless browser
         await this.browserPool.closeContext(context, browserKey);
-
-        // Smaž neplatné cookies (pokud existují)
-        const accountData = this.db.getAccount(account.id);
-        if (accountData && accountData.cookies && accountData.cookies !== 'null') {
-          console.log(`🗑️  [${account.username}] Mažu neplatné cookies`);
-          this.db.updateCookies(account.id, null);
-        }
-
-        // Otevři viditelný prohlížeč pro manuální přihlášení (NOVÝ ÚČET) - přidej do fronty
-        if (!this.isBrowserActive(account.id)) {
-          console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro přihlášení: ${account.username}`);
-          await this.browserQueue.enqueue(account.id, 'new_account', false); // false = browser se NEZAVŘE automaticky
-        } else {
-          console.log(`⏭️  Viditelný prohlížeč už je otevřený pro ${account.username} - přeskakuji`);
-        }
+        // Zpracuj selhání přihlášení
+        await this.handleFailedLogin(account);
         return;
       }
 
@@ -697,6 +704,7 @@ class Automator {
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
         await this.browserPool.closeContext(context, browserKey);
+        await this.handleFailedLogin(account);
         return;
       }
 
@@ -731,6 +739,7 @@ class Automator {
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
         await this.browserPool.closeContext(context, browserKey);
+        await this.handleFailedLogin(account);
         return;
       }
 
@@ -765,6 +774,7 @@ class Automator {
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
         await this.browserPool.closeContext(context, browserKey);
+        await this.handleFailedLogin(account);
         return;
       }
 
@@ -801,6 +811,7 @@ class Automator {
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
         await this.browserPool.closeContext(context, browserKey);
+        await this.handleFailedLogin(account);
         return;
       }
 
@@ -837,6 +848,7 @@ class Automator {
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
         await this.browserPool.closeContext(context, browserKey);
+        await this.handleFailedLogin(account);
         return;
       }
 
@@ -864,6 +876,7 @@ class Automator {
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
         await this.browserPool.closeContext(context, browserKey);
+        await this.handleFailedLogin(account);
         return;
       }
 
@@ -898,6 +911,7 @@ class Automator {
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
         await this.browserPool.closeContext(context, browserKey);
+        await this.handleFailedLogin(account);
         return;
       }
 

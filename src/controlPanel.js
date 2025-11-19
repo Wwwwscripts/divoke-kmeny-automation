@@ -83,11 +83,19 @@ async function getOrOpenBrowser(accountId) {
   let cookies = JSON.parse(account.cookies);
   // Zajistit že cookies jsou pole (Playwright vyžaduje array)
   if (!Array.isArray(cookies)) {
-    console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
-    cookies = Object.values(cookies);
+    // Pokud jsou cookies null nebo undefined, přeskoč
+    if (cookies === null || cookies === undefined) {
+      console.warn(`⚠️  Cookies pro ${account.username} jsou null/undefined - přeskakuji`);
+    } else {
+      console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
+      cookies = Object.values(cookies);
+      await context.addCookies(cookies);
+      console.log(`🍪 Cookies načteny pro účet ${accountId} (${account.username})`);
+    }
+  } else {
+    await context.addCookies(cookies);
+    console.log(`🍪 Cookies načteny pro účet ${accountId} (${account.username})`);
   }
-  await context.addCookies(cookies);
-  console.log(`🍪 Cookies načteny pro účet ${accountId} (${account.username})`);
 
   const page = await context.newPage();
 
