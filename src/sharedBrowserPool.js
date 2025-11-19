@@ -103,7 +103,7 @@ class SharedBrowserPool {
 
   /**
    * Uzavře context (ale nechá browser běžet)
-   * NEUKLÁDÁ cookies - ty se ukládají POUZE při manuálním přihlášení a shutdown
+   * NEUKLÁDÁ cookies - ty se ukládají po každém úspěšném loginToGame
    */
   async closeContext(context, browserKey) {
     try {
@@ -122,7 +122,8 @@ class SharedBrowserPool {
   }
 
   /**
-   * Uloží cookies pro účet (volá se pouze při manuálním přihlášení)
+   * Uloží cookies pro účet
+   * Volá se po každém úspěšném loginToGame (server může obnovit session cookies)
    */
   async saveCookies(context, accountId) {
     try {

@@ -646,6 +646,9 @@ class Automator {
         return;
       }
 
+      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
+      await this.browserPool.saveCookies(context, account.id);
+
       // Sbírej statistiky s vlastním intervalem
       const infoKey = `accountInfo_${account.id}`;
       const infoWaitUntil = this.accountWaitTimes[infoKey];
@@ -787,6 +790,9 @@ class Automator {
         return;
       }
 
+      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
+      await this.browserPool.saveCookies(context, account.id);
+
       const buildingModule = new BuildingModule(page, this.db, account.id);
       const buildResult = await buildingModule.startBuilding(settings.template);
 
@@ -822,6 +828,9 @@ class Automator {
         return;
       }
 
+      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
+      await this.browserPool.saveCookies(context, account.id);
+
       const scavengeModule = new ScavengeModule(page, this.db, account.id);
       const scavengeResult = await scavengeModule.execute();
 
@@ -856,6 +865,9 @@ class Automator {
         await this.handleFailedLogin(account);
         return;
       }
+
+      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
+      await this.browserPool.saveCookies(context, account.id);
 
       const recruitModule = new RecruitModule(page, this.db, account.id);
       // collectUnitsInfo() již není potřeba - jednotky sbírá SupportModule v checksLoop()
@@ -894,6 +906,9 @@ class Automator {
         return;
       }
 
+      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
+      await this.browserPool.saveCookies(context, account.id);
+
       const researchModule = new ResearchModule(page, this.db, account.id);
       const researchResult = await researchModule.autoResearch();
 
@@ -931,6 +946,9 @@ class Automator {
         return;
       }
 
+      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
+      await this.browserPool.saveCookies(context, account.id);
+
       const supportModule = new SupportModule(page, this.db, account.id);
       await supportModule.getAllUnitsInfo();
 
@@ -958,6 +976,9 @@ class Automator {
         await this.handleFailedLogin(account);
         return;
       }
+
+      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
+      await this.browserPool.saveCookies(context, account.id);
 
       const dailyRewardsModule = new DailyRewardsModule(page, this.db, account.id);
       const result = await dailyRewardsModule.execute();
@@ -993,6 +1014,9 @@ class Automator {
         await this.handleFailedLogin(account);
         return;
       }
+
+      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
+      await this.browserPool.saveCookies(context, account.id);
 
       const paladinModule = new PaladinModule(page, this.db, account.id);
       const paladinResult = await paladinModule.execute();
