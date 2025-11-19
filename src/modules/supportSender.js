@@ -302,21 +302,42 @@ class SupportSender {
         throw new Error('Nepovedlo se přejít na potvrzovací stránku');
       }
 
-      // Zkontrolovat, jestli je to podpora (ne útok)
-      const isSupport = await this.page.evaluate(() => {
+      // Zkontrolovat, jestli je to podpora (ne útok) - více kontrolních bodů
+      const confirmInfo = await this.page.evaluate(() => {
         const confirmButton = document.querySelector('#troop_confirm_submit');
-        if (confirmButton) {
-          // Zkontrolovat class nebo value tlačítka
-          return confirmButton.classList.contains('btn-support') ||
-                 confirmButton.value.includes('podpor') ||
-                 confirmButton.value.toLowerCase().includes('support');
-        }
-        return false;
+        const bodyText = document.body.innerText.toLowerCase();
+        const pageTitle = document.title.toLowerCase();
+        const urlParams = new URLSearchParams(window.location.search);
+
+        return {
+          buttonExists: confirmButton !== null,
+          buttonValue: confirmButton ? confirmButton.value : '',
+          buttonClass: confirmButton ? confirmButton.className : '',
+          hasAttackInText: bodyText.includes('útok') || bodyText.includes('attack') || bodyText.includes('útok'),
+          hasSupportInText: bodyText.includes('podpora') || bodyText.includes('support'),
+          hasAttackInTitle: pageTitle.includes('útok') || pageTitle.includes('attack'),
+          hasSupportInTitle: pageTitle.includes('podpora') || pageTitle.includes('support'),
+          urlAction: urlParams.get('action')
+        };
       });
 
-      if (!isSupport) {
-        logger.error('Detekován útok místo podpory - přerušuji', this.getAccountName());
-        throw new Error('Detekován útok místo podpory');
+      logger.info(`Detekce typu akce: button="${confirmInfo.buttonValue}", hasSupport=${confirmInfo.hasSupportInText}, hasAttack=${confirmInfo.hasAttackInText}`, this.getAccountName());
+
+      // Rozhodnutí zda je to podpora
+      const isSupport = confirmInfo.hasSupportInText ||
+                        confirmInfo.hasSupportInTitle ||
+                        confirmInfo.buttonValue.toLowerCase().includes('support') ||
+                        confirmInfo.buttonValue.toLowerCase().includes('podpor') ||
+                        confirmInfo.buttonClass.includes('btn-support');
+
+      const isAttack = confirmInfo.hasAttackInText ||
+                       confirmInfo.hasAttackInTitle ||
+                       confirmInfo.buttonValue.toLowerCase().includes('attack') ||
+                       confirmInfo.buttonValue.toLowerCase().includes('útok');
+
+      if (!isSupport || (isAttack && !isSupport)) {
+        logger.error(`Nepotvrzený typ akce - přerušuji. Support indikátory: ${confirmInfo.hasSupportInText}, Attack indikátory: ${confirmInfo.hasAttackInText}`, this.getAccountName());
+        throw new Error('Nelze ověřit že jde o podporu - možný útok');
       }
 
       logger.info('Potvrzuji odeslání podpory', this.getAccountName());

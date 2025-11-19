@@ -596,6 +596,10 @@ app.post('/api/support/open-manual', async (req, res) => {
 
 // Odeslat podporu do vesnice
 app.post('/api/support/send', async (req, res) => {
+  const startTime = Date.now();
+  let attempt = 0;
+  const maxAttempts = 2; // Max 2 pokusy
+
   try {
     const { accountId, unitTypes, targetX, targetY } = req.body;
 
@@ -603,24 +607,88 @@ app.post('/api/support/send', async (req, res) => {
       return res.status(400).json({ error: 'Chybí povinné parametry' });
     }
 
-    // Automaticky získat nebo otevřít browser (headless pokud není aktivní)
-    const browserData = await getOrOpenBrowser(accountId);
+    const account = db.getAccount(accountId);
+    if (!account) {
+      return res.status(404).json({ error: 'Účet nenalezen' });
+    }
 
-    // Dynamicky importovat SupportSender
-    const { default: SupportSender } = await import('./modules/supportSender.js');
-    const supportSender = new SupportSender(browserData.page, db, accountId);
+    // Kontrola cookies před pokusem
+    if (!account.cookies || account.cookies === 'null') {
+      return res.status(400).json({
+        error: `Účet ${account.username} nemá uložené cookies`,
+        details: 'Přihlaste se přes "Otevřít browser" v hlavním menu',
+        accountId,
+        username: account.username
+      });
+    }
 
-    // Odeslat podporu (více jednotek najednou)
-    const result = await supportSender.sendMultipleUnits(
-      unitTypes,  // Pole jednotek ['knight', 'spear', 'sword', ...]
-      parseInt(targetX),
-      parseInt(targetY)
-    );
+    let lastError = null;
 
-    res.json({ success: true, result });
+    // Retry loop
+    while (attempt < maxAttempts) {
+      attempt++;
+
+      try {
+        console.log(`[${account.username}] Pokus ${attempt}/${maxAttempts} - odesílám podporu`);
+
+        // Automaticky získat nebo otevřít browser (headless pokud není aktivní)
+        const browserData = await getOrOpenBrowser(accountId);
+
+        // Dynamicky importovat SupportSender
+        const { default: SupportSender } = await import('./modules/supportSender.js');
+        const supportSender = new SupportSender(browserData.page, db, accountId);
+
+        // Odeslat podporu (více jednotek najednou)
+        const result = await supportSender.sendMultipleUnits(
+          unitTypes,  // Pole jednotek ['knight', 'spear', 'sword', ...]
+          parseInt(targetX),
+          parseInt(targetY)
+        );
+
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`✅ [${account.username}] Podpora odeslána za ${duration}s (pokus ${attempt}/${maxAttempts})`);
+
+        return res.json({
+          success: true,
+          result,
+          duration: parseFloat(duration),
+          attempt
+        });
+
+      } catch (error) {
+        lastError = error;
+        console.error(`❌ [${account.username}] Pokus ${attempt}/${maxAttempts} selhal:`, error.message);
+
+        // Pokud je to chyba cookies, nepokračuj v retry
+        if (error.message.includes('cookies') || error.message.includes('Cookie')) {
+          break;
+        }
+
+        // Pokud to není poslední pokus, počkej před dalším pokusem
+        if (attempt < maxAttempts) {
+          const waitTime = attempt * 1000; // 1s, 2s, ...
+          console.log(`⏳ [${account.username}] Čekám ${waitTime}ms před dalším pokusem...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+    }
+
+    // Všechny pokusy selhaly
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.error(`❌ [${account.username}] Všechny pokusy selhaly po ${duration}s`);
+
+    res.status(500).json({
+      error: lastError.message,
+      details: `Selhalo po ${attempt} pokusech`,
+      accountId,
+      username: account.username,
+      duration: parseFloat(duration),
+      attempts: attempt
+    });
+
   } catch (error) {
     console.error('Error in /api/support/send:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
