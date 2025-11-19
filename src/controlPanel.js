@@ -272,6 +272,14 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
       return res.status(404).json({ error: 'Account not found' });
     }
 
+    // Vyčisti odpojené browsery
+    for (const [id, browserInfo] of visibleBrowsers.entries()) {
+      if (!browserInfo.browser || !browserInfo.browser.isConnected()) {
+        visibleBrowsers.delete(id);
+        console.log(`🧹 [Control Panel] Vyčištěn odpojený browser pro účet ${id}`);
+      }
+    }
+
     // Zkontroluj zda už není browser aktivní
     const existingBrowser = visibleBrowsers.get(accountId);
     if (existingBrowser && existingBrowser.browser && existingBrowser.browser.isConnected()) {
