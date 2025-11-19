@@ -741,11 +741,12 @@
                         attackDisplay = '-';
                     } else if (isCompleted) {
                         // Dopadlý útok (oznámení) - horizontální layout
+                        const sourceDisplay = source && source !== '-' ? `📍 <span style="color: #8b949e; font-weight: 600;">Z: ${source}</span>` : '';
                         attackDisplay = `
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div>
                                     👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span>
-                                    📍 <span style="color: #8b949e; font-weight: 600;">Z: ${source}</span>
+                                    ${sourceDisplay}
                                     🕐 <span style="color: #ffa657; font-weight: 600;">Dopad: ${arrivalTime}</span>
                                     ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span>
                                 </div>
@@ -758,9 +759,10 @@
                         `;
                     } else {
                         // Aktivní útok - horizontální layout
+                        const sourceDisplay = source && source !== '-' ? `📍 <span style="color: ${attackerColor}; font-weight: 600;">Z: ${source}</span>` : '';
                         attackDisplay = `
                             👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span>
-                            📍 <span style="color: ${attackerColor}; font-weight: 600;">Z: ${source}</span>
+                            ${sourceDisplay}
                             ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span>
                             🕐 <span style="color: #ffa657; font-weight: 600;">Dopad: ${arrivalTime}</span>
                             ⏱️ <span style="color: #ffa657; font-weight: 600;">Odpočet:</span> <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
