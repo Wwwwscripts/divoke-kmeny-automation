@@ -547,7 +547,9 @@
         function renderAttacks(accounts) {
             const tbody = document.getElementById('attacksList');
 
-            tbody.innerHTML = accounts.map(acc => {
+            const rows = [];
+
+            accounts.forEach(acc => {
                 const coord = (acc.coord_x && acc.coord_y) ? `${acc.coord_x}|${acc.coord_y}` : '-';
 
                 const resources = `
@@ -633,17 +635,17 @@
                 }
 
                 // Parsování útoků
-                let attacksDisplay = '-';
+                let attacks = [];
                 let hasCompletedAttacks = false;
                 if (acc.attacks_info) {
                     try {
-                        const attacks = typeof acc.attacks_info === 'string' ? JSON.parse(acc.attacks_info) : acc.attacks_info;
+                        attacks = typeof acc.attacks_info === 'string' ? JSON.parse(acc.attacks_info) : acc.attacks_info;
 
                         if (attacks && attacks.length > 0) {
                             const now = Math.floor(Date.now() / 1000);
 
                             // Seřaď útoky: aktivní (budoucí) první, dopadlé poslední
-                            const sortedAttacks = [...attacks].sort((a, b) => {
+                            attacks = [...attacks].sort((a, b) => {
                                 const timeA = Number(a.arrival_timestamp) || 0;
                                 const timeB = Number(b.arrival_timestamp) || 0;
 
@@ -660,65 +662,24 @@
                             });
 
                             // Zjisti zda má alespoň jeden dopadlý útok
-                            hasCompletedAttacks = sortedAttacks.some(attack => {
+                            hasCompletedAttacks = attacks.some(attack => {
                                 const timestamp = Number(attack.arrival_timestamp) || 0;
                                 return timestamp > 0 && timestamp < now;
                             });
-
-                            attacksDisplay = sortedAttacks.map((attack, index) => {
-                                const attacker = attack.attacker || 'Neznámý';
-                                const name = attack.name || 'Útok';
-                                const impact = attack.impact || name;
-                                const arrivalTime = attack.arrival_time || attack.arrival_date || '-';
-                                const timestamp = attack.arrival_timestamp;
-
-                                // Zkontroluj zda útok už dopadl
-                                const isCompleted = timestamp && Number(timestamp) < now;
-
-                                // Ikona a barva podle stavu
-                                let impactIcon = isCompleted ? '📋' : '⚔️';
-                                let impactColor = isCompleted ? '#8b949e' : '#f85149';
-                                let boxStyle = isCompleted ? 'opacity: 0.7; border-color: rgba(139, 148, 158, 0.3);' : '';
-
-                                // Jedinečné ID pro countdown element
-                                const countdownId = `countdown-${acc.id}-${index}`;
-
-                                if (isCompleted) {
-                                    // Dopadlý útok - zobrazí se jinak
-                                    return `
-                                        <div class="attack-box" style="${boxStyle}" data-timestamp="${timestamp}" data-completed="true">
-                                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                                <div style="flex: 1;">
-                                                    👤 <span class="attack-attacker" style="color: #8b949e;">${attacker}</span><br>
-                                                    ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
-                                                    🕐 Dopad: <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
-                                                    ⏱️ <span style="color: #8b949e; font-weight: 600;">DOPADL</span>
-                                                </div>
-                                                <button onclick="deleteCompletedAttack(${acc.id}, '${timestamp}')"
-                                                    style="background: none; border: none; color: #8b949e; cursor: pointer; font-size: 16px; padding: 4px 8px; opacity: 0.7; transition: opacity 0.2s;"
-                                                    onmouseover="this.style.opacity='1'; this.style.color='#f85149';"
-                                                    onmouseout="this.style.opacity='0.7'; this.style.color='#8b949e';"
-                                                    title="Odstranit útok">🗑️</button>
-                                            </div>
-                                        </div>
-                                    `;
-                                } else {
-                                    // Aktivní útok
-                                    return `
-                                        <div class="attack-box" data-timestamp="${timestamp}">
-                                            👤 <span class="attack-attacker">${attacker}</span><br>
-                                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
-                                            🕐 Dopad: <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
-                                            ⏱️ <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
-                                        </div>
-                                    `;
-                                }
-                            }).join('');
+                        } else {
+                            attacks = [];
                         }
                     } catch (e) {
-                        attacksDisplay = '<span style="color: #f85149;">❌ Chyba parsování</span>';
+                        attacks = [];
                     }
                 }
+
+                // Pokud nejsou žádné útoky, zobraz jeden řádek s "-"
+                if (attacks.length === 0) {
+                    attacks = [{ attacker: '-', impact: '-', arrival_time: '-', arrival_timestamp: null }];
+                }
+
+                const rowspan = attacks.length;
 
                 // Tlačítko podle typu útoků
                 let actionButton = '';
@@ -730,22 +691,85 @@
                     actionButton = `<button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>`;
                 }
 
-                return `
-                    <tr>
-                        <td><span class="account-name">${acc.username}</span></td>
-                        <td>${acc.tribe_name || '-'}</td>
-                        <td><span class="world-badge">${acc.world || '-'}</span></td>
-                        <td class="coord">${coord}</td>
-                        <td class="resources">${resources}</td>
-                        <td class="wall-level">${getWallIcon()} Lvl ${acc.wall_level || 0}</td>
-                        <td>${unitsDisplay}</td>
-                        <td>${attacksDisplay}</td>
-                        <td>
-                            ${actionButton}
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+                // První řádek s rowspan pro základní info
+                attacks.forEach((attack, index) => {
+                    const now = Math.floor(Date.now() / 1000);
+                    const attacker = attack.attacker || 'Neznámý';
+                    const name = attack.name || 'Útok';
+                    const impact = attack.impact || name;
+                    const arrivalTime = attack.arrival_time || attack.arrival_date || '-';
+                    const timestamp = attack.arrival_timestamp;
+
+                    // Zkontroluj zda útok už dopadl
+                    const isCompleted = timestamp && Number(timestamp) < now;
+
+                    // Ikona a barva podle stavu
+                    let impactIcon = isCompleted ? '📋' : '⚔️';
+                    let impactColor = isCompleted ? '#8b949e' : '#f85149';
+                    let attackerColor = isCompleted ? '#8b949e' : '#f85149';
+
+                    // Jedinečné ID pro countdown element
+                    const countdownId = `countdown-${acc.id}-${index}`;
+
+                    let attackDisplay = '';
+                    if (attacker === '-') {
+                        attackDisplay = '-';
+                    } else if (isCompleted) {
+                        // Dopadlý útok
+                        attackDisplay = `
+                            <div style="display: flex; justify-content: space-between; align-items: center; opacity: 0.7;">
+                                <div>
+                                    👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span> |
+                                    ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span> |
+                                    🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span> |
+                                    <span style="color: #8b949e; font-weight: 600;">DOPADL</span>
+                                </div>
+                                <button onclick="deleteCompletedAttack(${acc.id}, '${timestamp}')"
+                                    style="background: none; border: none; color: #8b949e; cursor: pointer; font-size: 14px; padding: 0 4px; opacity: 0.7; transition: opacity 0.2s;"
+                                    onmouseover="this.style.opacity='1'; this.style.color='#f85149';"
+                                    onmouseout="this.style.opacity='0.7'; this.style.color='#8b949e';"
+                                    title="Odstranit útok">🗑️</button>
+                            </div>
+                        `;
+                    } else {
+                        // Aktivní útok
+                        attackDisplay = `
+                            👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span> |
+                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span> |
+                            🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span> |
+                            ⏱️ <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
+                        `;
+                    }
+
+                    if (index === 0) {
+                        // První řádek s rowspan
+                        rows.push(`
+                            <tr>
+                                <td rowspan="${rowspan}"><span class="account-name">${acc.username}</span></td>
+                                <td rowspan="${rowspan}">${acc.tribe_name || '-'}</td>
+                                <td rowspan="${rowspan}"><span class="world-badge">${acc.world || '-'}</span></td>
+                                <td rowspan="${rowspan}" class="coord">${coord}</td>
+                                <td rowspan="${rowspan}" class="resources">${resources}</td>
+                                <td rowspan="${rowspan}" class="wall-level">${getWallIcon()} Lvl ${acc.wall_level || 0}</td>
+                                <td rowspan="${rowspan}">${unitsDisplay}</td>
+                                <td>${attackDisplay}</td>
+                                <td rowspan="${rowspan}">
+                                    ${actionButton}
+                                </td>
+                            </tr>
+                        `);
+                    } else {
+                        // Další řádky jen s útokem
+                        rows.push(`
+                            <tr>
+                                <td>${attackDisplay}</td>
+                            </tr>
+                        `);
+                    }
+                });
+            });
+
+            tbody.innerHTML = rows.join('');
         }
 
         // Načíst světy a vytvořit záložky
