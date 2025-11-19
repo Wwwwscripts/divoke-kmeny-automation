@@ -732,9 +732,6 @@ class Automator {
         return;
       }
 
-      // Ulož cookies po úspěšném zpracování (důležité pro nové účty)
-      await this.browserPool.saveCookies(context, account.id);
-
       // Zavři context (browser zůstane běžet)
       await this.browserPool.closeContext(context, browserKey);
 
@@ -778,8 +775,6 @@ class Automator {
         this.accountWaitTimes[`building_${account.id}`] = Date.now() + 1 * 60 * 1000; // 1 min fallback
       }
 
-      // Ulož cookies
-      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
@@ -814,8 +809,6 @@ class Automator {
         this.accountWaitTimes[`scavenge_${account.id}`] = Date.now() + this.intervals.scavenge;
       }
 
-      // Ulož cookies
-      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
@@ -852,8 +845,6 @@ class Automator {
         this.accountWaitTimes[`recruit_${account.id}`] = Date.now() + this.intervals.recruit;
       }
 
-      // Ulož cookies
-      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
@@ -890,8 +881,6 @@ class Automator {
         this.accountWaitTimes[`research_${account.id}`] = Date.now() + this.intervals.research;
       }
 
-      // Ulož cookies
-      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
@@ -919,8 +908,6 @@ class Automator {
       const supportModule = new SupportModule(page, this.db, account.id);
       await supportModule.getAllUnitsInfo();
 
-      // Ulož cookies
-      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
@@ -955,8 +942,6 @@ class Automator {
       // Nastav wait time na další den (24 hodin)
       this.accountWaitTimes[`dailyRewards_${account.id}`] = Date.now();
 
-      // Ulož cookies
-      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
@@ -993,8 +978,6 @@ class Automator {
         this.accountWaitTimes[`paladin_${account.id}`] = Date.now() + this.intervals.paladin;
       }
 
-      // Ulož cookies
-      await this.browserPool.saveCookies(context, account.id);
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {

@@ -38,8 +38,9 @@ class NotificationsModule {
         const lastConqueredNotification = this.getLastNotification('conquered');
         const now = Date.now();
 
-        // Pošli Discord notifikaci pouze pokud od poslední uplynulo více než 10 minut
-        if (!lastConqueredNotification || (now - lastConqueredNotification) > 10 * 60 * 1000) {
+        // Pošli Discord notifikaci pouze pokud od poslední uplynulo více než 60 minut (1 hodina)
+        // Tím se zabrání spamování Discord notifikací
+        if (!lastConqueredNotification || (now - lastConqueredNotification) > 60 * 60 * 1000) {
           await this.sendDiscordNotification('conquered');
           this.saveLastNotification('conquered', now);
         }
@@ -77,8 +78,9 @@ class NotificationsModule {
         const lastCaptchaNotification = this.getLastNotification('captcha');
         const now = Date.now();
 
-        // Pošli notifikaci pouze pokud od poslední uplynulo více než 10 minut
-        if (!lastCaptchaNotification || (now - lastCaptchaNotification) > 10 * 60 * 1000) {
+        // Pošli notifikaci pouze pokud od poslední uplynulo více než 60 minut (1 hodina)
+        // Tím se zabrání spamování Discord notifikací během noci
+        if (!lastCaptchaNotification || (now - lastCaptchaNotification) > 60 * 60 * 1000) {
           await this.sendDiscordNotification('captcha');
           this.saveLastNotification('captcha', now);
         }

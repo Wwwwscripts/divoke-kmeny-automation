@@ -4,8 +4,6 @@ import DatabaseManager from './database.js';
 class BrowserManager {
   constructor(db = null) {
     this.db = db || new DatabaseManager();
-    this.lastCookiesSave = new Map(); // key: accountId, value: { timestamp, hash }
-    this.cookiesSaveInterval = 10 * 60 * 1000; // 10 minut minimum mezi uložením
   }
 
   async createContext(accountId) {
@@ -84,73 +82,18 @@ class BrowserManager {
   }
 
   /**
-   * Vytvoří hash z cookies pro porovnání
-   */
-  hashCookies(cookies) {
-    // Pouze důležité cookies (session cookies)
-    const important = cookies
-      .filter(c => c.name.includes('sid') || c.name.includes('session') || c.name.includes('auth'))
-      .map(c => `${c.name}=${c.value}`)
-      .sort()
-      .join('|');
-    return important || JSON.stringify(cookies); // fallback na všechny cookies
-  }
-
-  /**
-   * Validuje že cookies obsahují session data
-   */
-  validateCookies(cookies) {
-    if (!cookies || cookies.length === 0) {
-      return false;
-    }
-    // Musí obsahovat alespoň nějakou session cookie
-    const hasSessionCookie = cookies.some(c =>
-      c.name.includes('sid') ||
-      c.name.includes('session') ||
-      c.name.includes('auth') ||
-      c.value.length > 10 // Nějáká rozumná cookie
-    );
-    return hasSessionCookie;
-  }
-
-  /**
-   * Uloží cookies pro účet (pouze pokud se změnily nebo uplynul čas)
+   * Uloží cookies pro účet (volá se pouze při manuálním přihlášení)
    */
   async saveCookies(context, accountId) {
     try {
       const cookies = await context.cookies();
 
-      // Validace cookies
-      if (!this.validateCookies(cookies)) {
-        console.log(`⚠️  [ID:${accountId}] Cookies nevalidní - přeskakuji uložení`);
+      if (!cookies || cookies.length === 0) {
+        console.log(`⚠️  [ID:${accountId}] Žádné cookies k uložení`);
         return;
       }
 
-      const newHash = this.hashCookies(cookies);
-      const lastSave = this.lastCookiesSave.get(accountId);
-      const now = Date.now();
-
-      // Zkontroluj zda se cookies změnily nebo uplynul interval
-      if (lastSave) {
-        const timeSinceLastSave = now - lastSave.timestamp;
-        const cookiesChanged = lastSave.hash !== newHash;
-
-        // Ulož pouze pokud se změnily NEBO uplynulo více než 10 minut
-        if (!cookiesChanged && timeSinceLastSave < this.cookiesSaveInterval) {
-          // console.log(`⏭️  [ID:${accountId}] Cookies nezměněny, přeskakuji (poslední save před ${Math.round(timeSinceLastSave/1000)}s)`);
-          return;
-        }
-
-        if (cookiesChanged) {
-          console.log(`🔄 [ID:${accountId}] Cookies se změnily - ukládám`);
-        } else {
-          console.log(`⏰ [ID:${accountId}] Interval uplynul (${Math.round(timeSinceLastSave/1000/60)} min) - ukládám`);
-        }
-      }
-
-      // Ulož cookies
       this.db.updateCookies(accountId, cookies);
-      this.lastCookiesSave.set(accountId, { timestamp: now, hash: newHash });
       console.log(`✅ Cookies uloženy pro účet ID: ${accountId}`);
 
     } catch (error) {
