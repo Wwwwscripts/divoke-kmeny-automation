@@ -1,4 +1,4 @@
-import { webkit } from 'playwright';
+import { chromium } from 'playwright';
 import DatabaseManager from './database.js';
 
 class BrowserManager {
@@ -17,7 +17,7 @@ class BrowserManager {
 
     const contextOptions = {
       viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       locale: 'cs-CZ',
       timezoneId: 'Europe/Prague',
     };
@@ -37,9 +37,13 @@ class BrowserManager {
       console.log('👻 Spouštím v tichém režimu (headless)');
     }
 
-    const browser = await webkit.launch({
+    const browser = await chromium.launch({
       headless: headless,
-      // WebKit nepotřebuje Chrome-specific args
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--no-sandbox'
+      ]
     });
 
     const context = await browser.newContext(contextOptions);
@@ -146,7 +150,7 @@ class BrowserManager {
 
     const contextOptions = {
       viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       locale,
       timezoneId,
       ignoreHTTPSErrors: true,
@@ -158,9 +162,13 @@ class BrowserManager {
       console.log(`🔐 Používám proxy: ${proxy.server}`);
     }
 
-    const browser = await webkit.launch({
+    const browser = await chromium.launch({
       headless: false,
-      // WebKit nepotřebuje Chrome-specific args
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--no-sandbox'
+      ]
     });
 
     const context = await browser.newContext(contextOptions);
