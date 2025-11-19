@@ -275,27 +275,42 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
 
     // Vyčisti odpojené browsery
     for (const [id, browserInfo] of visibleBrowsers.entries()) {
-      if (!browserInfo.browser || !browserInfo.browser.isConnected()) {
+      const isConnected = browserInfo.browser && browserInfo.browser.isConnected();
+      const pageValid = browserInfo.page && !browserInfo.page.isClosed();
+
+      if (!isConnected || !pageValid) {
         visibleBrowsers.delete(id);
-        console.log(`🧹 [Control Panel] Vyčištěn odpojený browser pro účet ${id}`);
+        console.log(`🧹 [Control Panel] Vyčištěn odpojený browser pro účet ${id} (connected: ${isConnected}, pageValid: ${pageValid})`);
       }
     }
 
     // Zkontroluj zda už není browser aktivní
     const existingBrowser = visibleBrowsers.get(accountId);
-    if (existingBrowser && existingBrowser.browser && existingBrowser.browser.isConnected()) {
+    if (existingBrowser && existingBrowser.browser && existingBrowser.browser.isConnected() &&
+        existingBrowser.page && !existingBrowser.page.isClosed()) {
       // Pokud je browser už otevřený a máme URL, naviguj na ni
-      if (url && existingBrowser.page) {
-        const domain = db.getDomainForAccount(account);
-        const fullUrl = `https://${account.world}.${domain}${url}`;
-        console.log(`🔄 [Control Panel] Navigace na ${fullUrl}`);
-        await existingBrowser.page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      }
+      if (url) {
+        try {
+          const domain = db.getDomainForAccount(account);
+          const fullUrl = `https://${account.world}.${domain}${url}`;
+          console.log(`🔄 [Control Panel] Navigace na ${fullUrl}`);
+          await existingBrowser.page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-      return res.json({
-        success: true,
-        message: 'Browser is already open'
-      });
+          return res.json({
+            success: true,
+            message: 'Browser is already open - navigated to URL'
+          });
+        } catch (error) {
+          console.log(`⚠️  [Control Panel] Chyba při navigaci (browser pravděpodobně zavřen): ${error.message}`);
+          // Browser byl zavřen - smaž z mapy a otevři nový níže
+          visibleBrowsers.delete(accountId);
+        }
+      } else {
+        return res.json({
+          success: true,
+          message: 'Browser is already open'
+        });
+      }
     }
 
     // Otevři browser přímo
