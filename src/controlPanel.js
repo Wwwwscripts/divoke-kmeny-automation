@@ -1,5 +1,7 @@
 import express from 'express';
 import { firefox } from 'playwright';
+import { writeFileSync, existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
 
@@ -782,6 +784,27 @@ app.delete('/api/templates/:type/:id', (req, res) => {
     db.deleteTemplate(type, id);
     res.json({ success: true });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Graceful shutdown endpoint
+app.post('/api/shutdown', (req, res) => {
+  try {
+    const shutdownFile = join(process.cwd(), '.shutdown');
+
+    // Vytvoř shutdown flag soubor
+    writeFileSync(shutdownFile, new Date().toISOString(), 'utf8');
+
+    console.log('🛑 Shutdown požadavek přijat z webového panelu');
+    console.log(`📝 Vytvořen shutdown flag: ${shutdownFile}`);
+
+    res.json({
+      success: true,
+      message: 'Shutdown zahájen - sledujte konzoli automatizace pro progress'
+    });
+  } catch (error) {
+    console.error('❌ Chyba při vytváření shutdown flag:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
