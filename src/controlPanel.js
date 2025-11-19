@@ -2,10 +2,12 @@ import express from 'express';
 import { chromium } from 'playwright';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
+import BrowserQueue from './browserQueue.js';
 
 const app = express();
 const db = new DatabaseManager();
 const browserManager = new BrowserManager(db);
+const browserQueue = new BrowserQueue(browserManager, 5); // Max 5 visible browserů najednou
 
 // Mapa aktivních browserů (accountId => { browser, context, page })
 const activeBrowsers = new Map();
@@ -250,81 +252,36 @@ app.put('/api/accounts/:id/scavenge', async (req, res) => {
 app.post('/api/accounts/:id/open-browser', async (req, res) => {
   try {
     const accountId = parseInt(req.params.id);
-    const { url } = req.body; // Volitelný parametr pro navigaci na konkrétní URL
     const account = db.getAccount(accountId);
 
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
 
-    // Zjisti locale podle světa
-    const domain = db.getDomainForAccount(account);
-    const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
-    const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
-
-    const browser = await chromium.launch({
-      headless: false,
-      args: ['--disable-blink-features=AutomationControlled']
-    });
-
-    const contextOptions = {
-      viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      locale,
-      timezoneId,
-      // Vypni cache a lokální úložiště z předchozích session
-      ignoreHTTPSErrors: true,
-    };
-
-    if (account.proxy) {
-      const proxy = browserManager.parseProxy(account.proxy);
-      contextOptions.proxy = proxy;
+    // Zkontroluj zda už není browser aktivní nebo ve frontě
+    if (browserQueue.isBrowserActive(accountId)) {
+      return res.json({
+        success: true,
+        message: 'Browser is already open',
+        queued: false
+      });
     }
 
-    const context = await browser.newContext(contextOptions);
+    // Přidej do fronty - automaticky se otevře když je místo
+    await browserQueue.enqueue(accountId, 'manual', false);
 
-    if (account.cookies) {
-      const cookies = JSON.parse(account.cookies);
-      await context.addCookies(cookies);
-    }
+    // Vrať status fronty
+    const status = browserQueue.getStatus();
+    const isActive = browserQueue.isBrowserActive(accountId);
 
-    const page = await context.newPage();
-
-    // Vyčisti localStorage/sessionStorage před načtením stránky
-    await page.goto(`https://${account.world}.${domain}/`);
-    await page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
+    res.json({
+      success: true,
+      queued: !isActive,
+      queuePosition: isActive ? 0 : status.queued,
+      message: isActive
+        ? 'Browser opened successfully'
+        : `Browser queued (${status.active}/${status.maxConcurrent} active, ${status.queued} waiting)`
     });
-
-    // Teď načti požadovanou URL nebo výchozí game.php
-    const targetUrl = url
-      ? `https://${account.world}.${domain}${url.startsWith('/') ? url : '/' + url}`
-      : `https://${account.world}.${domain}/game.php`;
-
-    await page.goto(targetUrl);
-
-    // Ulož browser do mapy aktivních browserů
-    setBrowser(accountId, { browser, context, page, account });
-
-    // Při zavření browseru ulož cookies a odstraň ho z mapy
-    browser.on('disconnected', async () => {
-      try {
-        // Ulož cookies před zavřením
-        const cookies = await context.cookies();
-        if (cookies && cookies.length > 0) {
-          db.updateCookies(accountId, cookies);
-          console.log(`💾 Cookies uloženy pro účet ${accountId} (${account.username})`);
-        }
-      } catch (error) {
-        console.error(`❌ Chyba při ukládání cookies při zavření browseru:`, error.message);
-      } finally {
-        console.log(`🔌 Browser pro účet ${accountId} (${account.username}) byl zavrén`);
-        removeBrowser(accountId);
-      }
-    });
-
-    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

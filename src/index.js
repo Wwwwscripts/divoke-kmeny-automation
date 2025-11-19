@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
+import BrowserQueue from './browserQueue.js';
 import SharedBrowserPool from './sharedBrowserPool.js';
 import WorkerPool from './workerPool.js';
 import AccountInfoModule from './modules/accountInfo.js';
@@ -33,12 +34,22 @@ class Automator {
   constructor() {
     this.db = new DatabaseManager();
     this.browserManager = new BrowserManager(this.db);
+    this.browserQueue = new BrowserQueue(this.browserManager, 5); // Max 5 visible browserů najednou
     this.browserPool = new SharedBrowserPool(this.db);
     this.workerPool = new WorkerPool(100); // Max 100 procesů
     this.isRunning = false;
     this.accountWaitTimes = {}; // Per-account per-module timing
-    this.openBrowserWindows = new Map(); // Účty s otevřeným viditelným oknem (accountId => browserInfo)
+    this.openBrowserWindows = new Map(); // DEPRECATED - používá se browserQueue.activeBrowsers
     this.captchaDetected = new Set(); // Účty s detekovanou CAPTCHA (aby se nespamovalo)
+
+    // Nastav callback pro zavření browseru - vyčisti captchaDetected
+    this.browserQueue.setOnCloseCallback((accountId, reason) => {
+      if (reason === 'captcha') {
+        this.captchaDetected.delete(accountId);
+        const account = this.db.getAccount(accountId);
+        console.log(`✅ [${account?.username || accountId}] CAPTCHA vyřešena - odebrán z CAPTCHA tracku`);
+      }
+    });
 
     // Intervaly pro smyčky
     this.intervals = {
@@ -82,28 +93,11 @@ class Automator {
 
   /**
    * Zkontroluje jestli je browser pro daný účet opravdu ještě otevřený a připojený
-   * Pokud ne, odstraní ho z mapy
+   * Používá browserQueue místo openBrowserWindows
    * @returns {boolean} true pokud je browser aktivní, false pokud ne
    */
   isBrowserActive(accountId) {
-    const browserInfo = this.openBrowserWindows.get(accountId);
-
-    if (!browserInfo) {
-      return false;
-    }
-
-    // Zkontroluj jestli je browser opravdu ještě připojený
-    const isConnected = browserInfo.browser && browserInfo.browser.isConnected();
-
-    if (!isConnected) {
-      // Browser byl zavřen ale nebyl odstraněn z mapy - odstraň ho teď
-      this.openBrowserWindows.delete(accountId);
-      const account = this.db.getAccount(accountId);
-      console.log(`🔌 Browser pro ${account?.username || accountId} již není aktivní - odstraněn z mapy`);
-      return false;
-    }
-
-    return true;
+    return this.browserQueue.isBrowserActive(accountId);
   }
 
   /**
@@ -603,33 +597,10 @@ class Automator {
           this.db.updateCookies(account.id, null);
         }
 
-        // Otevři viditelný prohlížeč pro manuální přihlášení (NOVÝ ÚČET)
+        // Otevři viditelný prohlížeč pro manuální přihlášení (NOVÝ ÚČET) - přidej do fronty
         if (!this.isBrowserActive(account.id)) {
-          console.log(`🖥️  Otevírám viditelný prohlížeč pro přihlášení: ${account.username}`);
-
-          try {
-            // autoSaveAndClose = true (automaticky zavře po přihlášení)
-            const browserInfo = await this.browserManager.testConnection(account.id, true);
-
-            if (browserInfo && browserInfo.browser && browserInfo.page) {
-              // Ulož do mapy
-              this.openBrowserWindows.set(account.id, browserInfo);
-
-              console.log(`✅ [${account.username}] Viditelné okno úspěšně otevřeno`);
-
-              // Sleduj zavření browseru
-              browserInfo.browser.on('disconnected', () => {
-                console.log(`🔒 Browser zavřen pro: ${account.username}`);
-                this.openBrowserWindows.delete(account.id);
-                console.log(`✅ Účet ${account.username} odebrán z otevřených oken`);
-              });
-            } else {
-              console.error(`❌ [${account.username}] Nepodařilo se otevřít viditelné okno - browserInfo je neplatný`);
-            }
-          } catch (error) {
-            console.error(`❌ [${account.username}] Chyba při otevírání viditelného okna:`, error.message);
-            console.error(`🔍 Stack trace:`, error.stack);
-          }
+          console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro přihlášení: ${account.username}`);
+          await this.browserQueue.enqueue(account.id, 'new_account', true);
         } else {
           console.log(`⏭️  Viditelný prohlížeč už je otevřený pro ${account.username} - přeskakuji`);
         }
@@ -665,32 +636,12 @@ class Automator {
           this.captchaDetected.add(account.id);
         }
 
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (CAPTCHA)
+        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (CAPTCHA) - přidej do fronty
         if (!this.isBrowserActive(account.id)) {
           if (isNewCaptcha) {
-            console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+            console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro vyřešení CAPTCHA`);
           }
-
-          // autoSaveAndClose = false (uživatel musí ručně zavřít)
-          const browserInfo = await this.browserManager.testConnection(account.id, false);
-          if (browserInfo) {
-            // Ulož do mapy
-            this.openBrowserWindows.set(account.id, browserInfo);
-
-            // Sleduj zavření browseru
-            const accountUsername = account.username;
-            const accountIdCopy = account.id;
-            browserInfo.browser.on('disconnected', () => {
-              console.log(`🔒 Browser zavřen pro: ${accountUsername}`);
-              this.openBrowserWindows.delete(accountIdCopy);
-              this.captchaDetected.delete(accountIdCopy); // Odstraň z CAPTCHA tracku
-              console.log(`✅ Účet ${accountUsername} odebrán z otevřených oken - CAPTCHA vyřešena`);
-            });
-          }
-
-          if (isNewCaptcha) {
-            console.log(`⚠️  Viditelný prohlížeč otevřen - vyřešte CAPTCHA a zavřete okno`);
-          }
+          await this.browserQueue.enqueue(account.id, 'captcha', false);
         }
         return;
       }
@@ -707,25 +658,10 @@ class Automator {
           village_conquered_at: new Date().toISOString()
         });
 
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (DOBYTÁ VESNICE)
+        // Otevři viditelný prohlížeč POUZE pokud už není otevřený (DOBYTÁ VESNICE) - přidej do fronty
         if (!this.isBrowserActive(account.id)) {
-          console.log(`🖥️  Otevírám viditelný prohlížeč pro vytvoření nové vesnice`);
-
-          // autoSaveAndClose = false (uživatel musí ručně zavřít)
-          const browserInfo = await this.browserManager.testConnection(account.id, false);
-          if (browserInfo) {
-            // Ulož do mapy
-            this.openBrowserWindows.set(account.id, browserInfo);
-
-            // Sleduj zavření browseru
-            browserInfo.browser.on('disconnected', () => {
-              console.log(`🔒 Browser zavřen pro: ${account.username}`);
-              this.openBrowserWindows.delete(account.id);
-              console.log(`✅ Účet ${account.username} odebrán z otevřených oken`);
-            });
-          }
-
-          console.log(`⚠️  Viditelný prohlížeč otevřen - vytvořte novou vesnici a zavřete okno`);
+          console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro vytvoření nové vesnice`);
+          await this.browserQueue.enqueue(account.id, 'conquered', false);
         } else {
           console.log(`⏭️  Viditelný prohlížeč už je otevřený - přeskakuji`);
         }
@@ -735,10 +671,9 @@ class Automator {
       // Zavři context (browser zůstane běžet)
       await this.browserPool.closeContext(context, browserKey);
 
-      // Odstraň z otevřených oken (pokud tam byl) - úspěšné zpracování = CAPTCHA/login vyřešen
-      if (this.openBrowserWindows.has(account.id)) {
-        this.openBrowserWindows.delete(account.id);
-        console.log(`✅ [${account.username}] Úspěšně přihlášen/vyřešeno - cookies uloženy`);
+      // Pokud byl browser otevřený, byl vyřešen CAPTCHA/login (browser se zavře automaticky pomocí startLoginWatcher)
+      if (this.isBrowserActive(account.id)) {
+        console.log(`✅ [${account.username}] Browser stále aktivní - CAPTCHA/login se řeší`);
       }
 
     } catch (error) {
