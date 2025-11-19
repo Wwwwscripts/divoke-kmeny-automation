@@ -414,6 +414,12 @@
     <div class="container">
         <div id="alert"></div>
 
+        <!-- Záložky pro útoky/oznámení -->
+        <div class="tabs-container" id="contentTypeTabs" style="margin-bottom: 10px;">
+            <button class="tab active" onclick="filterByContentType('attacks')">⚔️ Útoky</button>
+            <button class="tab" onclick="filterByContentType('notifications')">📋 Oznámení</button>
+        </div>
+
         <!-- Záložky pro světy -->
         <div class="tabs-container" id="worldTabs">
             <button class="tab active" onclick="filterByWorld('all')">Všechny světy</button>
@@ -444,6 +450,7 @@
     <script>
         let allAccounts = [];
         let currentWorld = 'all';
+        let currentContentType = 'attacks'; // 'attacks' nebo 'notifications'
 
         // Načíst uložený vybraný svět
         function loadWorldPreference() {
@@ -704,17 +711,22 @@
                     </tr>
                 `);
 
-                // Pak všechny útoky jako samostatné řádky
+                // Pak všechny útoky jako samostatné řádky - FILTRUJ podle currentContentType
                 attacks.forEach((attack, index) => {
                     const now = Math.floor(Date.now() / 1000);
                     const attacker = attack.attacker || 'Neznámý';
                     const name = attack.name || 'Útok';
                     const impact = attack.impact || name;
+                    const source = attack.source || '-';
                     const arrivalTime = attack.arrival_time || attack.arrival_date || '-';
                     const timestamp = attack.arrival_timestamp;
 
                     // Zkontroluj zda útok už dopadl
                     const isCompleted = timestamp && Number(timestamp) < now;
+
+                    // FILTR podle záložky
+                    if (currentContentType === 'attacks' && isCompleted) return; // Přeskoč dopadlé v záložce Útoky
+                    if (currentContentType === 'notifications' && !isCompleted) return; // Přeskoč budoucí v záložce Oznámení
 
                     // Ikona a barva podle stavu
                     let impactIcon = isCompleted ? '📋' : '⚔️';
@@ -728,13 +740,13 @@
                     if (attacker === '-') {
                         attackDisplay = '-';
                     } else if (isCompleted) {
-                        // Dopadlý útok - vertikální layout
+                        // Dopadlý útok (oznámení) - horizontální layout
                         attackDisplay = `
-                            <div style="display: flex; justify-content: space-between; align-items: start; opacity: 0.7;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div>
-                                    👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span><br>
-                                    ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
-                                    🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
+                                    👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span>
+                                    📍 <span style="color: #8b949e; font-weight: 600;">Z: ${source}</span>
+                                    🕐 <span style="color: #ffa657; font-weight: 600;">Dopad: ${arrivalTime}</span>
                                     <span style="color: #8b949e; font-weight: 600;">DOPADL</span>
                                 </div>
                                 <button onclick="deleteCompletedAttack(${acc.id}, '${timestamp}')"
@@ -745,12 +757,12 @@
                             </div>
                         `;
                     } else {
-                        // Aktivní útok - vertikální layout
+                        // Aktivní útok - horizontální layout
                         attackDisplay = `
-                            👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span><br>
-                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
-                            🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
-                            ⏱️ <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
+                            👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span>
+                            📍 <span style="color: ${attackerColor}; font-weight: 600;">Z: ${source}</span>
+                            🕐 <span style="color: #ffa657; font-weight: 600;">Dopad: ${arrivalTime}</span>
+                            ⏱️ <span style="color: #ffa657; font-weight: 600;">Odpočet:</span> <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
                         `;
                     }
 
@@ -796,7 +808,18 @@
             saveWorldPreference();
 
             // Aktualizuj aktivní záložku
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('#worldTabs .tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            filterAccounts();
+        }
+
+        // Filtrovat podle typu obsahu (útoky/oznámení)
+        function filterByContentType(type) {
+            currentContentType = type;
+
+            // Aktualizuj aktivní záložku
+            document.querySelectorAll('#contentTypeTabs .tab').forEach(tab => tab.classList.remove('active'));
             event.target.classList.add('active');
 
             filterAccounts();
