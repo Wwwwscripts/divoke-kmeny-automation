@@ -250,6 +250,7 @@ app.put('/api/accounts/:id/scavenge', async (req, res) => {
 app.post('/api/accounts/:id/open-browser', async (req, res) => {
   try {
     const accountId = parseInt(req.params.id);
+    const { url } = req.body; // Volitelný parametr pro navigaci na konkrétní URL
     const account = db.getAccount(accountId);
 
     if (!account) {
@@ -296,8 +297,12 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
       sessionStorage.clear();
     });
 
-    // Teď načti game.php
-    await page.goto(`https://${account.world}.${domain}/game.php`);
+    // Teď načti požadovanou URL nebo výchozí game.php
+    const targetUrl = url
+      ? `https://${account.world}.${domain}${url.startsWith('/') ? url : '/' + url}`
+      : `https://${account.world}.${domain}/game.php`;
+
+    await page.goto(targetUrl);
 
     // Ulož browser do mapy aktivních browserů
     setBrowser(accountId, { browser, context, page, account });
