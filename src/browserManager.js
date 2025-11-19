@@ -299,10 +299,8 @@ class BrowserManager {
    */
   async startLoginWatcher(browser, context, page, account) {
     const checkInterval = 5000; // 5 sekund
-    const saveInterval = 120000; // 2 minuty - periodické ukládání cookies
     const maxWaitTime = 600000; // 10 minut timeout
     let shouldStop = false;
-    let lastSaveTime = Date.now();
     const startTime = Date.now();
 
     // Funkce pro bezpečné uložení cookies
@@ -336,8 +334,8 @@ class BrowserManager {
     // Sleduj zavření browseru uživatelem
     browser.on('disconnected', async () => {
       if (!shouldStop) {
-        console.log(`🔒 [${account.username}] Browser zavřen uživatelem - ukládám cookies`);
-        await safeSaveCookies('browser zavřen uživatelem');
+        console.log(`🔒 [${account.username}] Browser zavřen uživatelem`);
+        // NEUKLÁDÁME cookies - nevíme jestli se přihlásil!
         shouldStop = true;
       }
     });
@@ -352,18 +350,13 @@ class BrowserManager {
         // Kontrola timeoutu (10 minut)
         const elapsed = Date.now() - startTime;
         if (elapsed > maxWaitTime) {
-          console.log(`⏱️  [${account.username}] Timeout (10 min) - ukládám cookies a zavírám`);
-          await safeSaveCookies('timeout');
+          console.log(`⏱️  [${account.username}] Timeout (10 min) - zavírám browser`);
+          // NEUKLÁDÁME cookies - nevíme jestli se přihlásil!
           await safeCloseBrowser('timeout');
           break;
         }
 
-        // Periodické ukládání cookies (každé 2 minuty)
-        const timeSinceLastSave = Date.now() - lastSaveTime;
-        if (timeSinceLastSave > saveInterval) {
-          await safeSaveCookies('periodické ukládání');
-          lastSaveTime = Date.now();
-        }
+        // Periodické ukládání cookies ODSTRANĚNO - ukládá se POUZE při úspěšném přihlášení
 
         try {
           // Robustnější detekce přihlášení - kontroluj více elementů
