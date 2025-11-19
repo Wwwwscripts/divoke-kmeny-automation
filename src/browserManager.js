@@ -149,7 +149,7 @@ class BrowserManager {
     const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
 
     const contextOptions = {
-      viewport: { width: 1280, height: 720 },
+      viewport: null, // Fullscreen mode
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       locale,
       timezoneId,
@@ -167,7 +167,8 @@ class BrowserManager {
       args: [
         '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage',
-        '--no-sandbox'
+        '--no-sandbox',
+        '--start-maximized'
       ]
     });
 
