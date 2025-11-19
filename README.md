@@ -66,21 +66,7 @@ Program:
 
 **DŮLEŽITÉ:** Pokud nemáš uložené cookies, budeš muset při prvním spuštění ručně přihlásit účet. Cookies se pak automaticky uloží do databáze.
 
-### 3. Test modulu pro sběr informací
-
-```bash
-npm run test-module
-```
-
-Tento příkaz:
-1. Načte první účet z databáze
-2. Otevře hru
-3. Pokud nejsi přihlášen, počká 60 sekund na ruční přihlášení
-4. Automaticky načte všechny informace o účtu (svět, premium, suroviny, jednotky)
-5. Uloží informace do databáze
-6. Zobrazí kompletní přehled
-
-### 4. Spuštění Control Panelu
+### 3. Spuštění Control Panelu
 
 ```bash
 npm run panel
@@ -96,7 +82,7 @@ Control panel zobrazuje:
 - Poslední aktualizace
 - Auto-refresh každých 30 sekund
 
-### 5. Formáty proxy
+### 4. Formáty proxy
 
 Podporované formáty:
 - `host:port` (např. `123.45.67.89:8080`)

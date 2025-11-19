@@ -8,7 +8,6 @@
     "start": "node src/index.js",
     "automate": "node --trace-warnings src/index.js",
     "panel": "node src/controlPanel.js",
-    "test": "node src/test.js",
     "add-accounts": "node src/addAccounts.js"
   },
   "keywords": [],
