@@ -129,7 +129,7 @@ class Automator {
 
     // Otevři viditelný prohlížeč pro manuální přihlášení - přidej do fronty
     console.log(`🖥️  Přidávám do fronty viditelný prohlížeč pro přihlášení: ${account.username}`);
-    await this.browserQueue.enqueue(account.id, 'bad_cookies', false); // false = browser se NEZAVŘE automaticky
+    await this.browserQueue.enqueue(account.id, 'bad_cookies', true); // true = browser se zavře automaticky po přihlášení
   }
 
   /**
