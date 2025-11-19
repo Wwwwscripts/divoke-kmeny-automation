@@ -217,11 +217,15 @@ class BrowserManager {
         });
       }
 
-      // VŽDY spusť sledování přihlášení - automaticky uloží cookies a zavře browser
-      console.log('🖥️  Prohlížeč otevřen - přihlaste se');
-      console.log('💾 Systém automaticky uloží cookies a zavře okno po přihlášení');
-
-      this.startLoginWatcher(browser, context, page, account);
+      // Spusť sledování přihlášení POUZE pokud je autoSaveAndClose = true
+      if (autoSaveAndClose) {
+        console.log('🖥️  Prohlížeč otevřen - přihlaste se');
+        console.log('💾 Systém automaticky uloží cookies a zavře okno po přihlášení');
+        this.startLoginWatcher(browser, context, page, account);
+      } else {
+        console.log('🖥️  Prohlížeč otevřen pro manuální kontrolu');
+        console.log('⚠️  Browser se NEZAVŘE automaticky - zavřete ho ručně');
+      }
 
       // Vrať browser, context, page pro sledování zavření
       return { browser, context, page, accountId: account.id };
