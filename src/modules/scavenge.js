@@ -336,23 +336,27 @@ class ScavengeModule {
 
       // Pokus o potvrzení (nebo zavření pokud disabled)
       await this.page.evaluate(() => {
-        const allButtons = Array.from(document.querySelectorAll('a.btn'));
+        // FIXED: Hledat confirm button JEN V POPUP okně
+        const popup = document.querySelector('.popup_box_content');
 
-        const enabledButtons = allButtons.filter(btn =>
-          !btn.classList.contains('unlock-button') &&
-          !btn.classList.contains('btn-disabled')
-        );
+        if (!popup) {
+          console.log('Auto Scavenge: Popup nenalezen');
+          return;
+        }
 
-        const disabledButtons = allButtons.filter(btn =>
-          !btn.classList.contains('unlock-button') &&
-          btn.classList.contains('btn-disabled')
-        );
+        // Najít confirm button v popup (ne unlock-button, ne disabled)
+        const confirmBtn = popup.querySelector('a.btn.btn-default:not(.unlock-button):not(.btn-disabled)');
+        const disabledBtn = popup.querySelector('a.btn.btn-default.btn-disabled');
 
-        if (enabledButtons.length > 0) {
+        if (confirmBtn) {
           console.log('Auto Scavenge: Potvrzuji odemknutí...');
-          enabledButtons[0].click();
-        } else if (disabledButtons.length > 0) {
-          console.log('Auto Scavenge: Odemknutí není možné, zavírám popup...');
+          confirmBtn.click();
+        } else if (disabledBtn) {
+          console.log('Auto Scavenge: Odemknutí není možné (nedostatek surovin), zavírám popup...');
+          const closeBtn = document.querySelector('a.popup_box_close');
+          if (closeBtn) closeBtn.click();
+        } else {
+          console.log('Auto Scavenge: Confirm button nenalezen, zavírám popup...');
           const closeBtn = document.querySelector('a.popup_box_close');
           if (closeBtn) closeBtn.click();
         }

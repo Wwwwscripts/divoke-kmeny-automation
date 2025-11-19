@@ -1083,31 +1083,94 @@ class Automator {
   }
 
   /**
-   * Zastaví všechny smyčky
+   * Zastaví všechny smyčky (GRACEFUL SHUTDOWN)
    */
   async stop() {
-    console.log('🛑 Zastavuji automatizaci...');
+    console.log('\n' + '='.repeat(70));
+    console.log('🛑 GRACEFUL SHUTDOWN - Zastavuji automatizaci...');
+    console.log('='.repeat(70));
+
+    // 1. Zastaví smyčky (nebudou spouštět nové úlohy)
+    console.log('\n📍 Krok 1/5: Zastavuji smyčky...');
     this.isRunning = false;
-    await this.browserPool.closeAll();
-    console.log('✅ Automatizace zastavena');
+    console.log('✅ Smyčky zastaveny (nebudou spouštět nové úlohy)');
+
+    // 2. Počkej na dokončení běžících úloh (max 30s)
+    console.log('\n📍 Krok 2/5: Čekám na dokončení běžících úloh...');
+    const completed = await this.workerPool.waitForCompletion(30000);
+
+    if (!completed) {
+      console.log('⚠️  Timeout! Některé úlohy nebyly dokončeny - force shutdown');
+      const clearedCount = this.workerPool.clearQueue();
+      console.log(`   Vymazáno ${clearedCount} čekajících úloh`);
+    }
+
+    // 3. Ulož cookies pro všechny otevřené headless contexty
+    console.log('\n📍 Krok 3/5: Ukládám cookies...');
+    try {
+      await this.browserPool.saveAllCookies();
+    } catch (error) {
+      console.error('❌ Chyba při ukládání cookies:', error.message);
+    }
+
+    // 4. Zavři všechny headless browsery
+    console.log('\n📍 Krok 4/5: Zavírám headless browsery...');
+    try {
+      await this.browserPool.closeAll();
+    } catch (error) {
+      console.error('❌ Chyba při zavírání browserů:', error.message);
+    }
+
+    // 5. Zavři všechny visible browsery
+    console.log('\n📍 Krok 5/5: Zavírám visible browsery...');
+    let closedVisible = 0;
+    for (const [accountId, browserInfo] of this.openBrowsers.entries()) {
+      try {
+        if (browserInfo.browser && browserInfo.browser.isConnected()) {
+          await browserInfo.browser.close();
+          closedVisible++;
+        }
+      } catch (error) {
+        console.error(`❌ Chyba při zavírání visible browseru pro účet ${accountId}:`, error.message);
+      }
+    }
+    this.openBrowsers.clear();
+    console.log(`✅ Zavřeno ${closedVisible} visible browserů`);
+
+    console.log('\n' + '='.repeat(70));
+    console.log('✅ GRACEFUL SHUTDOWN DOKONČEN');
+    console.log('='.repeat(70) + '\n');
   }
 }
 
 // Spuštění
 const automator = new Automator();
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\n⚠️  Přijat SIGINT - zavírám...');
-  await automator.stop();
-  process.exit(0);
-});
+// Graceful shutdown s podporou pro dvakrát Ctrl+C = force quit
+let shutdownInProgress = false;
 
-process.on('SIGTERM', async () => {
-  console.log('\n⚠️  Přijat SIGTERM - zavírám...');
-  await automator.stop();
-  process.exit(0);
-});
+async function handleShutdown(signal) {
+  if (shutdownInProgress) {
+    console.log('\n⚠️  Druhý signál detekován - FORCE QUIT!');
+    console.log('💀 Ukončuji okamžitě bez cleanup...');
+    process.exit(1);
+  }
+
+  shutdownInProgress = true;
+  console.log(`\n⚠️  Přijat ${signal} - spouštím graceful shutdown...`);
+  console.log('💡 TIP: Stiskněte Ctrl+C znovu pro okamžité ukončení (force quit)');
+
+  try {
+    await automator.stop();
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Chyba při shutdown:', error);
+    process.exit(1);
+  }
+}
+
+process.on('SIGINT', () => handleShutdown('SIGINT'));
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 
 automator.start().catch(error => {
   console.error('❌ Kritická chyba:', error);
