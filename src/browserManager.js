@@ -401,16 +401,19 @@ class BrowserManager {
           }
         } catch (error) {
           // Browser byl pravděpodobně zavřen nebo page neexistuje
-          console.log(`⚠️  [${account.username}] Chyba při kontrole přihlášení - ukládám cookies a zavírám`);
-          await safeSaveCookies('chyba při kontrole');
-          await safeCloseBrowser('chyba');
+          // NEUKLÁDÁME cookies - nevíme jestli se přihlásil!
+          // Cookies se uloží jen když browser zavře uživatel (handler 'disconnected')
+          console.log(`⚠️  [${account.username}] Chyba při kontrole přihlášení - zastavuji sledování`);
+          console.log(`    Důvod: ${error.message}`);
+          shouldStop = true;
           break;
         }
       }
     })().catch(async (err) => {
       console.error(`❌ [${account.username}] Kritická chyba v login watcher:`, err.message);
-      await safeSaveCookies('kritická chyba');
-      await safeCloseBrowser('kritická chyba');
+      // NEUKLÁDÁME cookies při chybě - nevíme jestli se přihlásil!
+      // Cookies se uloží jen při úspěšném přihlášení nebo zavření browseru uživatelem
+      shouldStop = true;
     });
   }
 }
