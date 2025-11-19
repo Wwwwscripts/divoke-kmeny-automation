@@ -424,19 +424,18 @@
             <table id="attacksTable">
                 <thead>
                     <tr>
-                        <th>Účet</th>
+                        <th>Účet / Útoky</th>
                         <th>Kmen</th>
                         <th>Svět</th>
                         <th>Souřadnice</th>
                         <th>Suroviny</th>
                         <th>Hradby</th>
                         <th>Jednotky (vlastní + podpora)</th>
-                        <th>Útoky (Útočník | Dopad | Odpočet)</th>
                         <th>Akce</th>
                     </tr>
                 </thead>
                 <tbody id="attacksList">
-                    <tr><td colspan="9" class="loading">⏳ Načítám...</td></tr>
+                    <tr><td colspan="8" class="loading">⏳ Načítám...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -496,7 +495,7 @@
         async function loadAttacks() {
             const tbody = document.getElementById('attacksList');
             const alertDiv = document.getElementById('alert');
-            tbody.innerHTML = '<tr><td colspan="9" class="loading">⏳ Načítám...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="loading">⏳ Načítám...</td></tr>';
             alertDiv.innerHTML = '';
 
             try {
@@ -504,7 +503,7 @@
                 const data = await response.json();
 
                 if (!data.success) {
-                    tbody.innerHTML = `<tr><td colspan="9" class="loading" style="color: #f85149;">❌ Chyba: ${data.error}</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="8" class="loading" style="color: #f85149;">❌ Chyba: ${data.error}</td></tr>`;
                     return;
                 }
 
@@ -512,7 +511,7 @@
                 allAccounts = accountsUnderAttack;
 
                 if (accountsUnderAttack.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="loading" style="color: #3fb950;">✅ Žádné účty pod útokem!</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="loading" style="color: #3fb950;">✅ Žádné účty pod útokem!</td></tr>';
                     alertDiv.innerHTML = '<div class="alert success">✅ Všechny účty jsou v bezpečí!</div>';
                     updateAttackCount();
                     return;
@@ -530,7 +529,7 @@
                 updateAttackCount();
 
             } catch (error) {
-                tbody.innerHTML = `<tr><td colspan="9" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
             }
         }
 
@@ -558,9 +557,9 @@
                 const coord = (acc.coord_x && acc.coord_y) ? `${acc.coord_x}|${acc.coord_y}` : '-';
 
                 const resources = `
-                    ${getResourceIcon('wood')} ${(acc.wood || 0).toLocaleString('cs-CZ')} |
-                    ${getResourceIcon('stone')} ${(acc.clay || 0).toLocaleString('cs-CZ')} |
-                    ${getResourceIcon('iron')} ${(acc.iron || 0).toLocaleString('cs-CZ')}
+                    ${getResourceIcon('holz')} ${(acc.wood || 0).toLocaleString('cs-CZ')} |
+                    ${getResourceIcon('lehm')} ${(acc.clay || 0).toLocaleString('cs-CZ')} |
+                    ${getResourceIcon('eisen')} ${(acc.iron || 0).toLocaleString('cs-CZ')}
                 `;
 
                 // Parsování jednotek
@@ -692,17 +691,16 @@
                     actionButton = `<button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>`;
                 }
 
-                // První řádek JEN se základními info (BEZ útoku)
+                // První řádek: Jméno účtu + základní info s rowspan
                 rows.push(`
                     <tr>
-                        <td rowspan="${rowspan}"><span class="account-name">${acc.username}</span></td>
+                        <td><span class="account-name">${acc.username}</span></td>
                         <td rowspan="${rowspan}">${acc.tribe_name || '-'}</td>
                         <td rowspan="${rowspan}"><span class="world-badge">${acc.world || '-'}</span></td>
                         <td rowspan="${rowspan}" class="coord">${coord}</td>
                         <td rowspan="${rowspan}" class="resources">${resources}</td>
                         <td rowspan="${rowspan}" class="wall-level">${getWallIcon()} Lvl ${acc.wall_level || 0}</td>
                         <td rowspan="${rowspan}">${unitsDisplay}</td>
-                        <td></td>
                         <td rowspan="${rowspan}">
                             ${actionButton}
                         </td>
