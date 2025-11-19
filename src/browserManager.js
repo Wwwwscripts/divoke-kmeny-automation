@@ -263,10 +263,7 @@ class BrowserManager {
       } else {
         console.log('🖥️  Prohlížeč otevřen pro manuální kontrolu');
         console.log('⚠️  Browser se NEZAVŘE automaticky - zavřete ho ručně');
-        console.log('💾 Cookies se automaticky ukládají každou 1 minutu');
-
-        // Spusť periodické ukládání cookies (každou 1 minutu)
-        this.startPeriodicCookieSaver(browser, context, account);
+        console.log('⚠️  Cookies se NEULOŽÍ automaticky - pouze po úspěšném přihlášení');
       }
 
       // Vrať browser, context, page pro sledování zavření
@@ -278,57 +275,6 @@ class BrowserManager {
       await this.close(browser, context);
       return null;
     }
-  }
-
-  /**
-   * Periodicky ukládá cookies pro manuální browsery (autoClose=false)
-   */
-  async startPeriodicCookieSaver(browser, context, account) {
-    const saveInterval = 60000; // 1 minuta
-    let shouldStop = false;
-
-    // Funkce pro bezpečné uložení cookies
-    const safeSaveCookies = async () => {
-      try {
-        const cookies = await context.cookies();
-        if (cookies && cookies.length > 0) {
-          this.db.updateCookies(account.id, cookies);
-          console.log(`💾 [${account.username}] Cookies auto-uloženy (${cookies.length} cookies)`);
-          return true;
-        }
-      } catch (error) {
-        console.error(`⚠️  [${account.username}] Nepodařilo se auto-uložit cookies:`, error.message);
-      }
-      return false;
-    };
-
-    // Sleduj zavření browseru uživatelem
-    browser.on('disconnected', async () => {
-      shouldStop = true;
-      console.log(`🔒 [${account.username}] Browser zavřen - ukládání cookies zastaveno`);
-    });
-
-    // Spusť periodické ukládání na pozadí
-    (async () => {
-      // První uložení hned
-      await safeSaveCookies();
-
-      while (!shouldStop) {
-        await new Promise(resolve => setTimeout(resolve, saveInterval));
-
-        if (shouldStop) break;
-
-        // Zkontroluj jestli je browser stále připojený
-        if (!browser.isConnected()) {
-          console.log(`⚠️  [${account.username}] Browser odpojen - zastavuji ukládání`);
-          break;
-        }
-
-        await safeSaveCookies();
-      }
-    })().catch(err => {
-      console.error(`❌ [${account.username}] Kritická chyba v cookie saver:`, err.message);
-    });
   }
 
   /**
