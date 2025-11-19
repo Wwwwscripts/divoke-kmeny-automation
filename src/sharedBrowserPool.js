@@ -103,6 +103,7 @@ class SharedBrowserPool {
 
   /**
    * Uzavře context (ale nechá browser běžet)
+   * NEUKLÁDÁ cookies - ty se ukládají POUZE při manuálním přihlášení a shutdown
    */
   async closeContext(context, browserKey) {
     try {
