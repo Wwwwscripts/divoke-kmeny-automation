@@ -201,7 +201,8 @@ class RecruitModule {
 
       Object.keys(template).forEach(unitType => {
         const targetCount = template[unitType];
-        const currentCount = unitsData[unitType]?.total || 0;
+        // Použij totalOwn (ze support modulu) nebo total (z fallback metody)
+        const currentCount = unitsData[unitType]?.totalOwn || unitsData[unitType]?.total || 0;
         const needed = Math.max(0, targetCount - currentCount);
 
         if (needed > 0) {
