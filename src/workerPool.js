@@ -99,6 +99,48 @@ class WorkerPool {
     const stats = this.getStats();
     console.log(`📊 Pool: ${stats.running}/${stats.total} běží | ${stats.queued} ve frontě | ${stats.utilization} využití`);
   }
+
+  /**
+   * Počká na dokončení všech běžících úloh
+   * @param {number} timeout - Max čas čekání v ms (default 30s)
+   * @returns {Promise<boolean>} true pokud všechny úlohy dokončeny, false při timeoutu
+   */
+  async waitForCompletion(timeout = 30000) {
+    const startTime = Date.now();
+    const checkInterval = 500; // Kontroluj každých 500ms
+
+    console.log(`⏳ Čekám na dokončení ${this.runningWorkers} běžících úloh...`);
+
+    while (this.runningWorkers > 0 || this.queue.length > 0) {
+      const elapsed = Date.now() - startTime;
+
+      if (elapsed >= timeout) {
+        console.log(`⚠️  Timeout! Zbývá: ${this.runningWorkers} běžících, ${this.queue.length} ve frontě`);
+        return false;
+      }
+
+      // Vypíše progress každých 5 sekund
+      if (Math.floor(elapsed / 5000) > Math.floor((elapsed - checkInterval) / 5000)) {
+        console.log(`   ⏱️  ${Math.floor(elapsed / 1000)}s - Zbývá: ${this.runningWorkers} běžících, ${this.queue.length} ve frontě`);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+    }
+
+    console.log(`✅ Všechny úlohy dokončeny`);
+    return true;
+  }
+
+  /**
+   * Vyčistí frontu (zahodí čekající úlohy)
+   * Používá se při force shutdown
+   */
+  clearQueue() {
+    const count = this.queue.length;
+    this.queue = [];
+    console.log(`🗑️  Vymazáno ${count} čekajících úloh z fronty`);
+    return count;
+  }
 }
 
 export default WorkerPool;

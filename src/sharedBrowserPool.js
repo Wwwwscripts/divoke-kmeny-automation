@@ -91,9 +91,12 @@ class SharedBrowserPool {
       }
     }
 
-    // Zaznamenej context
+    // Zaznamenej context (s accountId pro pozdější ukládání cookies)
     const browserData = this.browsers.get(browserKey);
     browserData.contexts.add(context);
+
+    // Ulož accountId přímo na context (pro saveAllCookies)
+    context._accountId = accountId;
 
     return { browser, context, account, browserKey };
   }
@@ -177,6 +180,43 @@ class SharedBrowserPool {
       browsers: this.browsers.size,
       contexts: totalContexts
     };
+  }
+
+  /**
+   * Uloží cookies pro všechny otevřené contexty
+   * Volá se před shutdown aby se neuložily cookies
+   */
+  async saveAllCookies() {
+    console.log('💾 Ukládám cookies pro všechny otevřené contexty...');
+
+    let savedCount = 0;
+    let errorCount = 0;
+
+    for (const [key, data] of this.browsers.entries()) {
+      for (const context of data.contexts) {
+        try {
+          // AccountId bylo uloženo při vytváření contextu
+          const accountId = context._accountId;
+
+          if (!accountId) {
+            console.warn(`⚠️  Context nemá přiřazený accountId - přeskakuji`);
+            continue;
+          }
+
+          const cookies = await context.cookies();
+
+          if (cookies && cookies.length > 0) {
+            this.db.updateCookies(accountId, cookies);
+            savedCount++;
+          }
+        } catch (error) {
+          console.error(`❌ Chyba při ukládání cookies:`, error.message);
+          errorCount++;
+        }
+      }
+    }
+
+    console.log(`✅ Cookies uloženy pro ${savedCount} účtů (${errorCount} chyb)`);
   }
 
   /**
