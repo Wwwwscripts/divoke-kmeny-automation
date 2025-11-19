@@ -89,8 +89,11 @@ class Automator {
     const browserInfo = this.openBrowsers.get(accountId);
     if (!browserInfo) return false;
 
-    // Zkontroluj jestli je browser stále připojený
-    if (!browserInfo.browser || !browserInfo.browser.isConnected()) {
+    // Zkontroluj jestli je browser stále připojený a page není zavřený
+    const isConnected = browserInfo.browser && browserInfo.browser.isConnected();
+    const pageValid = browserInfo.page && !browserInfo.page.isClosed();
+
+    if (!isConnected || !pageValid) {
       this.openBrowsers.delete(accountId);
       return false;
     }
