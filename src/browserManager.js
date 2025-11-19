@@ -239,11 +239,47 @@ class BrowserManager {
    */
   async startLoginWatcher(browser, context, page, account) {
     const checkInterval = 5000; // 5 sekund
+    const saveInterval = 120000; // 2 minuty - periodické ukládání cookies
+    const maxWaitTime = 600000; // 10 minut timeout
     let shouldStop = false;
+    let lastSaveTime = Date.now();
+    const startTime = Date.now();
+
+    // Funkce pro bezpečné uložení cookies
+    const safeSaveCookies = async (reason = '') => {
+      try {
+        const cookies = await context.cookies();
+        if (cookies && cookies.length > 0) {
+          this.db.updateCookies(account.id, cookies);
+          console.log(`💾 [${account.username}] Cookies uloženy (${cookies.length} cookies)${reason ? ` - ${reason}` : ''}`);
+          return true;
+        }
+      } catch (error) {
+        console.error(`⚠️  [${account.username}] Nepodařilo se uložit cookies:`, error.message);
+      }
+      return false;
+    };
+
+    // Funkce pro bezpečné zavření browseru
+    const safeCloseBrowser = async (reason = '') => {
+      try {
+        if (!shouldStop) {
+          shouldStop = true;
+          console.log(`🔒 [${account.username}] Zavírám browser${reason ? ` - ${reason}` : ''}`);
+          await browser.close();
+        }
+      } catch (error) {
+        console.error(`⚠️  [${account.username}] Chyba při zavírání browseru:`, error.message);
+      }
+    };
 
     // Sleduj zavření browseru uživatelem
-    browser.on('disconnected', () => {
-      shouldStop = true;
+    browser.on('disconnected', async () => {
+      if (!shouldStop) {
+        console.log(`🔒 [${account.username}] Browser zavřen uživatelem - ukládám cookies`);
+        await safeSaveCookies('browser zavřen uživatelem');
+        shouldStop = true;
+      }
     });
 
     // Spusť watch loop na pozadí
@@ -252,6 +288,22 @@ class BrowserManager {
         await new Promise(resolve => setTimeout(resolve, checkInterval));
 
         if (shouldStop) break;
+
+        // Kontrola timeoutu (10 minut)
+        const elapsed = Date.now() - startTime;
+        if (elapsed > maxWaitTime) {
+          console.log(`⏱️  [${account.username}] Timeout (10 min) - ukládám cookies a zavírám`);
+          await safeSaveCookies('timeout');
+          await safeCloseBrowser('timeout');
+          break;
+        }
+
+        // Periodické ukládání cookies (každé 2 minuty)
+        const timeSinceLastSave = Date.now() - lastSaveTime;
+        if (timeSinceLastSave > saveInterval) {
+          await safeSaveCookies('periodické ukládání');
+          lastSaveTime = Date.now();
+        }
 
         try {
           // Robustnější detekce přihlášení - kontroluj více elementů
@@ -282,26 +334,23 @@ class BrowserManager {
           });
 
           if (loginStatus.isLoggedIn) {
-            console.log(`✅ [${account.username}] Přihlášení detekováno - ukládám cookies`);
-
-            // Ulož cookies
-            const cookies = await context.cookies();
-            this.db.updateCookies(account.id, cookies);
-
-            console.log(`💾 [${account.username}] Cookies uloženy (${cookies.length} cookies) - zavírám browser`);
-
-            // Zavři browser (vyvolá 'disconnected' event)
-            await browser.close();
+            console.log(`✅ [${account.username}] Přihlášení detekováno!`);
+            await safeSaveCookies('přihlášení úspěšné');
+            await safeCloseBrowser('přihlášení dokončeno');
             break;
           }
         } catch (error) {
           // Browser byl pravděpodobně zavřen nebo page neexistuje
-          console.log(`🔒 [${account.username}] Login watcher ukončen (browser zavřen)`);
+          console.log(`⚠️  [${account.username}] Chyba při kontrole přihlášení - ukládám cookies a zavírám`);
+          await safeSaveCookies('chyba při kontrole');
+          await safeCloseBrowser('chyba');
           break;
         }
       }
-    })().catch(err => {
-      console.error(`❌ [${account.username}] Chyba v login watcher:`, err.message);
+    })().catch(async (err) => {
+      console.error(`❌ [${account.username}] Kritická chyba v login watcher:`, err.message);
+      await safeSaveCookies('kritická chyba');
+      await safeCloseBrowser('kritická chyba');
     });
   }
 }
