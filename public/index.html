@@ -457,6 +457,9 @@
                 <button class="nav-btn" onclick="loadAccounts()">
                     🔄
                 </button>
+                <button class="nav-btn danger" onclick="stopAutomation()" style="background: #da3633;">
+                    🛑 Stop
+                </button>
 
                 <div class="dropdown" id="moreMenu">
                     <button class="nav-btn" onclick="toggleDropdown()">⋯</button>
@@ -1085,6 +1088,27 @@
                     // Refresh data
                     await loadAccounts();
                     alert('✅ Účet resetován, můžete pokračovat v automatizaci');
+                } else {
+                    alert('❌ Chyba: ' + result.error);
+                }
+            } catch (error) {
+                alert('❌ Chyba: ' + error.message);
+            }
+        }
+
+        async function stopAutomation() {
+            if (!confirm('🛑 Opravdu chcete zastavit automatizaci?\n\n⏳ Všechny běžící úkoly doběhnou a pak se aplikace vypne.\n\n💡 TIP: Pro okamžité vypnutí stiskněte Ctrl+C v konzoli 2x')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/shutdown', {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert('✅ Shutdown zahájen!\n\n⏳ Počkejte na dokončení běžících úkolů...\n📝 Sledujte konzoli pro progress.');
                 } else {
                     alert('❌ Chyba: ' + result.error);
                 }

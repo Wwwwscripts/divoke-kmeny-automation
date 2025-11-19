@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
 import SharedBrowserPool from './sharedBrowserPool.js';
@@ -79,6 +81,34 @@ class Automator {
     }
 
     return 'divokekmeny.cz';
+  }
+
+  /**
+   * Zkontroluje jestli existuje .shutdown flag soubor
+   * Pokud ano, zahájí graceful shutdown a vrátí true
+   */
+  async checkShutdownFlag() {
+    const shutdownFile = join(process.cwd(), '.shutdown');
+
+    if (existsSync(shutdownFile)) {
+      console.log('\n🛑 Detekován shutdown flag - zahajuji graceful shutdown...');
+
+      // Smaž flag soubor
+      try {
+        unlinkSync(shutdownFile);
+        console.log('🗑️  Shutdown flag smazán');
+      } catch (error) {
+        console.error('⚠️  Nepodařilo se smazat shutdown flag:', error.message);
+      }
+
+      // Zavolej stop()
+      await this.stop();
+
+      // Exit proces
+      process.exit(0);
+    }
+
+    return false;
   }
 
   /**
@@ -198,6 +228,9 @@ class Automator {
     console.log('🔄 [P1] Smyčka KONTROLY spuštěna');
 
     while (this.isRunning) {
+      // Zkontroluj shutdown flag
+      await this.checkShutdownFlag();
+
       const accounts = this.db.getAllActiveAccounts();
 
       // Zpracuj po 2 účtech
@@ -234,6 +267,9 @@ class Automator {
     console.log('🔄 [P2] Smyčka BUILD spuštěna');
 
     while (this.isRunning) {
+      // Zkontroluj shutdown flag
+      await this.checkShutdownFlag();
+
       const accounts = this.db.getAllActiveAccounts();
 
       // Filtruj pouze účty, které mají build enabled a vypršelý timer
@@ -284,6 +320,9 @@ class Automator {
     console.log('🔄 [P2] Smyčka SBĚR spuštěna');
 
     while (this.isRunning) {
+      // Zkontroluj shutdown flag
+      await this.checkShutdownFlag();
+
       const accounts = this.db.getAllActiveAccounts();
 
       // Filtruj pouze účty, které mají scavenge enabled a vypršelý timer
@@ -339,6 +378,9 @@ class Automator {
     console.log('🔄 [P3] Smyčka REKRUT spuštěna');
 
     while (this.isRunning) {
+      // Zkontroluj shutdown flag
+      await this.checkShutdownFlag();
+
       const accounts = this.db.getAllActiveAccounts();
 
       // Filtruj pouze účty, které mají recruit enabled a vypršelý timer
@@ -389,6 +431,9 @@ class Automator {
     console.log('🔄 [P4] Smyčka VÝZKUM spuštěna');
 
     while (this.isRunning) {
+      // Zkontroluj shutdown flag
+      await this.checkShutdownFlag();
+
       const accounts = this.db.getAllActiveAccounts();
 
       // Filtruj pouze účty, které mají research enabled a vypršelý timer
@@ -439,6 +484,9 @@ class Automator {
     console.log('🔄 [P5] Smyčka PALADIN spuštěna');
 
     while (this.isRunning) {
+      // Zkontroluj shutdown flag
+      await this.checkShutdownFlag();
+
       const accounts = this.db.getAllActiveAccounts();
 
       // Filtruj pouze účty s vypršelým timerem
@@ -482,6 +530,9 @@ class Automator {
     console.log('🔄 [P6] Smyčka JEDNOTKY spuštěna');
 
     while (this.isRunning) {
+      // Zkontroluj shutdown flag
+      await this.checkShutdownFlag();
+
       const accounts = this.db.getAllActiveAccounts();
 
       // Zpracuj po 2 účtech
@@ -520,6 +571,9 @@ class Automator {
     await this.processDailyRewardsForAllAccounts(true);
 
     while (this.isRunning) {
+      // Zkontroluj shutdown flag
+      await this.checkShutdownFlag();
+
       // Čekej až do dalšího času: 4:00 nebo 16:00
       const now = new Date();
       const currentHour = now.getHours();
@@ -617,6 +671,9 @@ class Automator {
    */
   async statsMonitor() {
     while (this.isRunning) {
+      // Zkontroluj shutdown flag
+      await this.checkShutdownFlag();
+
       await new Promise(resolve => setTimeout(resolve, 30000)); // 30 sekund
       this.workerPool.logStats();
 
