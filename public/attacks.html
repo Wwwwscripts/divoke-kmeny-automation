@@ -469,6 +469,11 @@
             return `<img src="/images/wall.png" style="width: 18px; height: 18px; vertical-align: middle; margin-right: 2px;" alt="wall">`;
         }
 
+        // Helper funkce pro ikony surovin
+        function getResourceIcon(resourceType) {
+            return `<img src="/images/${resourceType}.png" style="width: 18px; height: 18px; vertical-align: middle; margin-right: 2px;" alt="${resourceType}">`;
+        }
+
         // Dropdown menu
         function toggleDropdown() {
             document.getElementById('moreMenu').classList.toggle('active');
@@ -553,9 +558,9 @@
                 const coord = (acc.coord_x && acc.coord_y) ? `${acc.coord_x}|${acc.coord_y}` : '-';
 
                 const resources = `
-                    🪵 ${(acc.wood || 0).toLocaleString('cs-CZ')} |
-                    🧱 ${(acc.clay || 0).toLocaleString('cs-CZ')} |
-                    ⛏️ ${(acc.iron || 0).toLocaleString('cs-CZ')}
+                    ${getResourceIcon('wood')} ${(acc.wood || 0).toLocaleString('cs-CZ')} |
+                    ${getResourceIcon('stone')} ${(acc.clay || 0).toLocaleString('cs-CZ')} |
+                    ${getResourceIcon('iron')} ${(acc.iron || 0).toLocaleString('cs-CZ')}
                 `;
 
                 // Parsování jednotek
@@ -674,12 +679,8 @@
                     }
                 }
 
-                // Pokud nejsou žádné útoky, zobraz jeden řádek s "-"
-                if (attacks.length === 0) {
-                    attacks = [{ attacker: '-', impact: '-', arrival_time: '-', arrival_timestamp: null }];
-                }
-
-                const rowspan = attacks.length;
+                // Rowspan = počet útoků + 1 řádek pro základní info (bez útoku)
+                const rowspan = attacks.length > 0 ? attacks.length + 1 : 1;
 
                 // Tlačítko podle typu útoků
                 let actionButton = '';
@@ -691,7 +692,24 @@
                     actionButton = `<button class="btn-small" onclick="openBrowser(${acc.id})">🖥️ Otevřít</button>`;
                 }
 
-                // První řádek s rowspan pro základní info
+                // První řádek JEN se základními info (BEZ útoku)
+                rows.push(`
+                    <tr>
+                        <td rowspan="${rowspan}"><span class="account-name">${acc.username}</span></td>
+                        <td rowspan="${rowspan}">${acc.tribe_name || '-'}</td>
+                        <td rowspan="${rowspan}"><span class="world-badge">${acc.world || '-'}</span></td>
+                        <td rowspan="${rowspan}" class="coord">${coord}</td>
+                        <td rowspan="${rowspan}" class="resources">${resources}</td>
+                        <td rowspan="${rowspan}" class="wall-level">${getWallIcon()} Lvl ${acc.wall_level || 0}</td>
+                        <td rowspan="${rowspan}">${unitsDisplay}</td>
+                        <td></td>
+                        <td rowspan="${rowspan}">
+                            ${actionButton}
+                        </td>
+                    </tr>
+                `);
+
+                // Pak všechny útoky jako samostatné řádky
                 attacks.forEach((attack, index) => {
                     const now = Math.floor(Date.now() / 1000);
                     const attacker = attack.attacker || 'Neznámý';
@@ -715,13 +733,13 @@
                     if (attacker === '-') {
                         attackDisplay = '-';
                     } else if (isCompleted) {
-                        // Dopadlý útok
+                        // Dopadlý útok - vertikální layout
                         attackDisplay = `
-                            <div style="display: flex; justify-content: space-between; align-items: center; opacity: 0.7;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; opacity: 0.7;">
                                 <div>
-                                    👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span> |
-                                    ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span> |
-                                    🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span> |
+                                    👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span><br>
+                                    ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
+                                    🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
                                     <span style="color: #8b949e; font-weight: 600;">DOPADL</span>
                                 </div>
                                 <button onclick="deleteCompletedAttack(${acc.id}, '${timestamp}')"
@@ -732,40 +750,21 @@
                             </div>
                         `;
                     } else {
-                        // Aktivní útok
+                        // Aktivní útok - vertikální layout
                         attackDisplay = `
-                            👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span> |
-                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span> |
-                            🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span> |
+                            👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span><br>
+                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
+                            🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
                             ⏱️ <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
                         `;
                     }
 
-                    if (index === 0) {
-                        // První řádek s rowspan
-                        rows.push(`
-                            <tr>
-                                <td rowspan="${rowspan}"><span class="account-name">${acc.username}</span></td>
-                                <td rowspan="${rowspan}">${acc.tribe_name || '-'}</td>
-                                <td rowspan="${rowspan}"><span class="world-badge">${acc.world || '-'}</span></td>
-                                <td rowspan="${rowspan}" class="coord">${coord}</td>
-                                <td rowspan="${rowspan}" class="resources">${resources}</td>
-                                <td rowspan="${rowspan}" class="wall-level">${getWallIcon()} Lvl ${acc.wall_level || 0}</td>
-                                <td rowspan="${rowspan}">${unitsDisplay}</td>
-                                <td>${attackDisplay}</td>
-                                <td rowspan="${rowspan}">
-                                    ${actionButton}
-                                </td>
-                            </tr>
-                        `);
-                    } else {
-                        // Další řádky jen s útokem
-                        rows.push(`
-                            <tr>
-                                <td>${attackDisplay}</td>
-                            </tr>
-                        `);
-                    }
+                    // Každý útok má vlastní řádek (pouze útok, bez základních info)
+                    rows.push(`
+                        <tr>
+                            <td>${attackDisplay}</td>
+                        </tr>
+                    `);
                 });
             });
 
