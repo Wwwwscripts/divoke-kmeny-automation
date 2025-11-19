@@ -715,13 +715,13 @@
                     if (attacker === '-') {
                         attackDisplay = '-';
                     } else if (isCompleted) {
-                        // Dopadlý útok
+                        // Dopadlý útok - vertikální layout
                         attackDisplay = `
-                            <div style="display: flex; justify-content: space-between; align-items: center; opacity: 0.7;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; opacity: 0.7;">
                                 <div>
-                                    👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span> |
-                                    ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span> |
-                                    🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span> |
+                                    👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span><br>
+                                    ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
+                                    🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
                                     <span style="color: #8b949e; font-weight: 600;">DOPADL</span>
                                 </div>
                                 <button onclick="deleteCompletedAttack(${acc.id}, '${timestamp}')"
@@ -732,11 +732,11 @@
                             </div>
                         `;
                     } else {
-                        // Aktivní útok
+                        // Aktivní útok - vertikální layout
                         attackDisplay = `
-                            👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span> |
-                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span> |
-                            🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span> |
+                            👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span><br>
+                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span><br>
+                            🕐 <span style="color: #ffa657; font-weight: 600;">${arrivalTime}</span><br>
                             ⏱️ <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
                         `;
                     }
