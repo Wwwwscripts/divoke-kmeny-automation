@@ -359,6 +359,13 @@ class BrowserManager {
         // Periodické ukládání cookies ODSTRANĚNO - ukládá se POUZE při úspěšném přihlášení
 
         try {
+          // Kontrola jestli page ještě existuje
+          if (page.isClosed()) {
+            console.log(`⚠️  [${account.username}] Page zavřen - zastavuji sledování`);
+            shouldStop = true;
+            break;
+          }
+
           // Robustnější detekce přihlášení - kontroluj více elementů
           const loginStatus = await page.evaluate(() => {
             // Detekce PŘIHLÁŠENÍ - hledej více elementů
@@ -382,20 +389,39 @@ class BrowserManager {
 
             return {
               isLoggedIn: hasLoggedInElement && !hasLoginForm,
-              hasLoginForm: hasLoginForm
+              hasLoginForm: hasLoginForm,
+              url: window.location.href
             };
           });
 
+          // Debug log každých 30s (každých 6 iterací po 5s)
+          const iterationCount = Math.floor((Date.now() - startTime) / checkInterval);
+          if (iterationCount % 6 === 0) {
+            console.log(`🔍 [${account.username}] Kontrola přihlášení (${Math.floor((Date.now() - startTime) / 1000)}s): přihlášen=${loginStatus.isLoggedIn}, form=${loginStatus.hasLoginForm}, url=${loginStatus.url}`);
+          }
+
           if (loginStatus.isLoggedIn) {
-            console.log(`✅ [${account.username}] Přihlášení detekováno!`);
+            console.log(`✅ [${account.username}] Přihlášení detekováno! (URL: ${loginStatus.url})`);
             await safeSaveCookies('přihlášení úspěšné');
             await safeCloseBrowser('přihlášení dokončeno');
             break;
           }
         } catch (error) {
-          // Browser byl pravděpodobně zavřen nebo page neexistuje
-          // NEUKLÁDÁME cookies - nevíme jestli se přihlásil!
-          // Cookies se uloží jen když browser zavře uživatel (handler 'disconnected')
+          // Zachyť specifické chyby
+          const errorMsg = error.message || '';
+
+          // Pokud je to navigace nebo context destroyed, NEPŘERUŠUJ sledování
+          // (stránka se možná jen načítá po přihlášení)
+          if (errorMsg.includes('navigation') ||
+              errorMsg.includes('Execution context') ||
+              errorMsg.includes('detached')) {
+            console.log(`⏳ [${account.username}] Navigace detekována, pokračuji ve sledování...`);
+            // Počkej 2s a pokračuj
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            continue;
+          }
+
+          // Jiná kritická chyba - zastav sledování
           console.log(`⚠️  [${account.username}] Chyba při kontrole přihlášení - zastavuji sledování`);
           console.log(`    Důvod: ${error.message}`);
           shouldStop = true;
