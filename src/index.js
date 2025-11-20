@@ -25,7 +25,7 @@ import { detectAnyChallenge, detectBan } from './utils/antiBot.js';
  * Architektura:
  * - Globální WorkerPool (max 100 procesů)
  * - 6 nezávislých smyček:
- *   1. Build - každých 5 min po 5 účtech [P1]
+ *   1. Build - každých 10s po 5 účtech (per-account timing) [P1]
  *   2. Sběr - každých 10 min po 5 účtech [P2]
  *   3. Rekrut - každých 15 min po 5 účtech (po 5 jednotkách) [P3]
  *   4. Výzkum - každých 120 min po 5 účtech [P4]
@@ -49,7 +49,7 @@ class Automator {
     // Intervaly pro smyčky
     this.intervals = {
       recruit: 15 * 60 * 1000,    // 15 minut (ZPOMALENO pro minimalizaci captchy)
-      building: 5 * 60 * 1000,    // 5 minut (ZPOMALENO z 5s pro minimalizaci captchy)
+      building: 10 * 1000,        // 10 sekund (per-account timing podle délky fronty)
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
       paladin: 60 * 60 * 1000,    // 60 minut (1 hodina)
       accountInfo: 20 * 60 * 1000, // 20 minut (sběr statistik)
@@ -193,7 +193,7 @@ class Automator {
     console.log('🤖 Spouštím Event-Driven automatizaci');
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🔄 6 nezávislých smyček:');
-    console.log('   [P1] Build: každých 5 min po 5 účtech (per-account timing)');
+    console.log('   [P1] Build: každých 10s po 5 účtech (per-account timing podle fronty)');
     console.log('   [P2] Sběr: každých 10 min po 5 účtech (per-account timing)');
     console.log('   [P3] Rekrut: každých 15 min po 5 účtech (po 5 jednotkách, per-account timing)');
     console.log('   [P4] Výzkum: každých 120 min po 5 účtech (2 hod, per-account timing)');
@@ -221,7 +221,7 @@ class Automator {
 
   /**
    * SMYČKA 1: Výstavba
-   * Každých 5 minut projde účty a zkontroluje per-account timing
+   * Každých 10 sekund projde účty a zkontroluje per-account timing
    * Zpracovává po 5 účtech paralelně
    * Priorita: 1
    */
@@ -267,7 +267,7 @@ class Automator {
         }
       }
 
-      // Počkej 5 minut před další kontrolou - s randomizací ±20%
+      // Počkej 10 sekund před další kontrolou - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.building)));
     }
   }
