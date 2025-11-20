@@ -630,25 +630,16 @@ class Automator {
     while (this.isRunning) {
       loopCount++;
       const loopStartTime = Date.now();
-      console.log(`\n🪖  JEDNOTKY Cyklus #${loopCount} (${new Date().toLocaleTimeString('cs-CZ')})`);
 
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
       const accounts = this.db.getAllActiveAccounts();
-      console.log(`   📊 Sbírám informace o jednotkách pro ${accounts.length} účtů`);
-
-      const totalBatches = Math.ceil(accounts.length / 2);
-      let successCount = 0;
       let errorCount = 0;
 
       // Zpracuj po 2 účtech
       for (let i = 0; i < accounts.length; i += 2) {
-        const batchStartTime = Date.now();
         const batch = accounts.slice(i, i + 2);
-        const batchNum = Math.floor(i / 2) + 1;
-
-        console.log(`\n   📦 Skupina ${batchNum}/${totalBatches}: ${batch.map(a => a.username).join(', ')}`);
 
         // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
         const results = await Promise.allSettled(
@@ -661,14 +652,9 @@ class Automator {
           )
         );
 
-        // Loguj výsledky
-        const successful = results.filter(r => r.status === 'fulfilled').length;
+        // Počítej jen chyby
         const failed = results.filter(r => r.status === 'rejected').length;
-        successCount += successful;
         errorCount += failed;
-        const batchElapsed = ((Date.now() - batchStartTime) / 1000).toFixed(1);
-
-        console.log(`      ✅ Úspěšně: ${successful} | ❌ Chyby: ${failed} | ⏱️  ${batchElapsed}s`);
 
         // Loguj chyby
         results.forEach((result, idx) => {
@@ -680,19 +666,17 @@ class Automator {
         // Pauza mezi dávkami (1-3s)
         if (i + 2 < accounts.length) {
           const pause = 1000 + Math.random() * 2000;
-          console.log(`      ⏸️  Pauza ${(pause / 1000).toFixed(1)}s...`);
           await new Promise(resolve => setTimeout(resolve, pause));
         }
       }
 
-      const loopElapsed = ((Date.now() - loopStartTime) / 1000).toFixed(1);
-      console.log(`\n   ✅ Cyklus dokončen za ${loopElapsed}s (Úspěšně: ${successCount}, Chyby: ${errorCount})`);
+      // Log jen pokud byly chyby
+      if (errorCount > 0) {
+        console.log(`⚠️  JEDNOTKY Cyklus #${loopCount}: ${errorCount} chyb`);
+      }
 
       // Počkej 15 minut - s randomizací ±2 minuty
       const interval = randomizeInterval(this.intervals.units, 2 * 60 * 1000);
-      const waitMin = Math.floor(interval / 60000);
-      const waitSec = Math.floor((interval % 60000) / 1000);
-      console.log(`   ⏰ Další cyklus za ${waitMin}m ${waitSec}s...`);
       await new Promise(resolve => setTimeout(resolve, interval));
     }
   }
@@ -1141,8 +1125,6 @@ class Automator {
     let context, browserKey;
 
     try {
-      console.log(`      🪖 [${account.username}] Sbírám info o jednotkách...`);
-
       ({ context, browserKey } = await this.browserPool.createContext(account.id));
       const page = await context.newPage();
 
@@ -1159,8 +1141,6 @@ class Automator {
 
       const supportModule = new SupportModule(page, this.db, account.id);
       await supportModule.getAllUnitsInfo();
-
-      console.log(`      ✅ [${account.username}] Jednotky uloženy do DB`);
 
       await this.browserPool.closeContext(context, browserKey);
 
