@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import DatabaseManager from './database.js';
-import stealthScript from './utils/stealth.js';
+import { generateFingerprint, createStealthScript } from './utils/fingerprint.js';
 
 class BrowserManager {
   constructor(db = null) {
@@ -9,16 +9,25 @@ class BrowserManager {
 
   async createContext(accountId) {
     const account = this.db.getAccount(accountId);
-    
+
     if (!account) {
       throw new Error(`Účet s ID ${accountId} nebyl nalezen`);
     }
 
     console.log(`🚀 Spouštím prohlížeč pro účet: ${account.username}`);
 
+    // Získej nebo vygeneruj fingerprint pro účet
+    let fingerprint = this.db.getFingerprint(accountId);
+    if (!fingerprint) {
+      fingerprint = generateFingerprint();
+      this.db.saveFingerprint(accountId, fingerprint);
+      console.log(`🎨 Vygenerován nový fingerprint pro účet ${account.username}`);
+    }
+
+    // Použij fingerprint pro context options
     const contextOptions = {
-      viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: fingerprint.viewport,
+      userAgent: fingerprint.userAgent,
       locale: 'cs-CZ',
       timezoneId: 'Europe/Prague',
     };
@@ -49,7 +58,8 @@ class BrowserManager {
 
     const context = await browser.newContext(contextOptions);
 
-    // Přidej stealth script pro maskování automation
+    // Přidej stealth script s konkrétním fingerprintem
+    const stealthScript = createStealthScript(fingerprint);
     await context.addInitScript(stealthScript);
 
     if (account.cookies && account.cookies !== 'null') {

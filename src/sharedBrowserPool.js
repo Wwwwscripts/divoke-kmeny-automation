@@ -3,7 +3,7 @@
  * Pro účty se stejnou proxy sdílí browser (šetří RAM)
  */
 import { chromium } from 'playwright';
-import stealthScript from './utils/stealth.js';
+import { generateFingerprint, createStealthScript } from './utils/fingerprint.js';
 
 class SharedBrowserPool {
   constructor(db) {
@@ -45,7 +45,7 @@ class SharedBrowserPool {
   }
 
   /**
-   * Vytvoří context pro účet (s proxy supportem)
+   * Vytvoří context pro účet (s proxy supportem a unikátním fingerprintem)
    */
   async createContext(accountId) {
     const account = this.db.getAccount(accountId);
@@ -54,9 +54,18 @@ class SharedBrowserPool {
       throw new Error(`Účet s ID ${accountId} nebyl nalezen`);
     }
 
+    // Získej nebo vygeneruj fingerprint pro účet
+    let fingerprint = this.db.getFingerprint(accountId);
+    if (!fingerprint) {
+      fingerprint = generateFingerprint();
+      this.db.saveFingerprint(accountId, fingerprint);
+      console.log(`🎨 Vygenerován nový fingerprint pro účet ${account.username}`);
+    }
+
+    // Použij fingerprint pro context options
     const contextOptions = {
-      viewport: { width: 1280, height: 720 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: fingerprint.viewport,
+      userAgent: fingerprint.userAgent,
       locale: 'cs-CZ',
       timezoneId: 'Europe/Prague',
     };
@@ -74,7 +83,8 @@ class SharedBrowserPool {
     // Vytvoř nový context
     const context = await browser.newContext(contextOptions);
 
-    // Přidej stealth script pro maskování automation
+    // Přidej stealth script s konkrétním fingerprintem
+    const stealthScript = createStealthScript(fingerprint);
     await context.addInitScript(stealthScript);
 
     // Přidej cookies
