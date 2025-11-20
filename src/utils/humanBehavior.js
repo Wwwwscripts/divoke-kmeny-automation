@@ -146,9 +146,9 @@ export async function humanScroll(page, direction = 'down', distance = null) {
   const stepSize = scrollDistance / steps;
 
   for (let i = 0; i < steps; i++) {
-    await page.evaluate((step, dir) => {
+    await page.evaluate(({ step, dir }) => {
       window.scrollBy(0, dir === 'down' ? step : -step);
-    }, stepSize, direction);
+    }, { step: stepSize, dir: direction });
 
     // Zpoždění mezi scroll kroky (20-60ms)
     await new Promise(r => setTimeout(r, randomRange(20, 60)));
@@ -157,9 +157,9 @@ export async function humanScroll(page, direction = 'down', distance = null) {
   // Někdy scrollni o malý kousek zpět (lidé přestřelí a vracejí se)
   if (Math.random() < 0.2) {
     await randomDelay(100, 50);
-    await page.evaluate((step, dir) => {
+    await page.evaluate(({ step, dir }) => {
       window.scrollBy(0, dir === 'down' ? -step : step);
-    }, stepSize * 0.3, direction);
+    }, { step: stepSize * 0.3, dir: direction });
   }
 }
 
