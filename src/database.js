@@ -602,6 +602,46 @@ class DatabaseManager {
     this._saveTemplates(templates);
     return true;
   }
+
+  /**
+   * Získat nebo vytvořit fingerprint pro účet
+   * @param {number} accountId - ID účtu
+   * @returns {object|null} Fingerprint object nebo null pokud účet neexistuje
+   */
+  getFingerprint(accountId) {
+    const data = this._loadAccounts();
+    const account = data.accounts.find(a => a.id === accountId);
+
+    if (!account) return null;
+
+    // Pokud již má fingerprint, vrátit ho
+    if (account.fingerprint) {
+      try {
+        return JSON.parse(account.fingerprint);
+      } catch (e) {
+        // Pokud je fingerprint poškozený, vygeneruj nový
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Uložit fingerprint pro účet
+   * @param {number} accountId - ID účtu
+   * @param {object} fingerprint - Fingerprint object
+   */
+  saveFingerprint(accountId, fingerprint) {
+    const data = this._loadAccounts();
+    const account = data.accounts.find(a => a.id === accountId);
+
+    if (account) {
+      account.fingerprint = JSON.stringify(fingerprint);
+      this._saveAccounts(data);
+    }
+  }
+
 }
 
 export default DatabaseManager;
