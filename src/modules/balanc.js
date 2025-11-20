@@ -332,47 +332,43 @@ class BalancModule {
   }
 
   /**
-   * Nastavit filtry na tržišti (checkboxy)
+   * Nastavit filtry na tržišti (radio buttony)
    * Po každém kliknutí čeká na AJAX refresh nabídek
    */
   async setMarketFilters(resourceToBuy, resourceToSell) {
-    // 1. Kliknout "všechno" pro buy → POČKAT NA AJAX
+    // Radio buttony - musíme nastavit checked = true a zavolat onclick
     try {
-      await this.page.click('input[name="res_buy"][value="all"]');
-      console.log('  ✓ Kliknuto: všechno buy, čekám na AJAX refresh...');
-      await this.page.waitForTimeout(2500);
-    } catch (e) {
-      console.log('Checkbox "všechno buy" nenalezen');
-    }
+      await this.page.evaluate(({ buy, sell }) => {
+        // 1. Nastavit buy filter
+        const buyRadio = document.querySelector(`input[name="res_buy"][value="${buy}"]`);
+        if (buyRadio && !buyRadio.checked) {
+          buyRadio.checked = true;
+          // Zavolat onclick handler pro spuštění AJAX
+          if (buyRadio.onclick) {
+            buyRadio.onclick();
+          }
+        }
 
-    // 2. Kliknout "všechno" pro sell → POČKAT NA AJAX
-    try {
-      await this.page.click('input[name="res_sell"][value="all"]');
-      console.log('  ✓ Kliknuto: všechno sell, čekám na AJAX refresh...');
-      await this.page.waitForTimeout(2500);
-    } catch (e) {
-      console.log('Checkbox "všechno sell" nenalezen');
-    }
+        // 2. Nastavit sell filter
+        const sellRadio = document.querySelector(`input[name="res_sell"][value="${sell}"]`);
+        if (sellRadio && !sellRadio.checked) {
+          sellRadio.checked = true;
+          // Zavolat onclick handler pro spuštění AJAX
+          if (sellRadio.onclick) {
+            sellRadio.onclick();
+          }
+        }
+      }, { buy: resourceToBuy, sell: resourceToSell });
 
-    // 3. Kliknout konkrétní surovinu pro buy → POČKAT NA AJAX
-    try {
-      await this.page.click(`input[name="res_buy"][value="${resourceToBuy}"]`);
-      console.log(`  ✓ Kliknuto: ${resourceToBuy} buy, čekám na AJAX refresh...`);
-      await this.page.waitForTimeout(2500);
-    } catch (e) {
-      console.log(`Checkbox "${resourceToBuy} buy" nenalezen`);
-    }
+      console.log(`  ✓ Nastaveny filtry: buy=${resourceToBuy}, sell=${resourceToSell}`);
 
-    // 4. Kliknout konkrétní surovinu pro sell → POČKAT NA AJAX
-    try {
-      await this.page.click(`input[name="res_sell"][value="${resourceToSell}"]`);
-      console.log(`  ✓ Kliknuto: ${resourceToSell} sell, čekám na AJAX refresh...`);
-      await this.page.waitForTimeout(2500);
-    } catch (e) {
-      console.log(`Checkbox "${resourceToSell} sell" nenalezen`);
-    }
+      // Počkat na AJAX refresh (po obou změnách)
+      await this.page.waitForTimeout(3000);
 
-    console.log('  ✅ Filtry nastaveny, nabídky načtené');
+      console.log('  ✅ Filtry nastaveny, nabídky načtené');
+    } catch (e) {
+      console.log(`❌ Chyba při nastavování filtrů: ${e.message}`);
+    }
   }
 
   /**
