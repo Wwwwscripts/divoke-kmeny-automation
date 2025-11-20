@@ -173,6 +173,8 @@ class DatabaseManager {
         research_status: null,
         // 🆕 SCAVENGE - Nové pole pro sběr
         scavenge_enabled: 0,
+        // 🆕 BALANCE - Nové pole pro balancování surovin na trhu
+        balance_enabled: 1,
         // 🆕 PAUSE - Pozastavení účtu
         paused: 0,
         last_login: null,
@@ -396,6 +398,28 @@ class DatabaseManager {
     };
   }
 
+  // 🆕 BALANCE - Aktualizovat informace o balancování surovin
+  updateBalanceSettings(accountId, settings) {
+    const data = this._loadAccounts();
+    const account = data.accounts.find(a => a.id === accountId);
+
+    if (account) {
+      if (settings.balanceEnabled !== undefined) account.balance_enabled = settings.balanceEnabled ? 1 : 0;
+      this._saveAccounts(data);
+      console.log(`✅ Nastavení balancování surovin aktualizováno pro účet ID: ${accountId}`);
+    }
+  }
+
+  // 🆕 BALANCE - Získat nastavení balancování surovin
+  getBalanceSettings(accountId) {
+    const account = this.getAccount(accountId);
+    if (!account) return null;
+
+    return {
+      enabled: account.balance_enabled === 1 || account.balance_enabled === undefined
+    };
+  }
+
   // Získat kompletní informace o účtu včetně statistik
   getAccountWithStats(accountId) {
     const account = this.getAccount(accountId);
@@ -457,6 +481,8 @@ class DatabaseManager {
           research_template: account.research_template,
           // 🆕 SCAVENGE - Přidáno do response
           scavenge_enabled: account.scavenge_enabled,
+          // 🆕 BALANCE - Přidáno do response
+          balance_enabled: account.balance_enabled,
           // 🆕 UNITS AWAY - Vypočítáno z units_info
           units_away: units_away
         };
