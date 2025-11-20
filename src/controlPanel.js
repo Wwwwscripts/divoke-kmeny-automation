@@ -4,7 +4,7 @@ import { writeFileSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
-import stealthScript from './utils/stealth.js';
+import { generateFingerprint, createStealthScript } from './utils/fingerprint.js';
 
 const app = express();
 const db = new DatabaseManager();
@@ -54,6 +54,14 @@ async function getOrOpenBrowser(accountId) {
     throw new Error(`Účet s ID ${accountId} nebyl nalezen`);
   }
 
+  // Získej nebo vygeneruj fingerprint pro účet
+  let fingerprint = db.getFingerprint(accountId);
+  if (!fingerprint) {
+    fingerprint = generateFingerprint();
+    db.saveFingerprint(accountId, fingerprint);
+    console.log(`🎨 Vygenerován nový fingerprint pro účet ${account.username}`);
+  }
+
   const domain = db.getDomainForAccount(account);
   const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
   const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
@@ -66,9 +74,10 @@ async function getOrOpenBrowser(accountId) {
     ]
   });
 
+  // Použij fingerprint pro context options
   const contextOptions = {
-    viewport: { width: 1280, height: 720 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    viewport: fingerprint.viewport,
+    userAgent: fingerprint.userAgent,
     locale,
     timezoneId,
     ignoreHTTPSErrors: true,
@@ -81,7 +90,8 @@ async function getOrOpenBrowser(accountId) {
 
   const context = await browser.newContext(contextOptions);
 
-  // Přidej stealth script pro maskování automation
+  // Přidej stealth script s konkrétním fingerprintem
+  const stealthScript = createStealthScript(fingerprint);
   await context.addInitScript(stealthScript);
 
   // Zkontrolovat a načíst cookies
@@ -579,9 +589,17 @@ app.post('/api/support/open-manual', async (req, res) => {
         ]
       });
 
+      // Získej nebo vygeneruj unikátní fingerprint pro tento účet
+      let fingerprint = db.getFingerprint(account.id);
+      if (!fingerprint) {
+        fingerprint = generateFingerprint();
+        db.saveFingerprint(account.id, fingerprint);
+        console.log(`[${account.world}] Vygenerován nový fingerprint pro účet ID ${account.id}`);
+      }
+
       const contextOptions = {
-        viewport: { width: 1280, height: 720 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        viewport: fingerprint.viewport,
+        userAgent: fingerprint.userAgent,
         locale,
         timezoneId,
         ignoreHTTPSErrors: true,
@@ -594,7 +612,8 @@ app.post('/api/support/open-manual', async (req, res) => {
 
       const context = await browser.newContext(contextOptions);
 
-      // Přidej stealth script pro maskování automation
+      // Přidej stealth script s unikátním fingerprintem
+      const stealthScript = createStealthScript(fingerprint);
       await context.addInitScript(stealthScript);
 
       // Zkontrolovat a načíst cookies
