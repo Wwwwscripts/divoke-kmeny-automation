@@ -285,25 +285,47 @@ class BalancModule {
 
   /**
    * Nastavit filtry na tržišti (checkboxy)
+   * Důležité: Nejdřív zaškrtnout "všechno", pak teprve konkrétní surovinu
    */
   async setMarketFilters(resourceToBuy, resourceToSell) {
     await this.page.evaluate(({ buy, sell }) => {
-      // Nejdřív odškrtnout všechno
+      // 1. Nejdřív odškrtnout všechno
       document.querySelectorAll('input[name="res_buy"]').forEach(cb => cb.checked = false);
       document.querySelectorAll('input[name="res_sell"]').forEach(cb => cb.checked = false);
 
-      // Zaškrtnout co chci koupit
+      // 2. Zaškrtnout "všechno" pro buy
+      const buyAllCheckbox = document.querySelector('input[name="res_buy"][value="all"]');
+      if (buyAllCheckbox) {
+        buyAllCheckbox.checked = true;
+        buyAllCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      // 3. Zaškrtnout "všechno" pro sell
+      const sellAllCheckbox = document.querySelector('input[name="res_sell"][value="all"]');
+      if (sellAllCheckbox) {
+        sellAllCheckbox.checked = true;
+        sellAllCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, { buy: resourceToBuy, sell: resourceToSell });
+
+    // Počkat chvilku
+    await this.page.waitForTimeout(500);
+
+    // 4. Teprve pak nastavit konkrétní suroviny
+    await this.page.evaluate(({ buy, sell }) => {
+      // Zaškrtnout konkrétní surovinu pro buy
       const buyCheckbox = document.querySelector(`input[name="res_buy"][value="${buy}"]`);
-      if (buyCheckbox) buyCheckbox.checked = true;
+      if (buyCheckbox) {
+        buyCheckbox.checked = true;
+        buyCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
 
-      // Zaškrtnout co chci prodat
+      // Zaškrtnout konkrétní surovinu pro sell
       const sellCheckbox = document.querySelector(`input[name="res_sell"][value="${sell}"]`);
-      if (sellCheckbox) sellCheckbox.checked = true;
-
-      // Trigger change event
-      document.querySelectorAll('input[name="res_buy"], input[name="res_sell"]').forEach(cb => {
-        cb.dispatchEvent(new Event('change', { bubbles: true }));
-      });
+      if (sellCheckbox) {
+        sellCheckbox.checked = true;
+        sellCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     }, { buy: resourceToBuy, sell: resourceToSell });
   }
 
