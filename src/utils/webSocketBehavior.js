@@ -198,8 +198,9 @@ export class WebSocketActionManager {
 
 /**
  * WebSocket Interceptor pro automatické přidání human behavior
+ * Používá context.addInitScript() místo page.evaluateOnNewDocument()
  */
-export function setupWebSocketInterceptor(page, options = {}) {
+export async function setupWebSocketInterceptor(page, options = {}) {
   const {
     autoHumanize = true,
     minDelay = 200,
@@ -208,7 +209,11 @@ export function setupWebSocketInterceptor(page, options = {}) {
     logActions = false
   } = options;
 
-  return page.evaluateOnNewDocument((opts) => {
+  // Získej context z page
+  const context = page.context();
+
+  // Přidej WebSocket interceptor jako init script
+  return await context.addInitScript((opts) => {
     const OriginalWebSocket = window.WebSocket;
     const actionManagers = new Map();
 
