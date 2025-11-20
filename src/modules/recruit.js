@@ -257,20 +257,24 @@ class RecruitModule {
 
         let total = 0;
 
-        // Najdi všechny řádky s časem
+        // Najdi všechny řádky s časem (tr.lit + tr.sortable_row)
         const allRows = parentTable.querySelectorAll('tr.lit, tr.sortable_row');
 
         allRows.forEach(row => {
-          const timeSpan = row.querySelector('span.timer, span[data-timestamp]');
-          if (timeSpan) {
-            const timeText = timeSpan.textContent.trim();
-            // Parse formát HH:MM:SS nebo MM:SS
-            const parts = timeText.split(':').map(p => parseInt(p) || 0);
-            if (parts.length === 3) {
-              total += parts[0] * 3600 + parts[1] * 60 + parts[2];
-            } else if (parts.length === 2) {
-              total += parts[0] * 60 + parts[1];
-            }
+          // Čas je v druhém <td> (index 1)
+          const cells = row.querySelectorAll('td');
+          if (cells.length < 2) return;
+
+          const timeCell = cells[1];
+          const timeText = timeCell.textContent.trim();
+
+          // Parse formát H:MM:SS nebo HH:MM:SS
+          const match = timeText.match(/(\d{1,2}):(\d{2}):(\d{2})/);
+          if (match) {
+            const hours = parseInt(match[1]) || 0;
+            const minutes = parseInt(match[2]) || 0;
+            const seconds = parseInt(match[3]) || 0;
+            total += hours * 3600 + minutes * 60 + seconds;
           }
         });
 
