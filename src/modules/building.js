@@ -973,7 +973,19 @@ class BuildingModule {
 
       const queueInfo = await this.checkBuildQueue();
 
-      if (queueInfo.hasQueue && queueInfo.buildings.length > 0) {
+      // Pokud je fronta plná (2 budovy), vrať čas první budovy
+      if (queueInfo.hasQueue && queueInfo.buildings.length >= 2) {
+        const firstBuilding = queueInfo.buildings[0];
+        const waitTime = this.parseTimeToMs(firstBuilding.time);
+        return { success: true, waitTime: waitTime };
+      }
+
+      // Počet budov, které můžeme přidat (max 2 celkem ve frontě)
+      const currentQueueSize = queueInfo.buildings.length;
+      const slotsAvailable = 2 - currentQueueSize;
+
+      if (slotsAvailable <= 0) {
+        // Fronta plná
         const firstBuilding = queueInfo.buildings[0];
         const waitTime = this.parseTimeToMs(firstBuilding.time);
         return { success: true, waitTime: waitTime };
@@ -1007,8 +1019,15 @@ class BuildingModule {
         }
       }
 
-      // Normální šablona - ZKONTROLUJ SKLAD PRO KAŽDOU BUDOVU
+      // NOVÉ: Pokus se přidat až 2 budovy najednou
+      let buildingsAdded = 0;
+
       for (const item of template) {
+        // Pokud už jsme přidali dostatek budov, konec
+        if (buildingsAdded >= slotsAvailable) {
+          break;
+        }
+
         const existing = currentBuildings.find(b =>
           b.name.includes(item.building) || item.building.includes(b.name)
         );
@@ -1036,15 +1055,41 @@ class BuildingModule {
 
               if (buildResult.success) {
                 this.lastWarehouseAttempt = 0;
+                buildingsAdded++;
               }
 
-              return buildResult;
+              // Po warehouse pokračuj, zkus přidat ještě jednu budovu
+              if (buildingsAdded >= slotsAvailable) {
+                break;
+              }
+              continue;
             }
           }
 
           // Pokud sklad není problém, zkus postavit budovu
           const buildResult = await this.buildBuilding(item.building, item.level);
-          return buildResult;
+
+          if (buildResult.success) {
+            buildingsAdded++;
+            // Krátká pauza mezi přidáváním budov (1-2 sekundy)
+            await this.page.waitForTimeout(1500);
+          } else {
+            // Pokud se nepodařilo postavit, zkus další budovu v šabloně
+            continue;
+          }
+        }
+      }
+
+      // Pokud jsme něco přidali, počkej chvíli a zkontroluj frontu
+      if (buildingsAdded > 0) {
+        await this.page.waitForTimeout(2000);
+
+        const updatedQueue = await this.checkBuildQueue();
+
+        if (updatedQueue.hasQueue && updatedQueue.buildings.length > 0) {
+          const firstBuilding = updatedQueue.buildings[0];
+          const waitTime = this.parseTimeToMs(firstBuilding.time);
+          return { success: true, waitTime: waitTime, buildingsAdded: buildingsAdded };
         }
       }
 
