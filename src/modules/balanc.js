@@ -77,23 +77,9 @@ class BalancModule {
       const acceptedOffers = await this.acceptExistingOffers(balance, merchants.available);
       console.log(`✅ Přijato nabídek: ${acceptedOffers.count}`);
 
-      // Aktualizovat dostupné obchodníky
-      let availableMerchants = merchants.available - acceptedOffers.merchantsUsed;
-
-      // Přepočítat balance po přijetí nabídek
-      const updatedBalance = this.updateBalanceAfterTrades(balance, acceptedOffers.trades);
-      console.log(`📊 Aktualizovaný stav po přijetí nabídek:`, updatedBalance);
-
-      // 6. Vytvořit vlastní nabídky pokud je potřeba
-      if (availableMerchants > 0 && (Object.keys(updatedBalance.surplus).length > 0 || Object.keys(updatedBalance.deficit).length > 0)) {
-        console.log(`📝 Vytváření vlastních nabídek...`);
-        const createdOffers = await this.createOwnOffers(updatedBalance, availableMerchants);
-        console.log(`✅ Vytvořeno nabídek: ${createdOffers.count}`);
-      }
-
       return {
         success: true,
-        message: `Balancování dokončeno`,
+        message: `Balancování dokončeno - přijato ${acceptedOffers.count} nabídek`,
         waitTime: 2 * 60 * 60 * 1000 // 2 hodiny
       };
 
@@ -407,7 +393,7 @@ class BalancModule {
    */
   async acceptOffer(formAction, count) {
     try {
-      await this.page.evaluate(({ action, count }) => {
+      const success = await this.page.evaluate(({ action, count }) => {
         const form = document.querySelector(`form[action="${action}"]`);
         if (!form) return false;
 
@@ -421,139 +407,25 @@ class BalancModule {
           countInput.dispatchEvent(new Event(eventType, { bubbles: true }));
         });
 
-        // Submit formulář
-        form.submit();
+        // Najít a kliknout na submit button
+        const submitBtn = form.querySelector('input[type="submit"]') ||
+                          form.querySelector('button[type="submit"]') ||
+                          form.querySelector('input[name="submit"]');
+
+        if (!submitBtn) return false;
+
+        // Kliknout na button
+        submitBtn.click();
         return true;
       }, { action: formAction, count });
 
-      return true;
+      return success;
     } catch (error) {
       console.error(`Chyba při přijímání nabídky:`, error.message);
       return false;
     }
   }
 
-  /**
-   * Aktualizovat balance po obchodech
-   */
-  updateBalanceAfterTrades(balance, trades) {
-    const newSurplus = { ...balance.surplus };
-    const newDeficit = { ...balance.deficit };
-
-    trades.forEach(trade => {
-      // Snížit přebytek
-      if (newSurplus[trade.give]) {
-        newSurplus[trade.give] -= trade.amount;
-        if (newSurplus[trade.give] <= 0) {
-          delete newSurplus[trade.give];
-        }
-      }
-
-      // Snížit nedostatek
-      if (newDeficit[trade.receive]) {
-        newDeficit[trade.receive] -= trade.amount;
-        if (newDeficit[trade.receive] <= 0) {
-          delete newDeficit[trade.receive];
-        }
-      }
-    });
-
-    return { surplus: newSurplus, deficit: newDeficit, targets: balance.targets };
-  }
-
-  /**
-   * Vytvořit vlastní nabídky
-   */
-  async createOwnOffers(balance, availableMerchants) {
-    let count = 0;
-
-    // Přejít na stránku pro vytváření nabídek
-    const worldUrl = this.getWorldUrl();
-    await this.page.goto(`${worldUrl}/game.php?screen=market&mode=own_offer`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000
-    });
-
-    await this.page.waitForTimeout(2000);
-
-    // Pro každou kombinaci přebytek -> nedostatek
-    for (const [offerResource, offerAmount] of Object.entries(balance.surplus)) {
-      for (const [wantResource, wantAmount] of Object.entries(balance.deficit)) {
-        if (availableMerchants <= 0) break;
-
-        const offersToCreate = Math.min(
-          Math.floor(offerAmount / this.OFFER_SIZE),
-          Math.floor(wantAmount / this.OFFER_SIZE),
-          availableMerchants
-        );
-
-        if (offersToCreate > 0) {
-          console.log(`  📝 Vytvářím ${offersToCreate}x nabídku: ${offerResource} → ${wantResource}`);
-
-          const success = await this.createOffer(offerResource, wantResource, offersToCreate);
-
-          if (success) {
-            count += offersToCreate;
-            availableMerchants -= offersToCreate;
-
-            // Aktualizovat balance
-            balance.surplus[offerResource] -= offersToCreate * this.OFFER_SIZE;
-            balance.deficit[wantResource] -= offersToCreate * this.OFFER_SIZE;
-
-            if (balance.surplus[offerResource] <= 0) delete balance.surplus[offerResource];
-            if (balance.deficit[wantResource] <= 0) delete balance.deficit[wantResource];
-
-            await this.page.waitForTimeout(2500);
-          }
-        }
-      }
-    }
-
-    return { count };
-  }
-
-  /**
-   * Vytvořit jednu vlastní nabídku
-   */
-  async createOffer(sellResource, buyResource, count) {
-    try {
-      const success = await this.page.evaluate(({ sell, buy, count }) => {
-        // Nastavit množství (mělo by být už 1000)
-        const sellAmount = document.querySelector('input[name="sell"]');
-        const buyAmount = document.querySelector('input[name="buy"]');
-
-        if (sellAmount) sellAmount.value = '1000';
-        if (buyAmount) buyAmount.value = '1000';
-
-        // Zvolit suroviny (radio buttons)
-        const sellRadio = document.querySelector(`input[name="res_sell"][value="${sell}"]`);
-        const buyRadio = document.querySelector(`input[name="res_buy"][value="${buy}"]`);
-
-        if (!sellRadio || !buyRadio) return false;
-
-        sellRadio.checked = true;
-        buyRadio.checked = true;
-
-        // Nastavit počet nabídek
-        const multiInput = document.querySelector('input[name="multi"]');
-        if (!multiInput) return false;
-
-        multiInput.value = count.toString();
-
-        // Submit
-        const submitBtn = document.querySelector('input[name="submit_offer"]');
-        if (!submitBtn) return false;
-
-        submitBtn.click();
-        return true;
-      }, { sell: sellResource, buy: buyResource, count });
-
-      return success;
-    } catch (error) {
-      console.error(`Chyba při vytváření nabídky:`, error.message);
-      return false;
-    }
-  }
 }
 
 export default BalancModule;
