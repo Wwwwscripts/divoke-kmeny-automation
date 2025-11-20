@@ -254,9 +254,9 @@ class RecruitModule {
   }
 
   /**
-   * Narekrutuje jednu jednotku
+   * Narekrutuje 5 jednotek (nebo méně pokud není možné)
    */
-  async recruitUnit(unitType) {
+  async recruitUnit(unitType, count = 5) {
     try {
       const worldUrl = this.getWorldUrl();
 
@@ -275,13 +275,13 @@ class RecruitModule {
       // Human-like delay po načtení stránky (jako když člověk čte)
       await randomDelay(1200, 500);
 
-      // Najdeme input pro jednotku a nastavíme hodnotu 1
-      const recruited = await this.page.evaluate((unitType) => {
+      // Najdeme input pro jednotku a nastavíme hodnotu
+      const recruited = await this.page.evaluate(({ unitType, count }) => {
         const input = document.querySelector(`input[name="${unitType}"]`);
         if (!input) return false;
 
-        // Nastavíme hodnotu
-        input.value = '1';
+        // Nastavíme hodnotu na count (5 jednotek)
+        input.value = count.toString();
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
 
@@ -296,13 +296,13 @@ class RecruitModule {
         }, 500);
 
         return true;
-      }, unitType);
+      }, { unitType, count });
 
       if (recruited) {
         await this.page.waitForTimeout(1500);
 
         // LOGUJ AKCI
-        logger.recruit(this.getAccountName(), unitType, 1);
+        logger.recruit(this.getAccountName(), unitType, count);
 
         return true;
       }

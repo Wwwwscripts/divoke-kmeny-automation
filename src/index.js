@@ -301,7 +301,7 @@ class Automator {
    * Priorita: 1
    */
   async buildingLoop() {
-    console.log('🔄 [P2] Smyčka BUILD spuštěna');
+    console.log('🔄 [P1] Smyčka BUILD spuštěna');
 
     while (this.isRunning) {
       // Zkontroluj shutdown flag
@@ -342,14 +342,14 @@ class Automator {
         }
       }
 
-      // Počkej 5 sekund před další kontrolou (COOLDOWN režim) - s randomizací ±10s
+      // Počkej 10 sekund před další kontrolou - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.building)));
     }
   }
 
   /**
-   * SMYČKA 2.5: Sběr (Scavenge)
-   * Každou 1 minutu projde účty a zkontroluje per-account timing
+   * SMYČKA 2: Sběr (Scavenge)
+   * Každých 10 minut projde účty a zkontroluje per-account timing
    * Zpracovává po 5 účtech paralelně
    * Priorita: 2
    */
@@ -400,14 +400,14 @@ class Automator {
         }
       }
 
-      // Počkej 1 minutu - s randomizací ±10s
+      // Počkej 10 minut - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.scavenge)));
     }
   }
 
   /**
    * SMYČKA 3: Rekrutování
-   * Každé 2 minuty projde účty a zkontroluje timing
+   * Každých 15 minut projde účty a zkontroluje timing
    * Zpracovává po 5 účtech paralelně
    * Priorita: 3
    */
@@ -453,7 +453,7 @@ class Automator {
         }
       }
 
-      // Počkej 2 minuty - s randomizací ±10s
+      // Počkej 15 minut - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.recruit)));
     }
   }
@@ -506,7 +506,7 @@ class Automator {
         }
       }
 
-      // Počkej 2 hodiny
+      // Počkej 2 hodiny - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.research)));
     }
   }
@@ -553,7 +553,7 @@ class Automator {
         }
       }
 
-      // Počkej 1 hodinu
+      // Počkej 1 hodinu - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.paladin)));
     }
   }
@@ -1270,6 +1270,37 @@ class Automator {
       }
 
       console.log(`✅ [${account.username}] Úspěšně přihlášen`);
+
+      // NOVÉ: Kontrola CAPTCHA, útoků a jednotek při každém přihlášení
+      try {
+        const notificationsModule = new NotificationsModule(page, this.db, account.id);
+        const supportModule = new SupportModule(page, this.db, account.id);
+
+        // 1. Kontrola útoků (vždy)
+        await notificationsModule.detectAttacks();
+
+        // 2. Kontrola CAPTCHA
+        const hasCaptcha = await notificationsModule.detectCaptcha();
+        if (hasCaptcha) {
+          console.log(`⚠️  [${account.username}] CAPTCHA detekována při přihlášení!`);
+          // Nezavíráme page, protože to bude řešit volající funkce
+        }
+
+        // 3. Kontrola dobytí vesnice
+        const isConquered = await notificationsModule.detectConqueredVillage();
+        if (isConquered) {
+          console.log(`⚠️  [${account.username}] Vesnice dobyta!`);
+        }
+
+        // 4. Kontrola jednotek (pokud není captcha/dobytí)
+        if (!hasCaptcha && !isConquered) {
+          await supportModule.getAllUnitsInfo();
+        }
+      } catch (checkError) {
+        // Tichá chyba - nepřerušujeme přihlášení kvůli chybě v kontrolách
+        console.error(`⚠️  [${account.username}] Chyba při kontrolách po přihlášení:`, checkError.message);
+      }
+
       return true;
 
     } catch (error) {
