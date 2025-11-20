@@ -375,16 +375,18 @@ class BalancModule {
 
   /**
    * Najít vhodné nabídky (1000 za 1000)
+   * LANGUAGE-INDEPENDENT - hledá tabulku s form.market_accept_offer
    */
   async findSuitableOffers(wantResource, offerResource) {
     return await this.page.evaluate(({ want, offer }) => {
       const tables = document.querySelectorAll('table.vis');
       let offerTable = null;
 
-      // Najít tabulku s nabídkami
+      // Najít tabulku s nabídkami k přijetí
+      // Tato tabulka obsahuje formuláře s třídou market_accept_offer
       for (const table of tables) {
-        const text = table.textContent;
-        if (text.includes('Přijmout') && text.includes('Poměr')) {
+        const form = table.querySelector('form.market_accept_offer');
+        if (form) {
           offerTable = table;
           break;
         }
@@ -490,6 +492,7 @@ class BalancModule {
    * Získat příchozí a odchozí suroviny z tržiště (z tabulky 2 na mode=own_offer)
    * Příchozí = suroviny které nám jedou z přijatých nabídek
    * Odchozí = suroviny které odjíždějí v našich nabídkách
+   * LANGUAGE-INDEPENDENT - hledá tabulku se 2 TH obsahujícími span.nowrap s ikonami
    */
   async getIncomingOutgoingResources() {
     return await this.page.evaluate(() => {
@@ -498,16 +501,46 @@ class BalancModule {
 
       const tables = document.querySelectorAll('table.vis');
 
-      // Najít tabulku s příchozími/odchozími (tabulka 2)
+      // Najít tabulku s příchozími/odchozími
+      // Tato tabulka má 1 řádek s 2 TH, každý TH má více span.nowrap s ikonami
       for (const table of tables) {
-        const th = table.querySelector('th');
-        if (!th) continue;
+        const ths = table.querySelectorAll('th');
 
-        const text = th.textContent;
-        if (!text.includes('Přicházející')) continue;
+        // Kontrola: tabulka má právě 2 TH
+        if (ths.length !== 2) continue;
 
-        // Parsovat příchozí suroviny
-        const incomingSpans = th.querySelectorAll('span.nowrap');
+        // Kontrola: oba TH mají span.nowrap s ikonami
+        let hasIcons = true;
+        for (const th of ths) {
+          const spans = th.querySelectorAll('span.nowrap');
+          if (spans.length === 0) {
+            hasIcons = false;
+            break;
+          }
+
+          // Kontrola že alespoň jeden span má ikonu
+          let hasIcon = false;
+          for (const span of spans) {
+            if (span.querySelector('span.icon.header')) {
+              hasIcon = true;
+              break;
+            }
+          }
+          if (!hasIcon) {
+            hasIcons = false;
+            break;
+          }
+        }
+
+        if (!hasIcons) continue;
+
+        // Toto je naše tabulka!
+        // První TH = příchozí, druhý TH = odchozí
+        const firstTh = ths[0];
+        const secondTh = ths[1];
+
+        // Parsovat příchozí suroviny z prvního TH
+        const incomingSpans = firstTh.querySelectorAll('span.nowrap');
         incomingSpans.forEach(span => {
           const icon = span.querySelector('span.icon.header');
           if (!icon) return;
@@ -524,26 +557,21 @@ class BalancModule {
           }
         });
 
-        // Parsovat odchozí suroviny
-        const ths = table.querySelectorAll('th');
-        ths.forEach(th => {
-          if (!th.textContent.includes('Odcházející')) return;
+        // Parsovat odchozí suroviny z druhého TH
+        const outgoingSpans = secondTh.querySelectorAll('span.nowrap');
+        outgoingSpans.forEach(span => {
+          const icon = span.querySelector('span.icon.header');
+          if (!icon) return;
 
-          const outgoingSpans = th.querySelectorAll('span.nowrap');
-          outgoingSpans.forEach(span => {
-            const icon = span.querySelector('span.icon.header');
-            if (!icon) return;
+          const resourceType = icon.className.split(' ').find(c => c === 'wood' || c === 'stone' || c === 'iron');
+          if (!resourceType) return;
 
-            const resourceType = icon.className.split(' ').find(c => c === 'wood' || c === 'stone' || c === 'iron');
-            if (!resourceType) return;
+          const amountText = span.textContent.replace(/\./g, '').replace(/\s/g, '').trim();
+          const amount = parseInt(amountText, 10);
 
-            const amountText = span.textContent.replace(/\./g, '').replace(/\s/g, '').trim();
-            const amount = parseInt(amountText, 10);
-
-            if (!isNaN(amount)) {
-              outgoing[resourceType] = amount;
-            }
-          });
+          if (!isNaN(amount)) {
+            outgoing[resourceType] = amount;
+          }
         });
 
         break;
@@ -556,6 +584,7 @@ class BalancModule {
   /**
    * Získat vlastní vytvořené nabídky z tabulky (tabulka 6 na mode=own_offer)
    * Vrátí co nabízíme a co chceme z našich aktivních nabídek
+   * LANGUAGE-INDEPENDENT - hledá tabulku s TH[colspan="2"] a řádky s ikonami
    */
   async getOwnOffers() {
     return await this.page.evaluate(() => {
@@ -564,13 +593,15 @@ class BalancModule {
 
       const tables = document.querySelectorAll('table.vis');
 
-      // Najít tabulku s vlastními nabídkami (tabulka 6 - má sloupce "Nabízím", "Za", "Počet")
+      // Najít tabulku s vlastními nabídkami
+      // Tato tabulka má header s TH[colspan="2"] a data řádky s ikonami v prvních 2 TD
       for (const table of tables) {
         const headerRow = table.querySelector('tr');
         if (!headerRow) continue;
 
-        const headerText = headerRow.textContent;
-        if (!headerText.includes('Nabízím') || !headerText.includes('Za') || !headerText.includes('Počet')) continue;
+        // Kontrola: má TH s colspan="2" (unikátní pro tuto tabulku)
+        const colspanTh = headerRow.querySelector('th[colspan="2"]');
+        if (!colspanTh) continue;
 
         // Parsovat jednotlivé řádky s nabídkami
         const rows = table.querySelectorAll('tr');
@@ -583,14 +614,18 @@ class BalancModule {
           // TD 0: co nabízíme (ikona + množství)
           const offerCell = cells[0];
           const offerIcon = offerCell.querySelector('span.icon.header');
-          const offerResource = offerIcon ? offerIcon.className.split(' ').find(c => c === 'wood' || c === 'stone' || c === 'iron') : null;
+          if (!offerIcon) continue; // Skip řádky bez ikony
+
+          const offerResource = offerIcon.className.split(' ').find(c => c === 'wood' || c === 'stone' || c === 'iron');
           const offerAmountText = offerCell.textContent.replace(/\./g, '').replace(/\s/g, '').trim();
           const offerAmount = parseInt(offerAmountText, 10);
 
           // TD 1: co chceme (ikona + množství)
           const wantCell = cells[1];
           const wantIcon = wantCell.querySelector('span.icon.header');
-          const wantResource = wantIcon ? wantIcon.className.split(' ').find(c => c === 'wood' || c === 'stone' || c === 'iron') : null;
+          if (!wantIcon) continue; // Skip řádky bez ikony
+
+          const wantResource = wantIcon.className.split(' ').find(c => c === 'wood' || c === 'stone' || c === 'iron');
           const wantAmountText = wantCell.textContent.replace(/\./g, '').replace(/\s/g, '').trim();
           const wantAmount = parseInt(wantAmountText, 10);
 
