@@ -336,14 +336,24 @@ class BalancModule {
    * Po každém kliknutí čeká na AJAX refresh nabídek
    */
   async setMarketFilters(resourceToBuy, resourceToSell) {
-    // Radio buttony - musíme nastavit checked = true a zavolat onclick
+    // Radio buttony - vždy klikneme pro spuštění AJAX (i když už jsou checked)
     try {
       await this.page.evaluate(({ buy, sell }) => {
         // 1. Nastavit buy filter
         const buyRadio = document.querySelector(`input[name="res_buy"][value="${buy}"]`);
-        if (buyRadio && !buyRadio.checked) {
+        if (buyRadio) {
+          // Pokud už je checked, musíme resetovat aby se AJAX znovu spustil
+          if (buyRadio.checked) {
+            // Nejdřív klikni na "all" aby se to resetovalo
+            const buyAll = document.querySelector(`input[name="res_buy"][value="all"]`);
+            if (buyAll && !buyAll.checked) {
+              buyAll.checked = true;
+              if (buyAll.onclick) buyAll.onclick();
+            }
+          }
+
+          // Teď nastav požadovanou hodnotu
           buyRadio.checked = true;
-          // Zavolat onclick handler pro spuštění AJAX
           if (buyRadio.onclick) {
             buyRadio.onclick();
           }
@@ -351,9 +361,19 @@ class BalancModule {
 
         // 2. Nastavit sell filter
         const sellRadio = document.querySelector(`input[name="res_sell"][value="${sell}"]`);
-        if (sellRadio && !sellRadio.checked) {
+        if (sellRadio) {
+          // Pokud už je checked, musíme resetovat aby se AJAX znovu spustil
+          if (sellRadio.checked) {
+            // Nejdřív klikni na "all" aby se to resetovalo
+            const sellAll = document.querySelector(`input[name="res_sell"][value="all"]`);
+            if (sellAll && !sellAll.checked) {
+              sellAll.checked = true;
+              if (sellAll.onclick) sellAll.onclick();
+            }
+          }
+
+          // Teď nastav požadovanou hodnotu
           sellRadio.checked = true;
-          // Zavolat onclick handler pro spuštění AJAX
           if (sellRadio.onclick) {
             sellRadio.onclick();
           }
@@ -362,8 +382,8 @@ class BalancModule {
 
       console.log(`  ✓ Nastaveny filtry: buy=${resourceToBuy}, sell=${resourceToSell}`);
 
-      // Počkat na AJAX refresh (po obou změnách)
-      await this.page.waitForTimeout(3000);
+      // Počkat na AJAX refresh (po obou změnách) - možná 2 AJAXy (buy + sell)
+      await this.page.waitForTimeout(5000);
 
       console.log('  ✅ Filtry nastaveny, nabídky načtené');
     } catch (e) {
