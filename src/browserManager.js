@@ -157,14 +157,22 @@ class BrowserManager {
 
     console.log(`🖥️  Otevírám VIDITELNÝ prohlížeč pro: ${account.username}`);
 
+    // Získej nebo vygeneruj fingerprint pro účet
+    let fingerprint = this.db.getFingerprint(accountId);
+    if (!fingerprint) {
+      fingerprint = generateFingerprint();
+      this.db.saveFingerprint(accountId, fingerprint);
+      console.log(`🎨 Vygenerován nový fingerprint pro účet ${account.username}`);
+    }
+
     // Zjisti locale podle světa
     const domain = this.db.getDomainForAccount(account);
     const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
     const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
 
     const contextOptions = {
-      viewport: null, // Fullscreen mode
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: null, // Fullscreen mode pro viditelný browser
+      userAgent: fingerprint.userAgent,
       locale,
       timezoneId,
       ignoreHTTPSErrors: true,
@@ -188,7 +196,8 @@ class BrowserManager {
 
     const context = await browser.newContext(contextOptions);
 
-    // Přidej stealth script pro maskování automation
+    // Přidej stealth script s unikátním fingerprintem
+    const stealthScript = createStealthScript(fingerprint);
     await context.addInitScript(stealthScript);
 
     if (account.cookies && account.cookies !== 'null') {
