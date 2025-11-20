@@ -993,9 +993,15 @@ class BuildingModule {
       const queueInfo = await this.checkBuildQueue();
 
       if (queueInfo.hasQueue && queueInfo.buildings.length > 0) {
-        const firstBuilding = queueInfo.buildings[0];
-        const waitTime = this.parseTimeToMs(firstBuilding.time);
-        return { success: true, waitTime: waitTime };
+        // Sečti VŠECHNY budovy ve frontě
+        const totalWaitTime = queueInfo.buildings.reduce((sum, building) => {
+          return sum + this.parseTimeToMs(building.time);
+        }, 0);
+
+        const totalMinutes = Math.ceil(totalWaitTime / 60000);
+        console.log(`📊 [${this.getAccountName()}] Fronta: ${queueInfo.buildings.length} budov, celkem ${totalMinutes} min`);
+
+        return { success: true, waitTime: totalWaitTime };
       }
 
       // 🆕 KONTROLA POPULACE (GLOBÁLNÍ)
