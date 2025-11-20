@@ -200,10 +200,11 @@ class Automator {
     console.log('🔄 Aktivní smyčky (POUZE PRO TESTOVÁNÍ):');
     console.log('   [P1] Kontroly útoků: po 10 účtech (10s pauzy), cyklus každé 3 min');
     console.log('   [P1] Build: každých 30s po 5 účtech - COOLDOWN režim (±15s random)');
+    console.log('   [P3] Rekrut: každou 1h po 10 účtech (10s pauzy mezi skupinami)');
     console.log('   [P6] Jednotky: každých 15 min po 2 účtech (±2 min random)');
     console.log('   ⏸️  CAPTCHA kontrola: při každém přihlášení (ne v loopu)');
     console.log('');
-    console.log('   ❌ VYPNUTO: Sběr, Rekrut, Výzkum, Paladin, Denní odměny');
+    console.log('   ❌ VYPNUTO: Sběr, Výzkum, Paladin, Denní odměny');
     console.log('='.repeat(70));
 
     this.isRunning = true;
@@ -214,7 +215,7 @@ class Automator {
       this.buildingLoop(),     // P1: Výstavba
       this.unitsLoop(),        // P6: Kontrola jednotek
       // this.scavengeLoop(),     // P2: VYPNUTO - testování
-      // this.recruitLoop(),      // P3: VYPNUTO - testování
+      this.recruitLoop(),      // P3: ZAPNUTO
       // this.researchLoop(),     // P4: VYPNUTO - testování
       // this.paladinLoop(),      // P5: VYPNUTO - testování
       // this.dailyRewardsLoop(), // P6: VYPNUTO - testování
