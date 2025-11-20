@@ -194,33 +194,30 @@ class Automator {
    */
   async start() {
     console.log('='.repeat(70));
-    console.log('🤖 Spouštím Event-Driven automatizaci - ANTI-CAPTCHA MODE');
+    console.log('🤖 Spouštím Event-Driven automatizaci - TESTOVACÍ REŽIM');
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🛡️  Aktivní ochrana: Human behavior, WebSocket timing, Fingerprinting');
-    console.log('🔄 9 nezávislých smyček (OPTIMALIZOVÁNO PRO NÍZKÉ RIZIKO CAPTCHA):');
-    console.log('   [P1] Kontroly: neustále po 2 účtech s pauzami 3-6s mezi cykly');
+    console.log('🔄 Aktivní smyčky (POUZE PRO TESTOVÁNÍ):');
+    console.log('   [P1] Kontroly útoků: po 10 účtech (10s pauzy), cyklus každé 3 min');
     console.log('   [P1] Build: každých 30s po 5 účtech - COOLDOWN režim (±15s random)');
-    console.log('   [P2] Sběr: každé 3 min po 5 účtech (±30s random, per-account timing)');
-    console.log('   [P3] Rekrut: každých 5 min po 5 účtech (±45s random, per-account timing)');
-    console.log('   [P4] Výzkum: každých 120 min po 5 účtech (±5 min random)');
-    console.log('   [P5] Paladin: každých 60 min po 5 účtech (±3 min random)');
     console.log('   [P6] Jednotky: každých 15 min po 2 účtech (±2 min random)');
-    console.log('   [P6] Denní odměny: 2x denně ve 4:00 a 16:00 + při startu');
-    console.log('   [P7] Statistiky: každých 25 min');
+    console.log('   ⏸️  CAPTCHA kontrola: při každém přihlášení (ne v loopu)');
+    console.log('');
+    console.log('   ❌ VYPNUTO: Sběr, Rekrut, Výzkum, Paladin, Denní odměny');
     console.log('='.repeat(70));
 
     this.isRunning = true;
 
     // Spusť všechny smyčky paralelně
     await Promise.all([
-      this.checksLoop(),       // P1: Neustále po 2 účtech
-      this.buildingLoop(),     // P1: Každých 5s po 5 účtech (COOLDOWN režim)
-      this.scavengeLoop(),     // P2: Každých 5 min po 5 účtech
-      this.recruitLoop(),      // P3: Každé 2 min po 5 účtech
-      this.researchLoop(),     // P4: Každých 120 min po 5 účtech
-      this.paladinLoop(),      // P5: Každých 120 min po 5 účtech
-      this.unitsLoop(),        // P6: Každých 20 min po 2 účtech
-      this.dailyRewardsLoop(), // P6: Jednou denně ve 4:00 nebo při startu
+      this.checksLoop(),       // P1: Kontroly útoků
+      this.buildingLoop(),     // P1: Výstavba
+      this.unitsLoop(),        // P6: Kontrola jednotek
+      // this.scavengeLoop(),     // P2: VYPNUTO - testování
+      // this.recruitLoop(),      // P3: VYPNUTO - testování
+      // this.researchLoop(),     // P4: VYPNUTO - testování
+      // this.paladinLoop(),      // P5: VYPNUTO - testování
+      // this.dailyRewardsLoop(), // P6: VYPNUTO - testování
       // this.balanceLoop(),      // P7: VYPNUTO - způsobovalo bany
       this.statsMonitor()      // Monitoring
     ]);
@@ -228,24 +225,45 @@ class Automator {
 
   /**
    * SMYČKA 1: Kontroly (útoky/CAPTCHA)
-   * Běží neustále dokola po 2 účtech
+   * Běží po 10 účtech s 10s pauzami, celý cyklus každé 3 minuty
    * Priorita: 1 (nejvyšší)
    */
   async checksLoop() {
     console.log('🔄 [P1] Smyčka KONTROLY spuštěna');
 
     while (this.isRunning) {
+      const cycleStartTime = Date.now();
+      console.log('\n' + '='.repeat(70));
+      console.log(`🔍 KONTROLY - Nový cyklus začíná (${new Date().toLocaleTimeString('cs-CZ')})`);
+      console.log('='.repeat(70));
+
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
-      const accounts = this.db.getAllActiveAccounts();
+      const allAccounts = this.db.getAllActiveAccounts();
+      const accounts = allAccounts.slice(0, 20); // TESTOVÁNÍ: pouze prvních 20 účtů
+      console.log(`📊 Načteno: ${accounts.length} účtů k zpracování (z ${allAccounts.length} celkem - limit 20 pro test)`);
 
-      // Zpracuj po 2 účtech
-      for (let i = 0; i < accounts.length; i += 2) {
-        const batch = accounts.slice(i, i + 2);
+      if (accounts.length === 0) {
+        console.log('⚠️  Žádné aktivní účty k zpracování');
+        await new Promise(resolve => setTimeout(resolve, 30000));
+        continue;
+      }
+
+      const totalBatches = Math.ceil(accounts.length / 10);
+      console.log(`📦 Rozděleno do ${totalBatches} skupin po max 10 účtech\n`);
+
+      // Zpracuj po 10 účtech
+      for (let i = 0; i < accounts.length; i += 10) {
+        const batchStartTime = Date.now();
+        const batch = accounts.slice(i, i + 10);
+        const batchNum = Math.floor(i / 10) + 1;
+
+        console.log(`\n📋 Skupina ${batchNum}/${totalBatches}: Zpracovávám účty ${i + 1}-${Math.min(i + 10, accounts.length)}`);
+        console.log(`   Účty: ${batch.map(a => a.username).join(', ')}`);
 
         // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
-        await Promise.all(
+        const results = await Promise.allSettled(
           batch.map(account =>
             this.workerPool.run(
               () => this.processChecks(account),
@@ -255,12 +273,43 @@ class Automator {
           )
         );
 
-        // Pauza mezi dávkami (500ms-2s) - human-like
-        await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1500));
+        // Loguj výsledky zpracování
+        const successful = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+        const batchElapsed = ((Date.now() - batchStartTime) / 1000).toFixed(1);
+
+        console.log(`   ✅ Úspěšně: ${successful} | ❌ Chyby: ${failed} | ⏱️  Čas: ${batchElapsed}s`);
+
+        // Loguj chyby pokud nějaké byly
+        results.forEach((result, idx) => {
+          if (result.status === 'rejected') {
+            console.log(`   ⚠️  [${batch[idx].username}] Chyba: ${result.reason?.message || result.reason}`);
+          }
+        });
+
+        // Pauza mezi skupinami (10 sekund)
+        if (i + 10 < accounts.length) {
+          console.log(`   ⏸️  Pauza 10s před další skupinou...`);
+          await new Promise(resolve => setTimeout(resolve, 10000));
+        }
       }
 
-      // Celý cyklus hotový, delší pauza před dalším kolem (3-6s)
-      await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 3000));
+      // Celý cyklus hotový, počkej 3 minuty od začátku cyklu
+      const cycleElapsed = Date.now() - cycleStartTime;
+      const waitTime = Math.max(0, 3 * 60 * 1000 - cycleElapsed);
+      const cycleElapsedSec = (cycleElapsed / 1000).toFixed(1);
+
+      console.log('\n' + '-'.repeat(70));
+      console.log(`✅ Cyklus dokončen za ${cycleElapsedSec}s`);
+
+      if (waitTime > 0) {
+        const waitMin = Math.floor(waitTime / 60000);
+        const waitSec = Math.floor((waitTime % 60000) / 1000);
+        console.log(`⏰ Čekám ${waitMin}m ${waitSec}s do dalšího cyklu (3min od začátku)...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        console.log(`⚠️  Cyklus trval déle než 3 minuty, spouštím další okamžitě`);
+      }
     }
   }
 
@@ -272,8 +321,12 @@ class Automator {
    */
   async buildingLoop() {
     console.log('🔄 [P2] Smyčka BUILD spuštěna');
+    let loopCount = 0;
 
     while (this.isRunning) {
+      loopCount++;
+      const loopStartTime = Date.now();
+
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
@@ -291,29 +344,66 @@ class Automator {
         return !buildingWaitUntil || Date.now() >= buildingWaitUntil;
       });
 
-      // Zpracuj po 5 účtech paralelně
-      for (let i = 0; i < accountsToProcess.length; i += 5) {
-        const batch = accountsToProcess.slice(i, i + 5);
+      if (accountsToProcess.length > 0) {
+        console.log(`\n🏗️  BUILD Cyklus #${loopCount} (${new Date().toLocaleTimeString('cs-CZ')})`);
+        console.log(`   📊 K zpracování: ${accountsToProcess.length} účtů s enabled build a vypršelým timerem`);
+        console.log(`   📋 Účty: ${accountsToProcess.map(a => a.username).join(', ')}`);
 
-        await Promise.all(
-          batch.map(account => {
-            const buildingSettings = this.db.getBuildingSettings(account.id);
-            return this.workerPool.run(
-              () => this.processBuilding(account, buildingSettings),
-              this.priorities.building,
-              `Build: ${account.username}`
-            );
-          })
-        );
+        const totalBatches = Math.ceil(accountsToProcess.length / 5);
 
-        // Pauza mezi dávkami (1-3s)
-        if (i + 5 < accountsToProcess.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+        // Zpracuj po 5 účtech paralelně
+        for (let i = 0; i < accountsToProcess.length; i += 5) {
+          const batchStartTime = Date.now();
+          const batch = accountsToProcess.slice(i, i + 5);
+          const batchNum = Math.floor(i / 5) + 1;
+
+          console.log(`\n   📦 Skupina ${batchNum}/${totalBatches}: ${batch.map(a => a.username).join(', ')}`);
+
+          const results = await Promise.allSettled(
+            batch.map(account => {
+              const buildingSettings = this.db.getBuildingSettings(account.id);
+              return this.workerPool.run(
+                () => this.processBuilding(account, buildingSettings),
+                this.priorities.building,
+                `Build: ${account.username}`
+              );
+            })
+          );
+
+          // Loguj výsledky
+          const successful = results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected').length;
+          const batchElapsed = ((Date.now() - batchStartTime) / 1000).toFixed(1);
+
+          console.log(`      ✅ Úspěšně: ${successful} | ❌ Chyby: ${failed} | ⏱️  ${batchElapsed}s`);
+
+          // Loguj chyby
+          results.forEach((result, idx) => {
+            if (result.status === 'rejected') {
+              console.log(`      ⚠️  [${batch[idx].username}] ${result.reason?.message || result.reason}`);
+            }
+          });
+
+          // Pauza mezi dávkami (1-3s)
+          if (i + 5 < accountsToProcess.length) {
+            const pause = 1000 + Math.random() * 2000;
+            console.log(`      ⏸️  Pauza ${(pause / 1000).toFixed(1)}s...`);
+            await new Promise(resolve => setTimeout(resolve, pause));
+          }
+        }
+
+        const loopElapsed = ((Date.now() - loopStartTime) / 1000).toFixed(1);
+        console.log(`   ✅ Zpracováno za ${loopElapsed}s`);
+      } else {
+        // Tichý log pouze každých 10 cyklů
+        if (loopCount % 10 === 0) {
+          console.log(`🏗️  BUILD: Žádné účty k zpracování (cyklus #${loopCount})`);
         }
       }
 
       // Počkej 30s před další kontrolou (COOLDOWN režim) - s randomizací ±15s
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.building, 15000)));
+      const interval = randomizeInterval(this.intervals.building, 15000);
+      await new Promise(resolve => setTimeout(resolve, interval));
     }
   }
 
@@ -535,19 +625,33 @@ class Automator {
    */
   async unitsLoop() {
     console.log('🔄 [P6] Smyčka JEDNOTKY spuštěna');
+    let loopCount = 0;
 
     while (this.isRunning) {
+      loopCount++;
+      const loopStartTime = Date.now();
+      console.log(`\n🪖  JEDNOTKY Cyklus #${loopCount} (${new Date().toLocaleTimeString('cs-CZ')})`);
+
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
       const accounts = this.db.getAllActiveAccounts();
+      console.log(`   📊 Sbírám informace o jednotkách pro ${accounts.length} účtů`);
+
+      const totalBatches = Math.ceil(accounts.length / 2);
+      let successCount = 0;
+      let errorCount = 0;
 
       // Zpracuj po 2 účtech
       for (let i = 0; i < accounts.length; i += 2) {
+        const batchStartTime = Date.now();
         const batch = accounts.slice(i, i + 2);
+        const batchNum = Math.floor(i / 2) + 1;
+
+        console.log(`\n   📦 Skupina ${batchNum}/${totalBatches}: ${batch.map(a => a.username).join(', ')}`);
 
         // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
-        await Promise.all(
+        const results = await Promise.allSettled(
           batch.map(account =>
             this.workerPool.run(
               () => this.processUnits(account),
@@ -557,12 +661,39 @@ class Automator {
           )
         );
 
+        // Loguj výsledky
+        const successful = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+        successCount += successful;
+        errorCount += failed;
+        const batchElapsed = ((Date.now() - batchStartTime) / 1000).toFixed(1);
+
+        console.log(`      ✅ Úspěšně: ${successful} | ❌ Chyby: ${failed} | ⏱️  ${batchElapsed}s`);
+
+        // Loguj chyby
+        results.forEach((result, idx) => {
+          if (result.status === 'rejected') {
+            console.log(`      ⚠️  [${batch[idx].username}] ${result.reason?.message || result.reason}`);
+          }
+        });
+
         // Pauza mezi dávkami (1-3s)
-        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+        if (i + 2 < accounts.length) {
+          const pause = 1000 + Math.random() * 2000;
+          console.log(`      ⏸️  Pauza ${(pause / 1000).toFixed(1)}s...`);
+          await new Promise(resolve => setTimeout(resolve, pause));
+        }
       }
 
+      const loopElapsed = ((Date.now() - loopStartTime) / 1000).toFixed(1);
+      console.log(`\n   ✅ Cyklus dokončen za ${loopElapsed}s (Úspěšně: ${successCount}, Chyby: ${errorCount})`);
+
       // Počkej 15 minut - s randomizací ±2 minuty
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.units, 2 * 60 * 1000)));
+      const interval = randomizeInterval(this.intervals.units, 2 * 60 * 1000);
+      const waitMin = Math.floor(interval / 60000);
+      const waitSec = Math.floor((interval % 60000) / 1000);
+      console.log(`   ⏰ Další cyklus za ${waitMin}m ${waitSec}s...`);
+      await new Promise(resolve => setTimeout(resolve, interval));
     }
   }
 
@@ -749,6 +880,8 @@ class Automator {
     let browser, context, browserKey;
 
     try {
+      console.log(`   🔍 [${account.username}] Zahajuji kontrolu...`);
+
       // Vytvoř context (sdílený browser)
       ({ browser, context, browserKey } = await this.browserPool.createContext(account.id));
       const page = await context.newPage();
@@ -756,6 +889,7 @@ class Automator {
       // Přihlásit se
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
+        console.log(`   ❌ [${account.username}] Přihlášení selhalo`);
         // Zavři headless browser
         await this.browserPool.closeContext(context, browserKey);
         // Zpracuj selhání přihlášení
@@ -771,63 +905,20 @@ class Automator {
       const infoWaitUntil = this.accountWaitTimes[infoKey];
 
       if (!infoWaitUntil || Date.now() >= infoWaitUntil) {
+        console.log(`   📊 [${account.username}] Sbírám statistiky účtu...`);
         const infoModule = new AccountInfoModule(page, this.db, account.id);
         await infoModule.collectInfo();
         this.accountWaitTimes[infoKey] = Date.now() + this.intervals.accountInfo;
+        console.log(`   ✅ [${account.username}] Statistiky uloženy`);
       }
 
-      // Kontrola útoků a CAPTCHA (VŽDY) - VOLAT NEJDŘÍV pro aktualizaci incoming_attacks
+      // Kontrola útoků - VOLAT NEJDŘÍV pro aktualizaci incoming_attacks
+      console.log(`   🛡️  [${account.username}] Kontroluji útoky...`);
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       await notificationsModule.detectAttacks();
 
-      const hasCaptcha = await notificationsModule.detectCaptcha();
+      // Kontrola dobytí vesnice
       const isConquered = await notificationsModule.detectConqueredVillage();
-
-      if (hasCaptcha) {
-        // Zavři headless browser
-        await this.browserPool.closeContext(context, browserKey);
-
-        // Loguj pouze pokud ještě není zaznamenaná CAPTCHA pro tento účet
-        const isNewCaptcha = !this.captchaDetected.has(account.id);
-
-        if (isNewCaptcha) {
-          console.log(`⚠️  [${account.username}] CAPTCHA detekována!`);
-          this.captchaDetected.add(account.id);
-        }
-
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený nebo se neotvírá (CAPTCHA)
-        if (!this.isBrowserActive(account.id) && !this.openingBrowsers.has(account.id)) {
-          if (isNewCaptcha) {
-            console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
-
-            // Označ že se browser otevírá
-            this.openingBrowsers.add(account.id);
-
-            try {
-              const browserInfo = await this.browserManager.testConnection(account.id, false); // false = nezavře se auto
-
-              if (browserInfo) {
-                const { browser } = browserInfo;
-                this.openBrowsers.set(account.id, browserInfo);
-
-                // Sleduj zavření browseru
-                browser.on('disconnected', () => {
-                  this.openBrowsers.delete(account.id);
-                  this.openingBrowsers.delete(account.id);
-                  this.captchaDetected.delete(account.id);
-                  console.log(`✅ [${account.username}] CAPTCHA vyřešena - browser zavřen`);
-                });
-              }
-            } catch (error) {
-              console.error(`❌ [${account.username}] Chyba při otevírání browseru pro CAPTCHA:`, error.message);
-            } finally {
-              // Vždy odstraň z openingBrowsers
-              this.openingBrowsers.delete(account.id);
-            }
-          }
-        }
-        return;
-      }
 
       if (isConquered) {
         console.log(`⚠️  [${account.username}] VESNICE DOBYTA!`);
@@ -877,16 +968,19 @@ class Automator {
       // Zavři context (browser zůstane běžet)
       await this.browserPool.closeContext(context, browserKey);
 
+      console.log(`   ✅ [${account.username}] Kontrola dokončena`);
+
       // Pokud byl browser otevřený, byl vyřešen CAPTCHA/login (browser se zavře automaticky pomocí startLoginWatcher)
       if (this.isBrowserActive(account.id)) {
-        console.log(`✅ [${account.username}] Browser stále aktivní - CAPTCHA/login se řeší`);
+        console.log(`   ℹ️  [${account.username}] Browser stále aktivní - CAPTCHA/login se řeší`);
       }
 
     } catch (error) {
-      console.error(`❌ [${account.username}] Chyba při kontrole:`, error.message);
+      console.error(`   ❌ [${account.username}] Chyba při kontrole: ${error.message}`);
       if (context && browserKey) {
         await this.browserPool.closeContext(context, browserKey);
       }
+      throw error; // Re-throw pro správné logování v Promise.allSettled
     }
   }
 
@@ -897,11 +991,14 @@ class Automator {
     let context, browserKey;
 
     try {
+      console.log(`      🏗️  [${account.username}] Zahajuji build (šablona: ${settings.template})...`);
+
       ({ context, browserKey } = await this.browserPool.createContext(account.id));
       const page = await context.newPage();
 
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
+        console.log(`      ❌ [${account.username}] Přihlášení selhalo`);
         await this.browserPool.closeContext(context, browserKey);
         await this.handleFailedLogin(account);
         return;
@@ -915,16 +1012,19 @@ class Automator {
 
       if (buildResult && buildResult.waitTime) {
         this.accountWaitTimes[`building_${account.id}`] = Date.now() + buildResult.waitTime;
-        console.log(`⏰ [${account.username}] Build: Další za ${Math.ceil(buildResult.waitTime / 60000)} min`);
+        const waitMin = Math.ceil(buildResult.waitTime / 60000);
+        console.log(`      ⏰ [${account.username}] Build dokončen, další za ${waitMin} min`);
       } else {
         this.accountWaitTimes[`building_${account.id}`] = Date.now() + 1 * 60 * 1000; // 1 min fallback
+        console.log(`      ✅ [${account.username}] Build zkontrolován (fallback 1min)`);
       }
 
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
-      console.error(`❌ [${account.username}] Chyba při buildění:`, error.message);
+      console.error(`      ❌ [${account.username}] Chyba při buildění: ${error.message}`);
       if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+      throw error; // Re-throw pro správné logování v Promise.allSettled
     }
   }
 
@@ -1053,11 +1153,14 @@ class Automator {
     let context, browserKey;
 
     try {
+      console.log(`      🪖 [${account.username}] Sbírám info o jednotkách...`);
+
       ({ context, browserKey } = await this.browserPool.createContext(account.id));
       const page = await context.newPage();
 
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
+        console.log(`      ❌ [${account.username}] Přihlášení selhalo`);
         await this.browserPool.closeContext(context, browserKey);
         await this.handleFailedLogin(account);
         return;
@@ -1069,11 +1172,14 @@ class Automator {
       const supportModule = new SupportModule(page, this.db, account.id);
       await supportModule.getAllUnitsInfo();
 
+      console.log(`      ✅ [${account.username}] Jednotky uloženy do DB`);
+
       await this.browserPool.closeContext(context, browserKey);
 
     } catch (error) {
-      logger.error(`Chyba při kontrole jednotek: ${error.message}`, account.username);
+      console.error(`      ❌ [${account.username}] Chyba při kontrole jednotek: ${error.message}`);
       if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+      throw error; // Re-throw pro správné logování v Promise.allSettled
     }
   }
 
@@ -1284,6 +1390,58 @@ class Automator {
       }
 
       console.log(`✅ [${account.username}] Úspěšně přihlášen`);
+
+      // Zkontroluj CAPTCHA (in-game CAPTCHA kontrola)
+      try {
+        const NotificationsModule = (await import('./modules/notifications.js')).default;
+        const notificationsModule = new NotificationsModule(page, this.db, account.id);
+        const hasCaptcha = await notificationsModule.detectCaptcha();
+
+        if (hasCaptcha) {
+          // Loguj pouze pokud ještě není zaznamenaná CAPTCHA pro tento účet
+          const isNewCaptcha = !this.captchaDetected.has(account.id);
+
+          if (isNewCaptcha) {
+            console.log(`⚠️  [${account.username}] CAPTCHA detekována při přihlášení!`);
+            this.captchaDetected.add(account.id);
+
+            // Otevři viditelný prohlížeč POUZE pokud už není otevřený nebo se neotvírá
+            if (!this.isBrowserActive(account.id) && !this.openingBrowsers.has(account.id)) {
+              console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+
+              // Označ že se browser otevírá
+              this.openingBrowsers.add(account.id);
+
+              try {
+                const browserInfo = await this.browserManager.testConnection(account.id, false);
+
+                if (browserInfo) {
+                  const { browser } = browserInfo;
+                  this.openBrowsers.set(account.id, browserInfo);
+
+                  // Sleduj zavření browseru
+                  browser.on('disconnected', () => {
+                    this.openBrowsers.delete(account.id);
+                    this.openingBrowsers.delete(account.id);
+                    this.captchaDetected.delete(account.id);
+                    console.log(`✅ [${account.username}] CAPTCHA vyřešena - browser zavřen`);
+                  });
+                }
+              } catch (error) {
+                console.error(`❌ [${account.username}] Chyba při otevírání browseru pro CAPTCHA:`, error.message);
+              } finally {
+                this.openingBrowsers.delete(account.id);
+              }
+            }
+          }
+
+          return false; // CAPTCHA = failed login
+        }
+      } catch (captchaError) {
+        // Ignore CAPTCHA check errors
+        console.log(`⚠️  [${account.username}] Nepodařilo se zkontrolovat CAPTCHA: ${captchaError.message}`);
+      }
+
       return true;
 
     } catch (error) {
