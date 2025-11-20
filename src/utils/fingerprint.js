@@ -211,7 +211,176 @@ export function createStealthScript(fingerprint) {
       })
     });
 
-    window.__playwright_stealth_enabled = true;
+    // 12. Odstranit všechny Playwright-specific properties
+    delete window.playwright;
+    delete window.__playwright;
+    delete window.__pw_manual;
+    delete window.__PW_inspect;
+    delete document.__playwright_evaluation_script__;
+
+    // 13. Odstranit Chrome CDP (DevTools Protocol) indicators
+    // Tyto properties nastavuje Playwright/Puppeteer přes CDP
+    const cdcProps = Object.keys(window).filter(prop => /^(cdc_|__cdc|_cdc)/.test(prop));
+    cdcProps.forEach(prop => delete window[prop]);
+
+    const docCdcProps = Object.keys(document).filter(prop => /^(\\$cdc|\\$chrome)/.test(prop));
+    docCdcProps.forEach(prop => delete document[prop]);
+
+    // 14. Odstranit Selenium/WebDriver indicators
+    delete window._Selenium_IDE_Recorder;
+    delete window.__selenium_evaluate;
+    delete window.__selenium_unwrapped;
+    delete window.__webdriver_evaluate;
+    delete window.__driver_evaluate;
+    delete window.__webdriver_script_fn;
+    delete window.__webdriver_script_func;
+    delete window.__webdriver_script_function;
+    delete window.__fxdriver_evaluate;
+    delete window.__driver_unwrapped;
+    delete window.__webdriver_unwrapped;
+    delete window.__fxdriver_unwrapped;
+    delete window._selenium;
+    delete window._webdriver;
+    delete window.callSelenium;
+    delete window.callPhantom;
+    delete window._phantom;
+    delete window.__phantomas;
+    delete window.__nightmare;
+    delete window.domAutomation;
+    delete window.domAutomationController;
+
+    // 15. Opravit Function.prototype.toString pro native funkce
+    // Bot detekce kontroluje zda modifikované funkce vypadají nativně
+    const originalToString = Function.prototype.toString;
+    const nativeFunctionString = 'function () { [native code] }';
+
+    Function.prototype.toString = function() {
+      // Pokud je to naše modifikovaná funkce, vrať native-looking string
+      if (this === WebGLRenderingContext.prototype.getParameter ||
+          this === navigator.permissions.query) {
+        return nativeFunctionString;
+      }
+      return originalToString.call(this);
+    };
+
+    // 16. Opravit iframe contentWindow descriptor (Playwright specific)
+    // Playwright mění způsob jak funguje contentWindow u iframe
+    try {
+      const iframeGetter = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow').get;
+      Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
+        get: function() {
+          const win = iframeGetter.call(this);
+          if (win) {
+            // Zajisti že webdriver je undefined i v iframe
+            try {
+              Object.defineProperty(win.navigator, 'webdriver', {
+                get: () => undefined,
+                configurable: true
+              });
+            } catch (e) {}
+          }
+          return win;
+        },
+        configurable: true
+      });
+    } catch (e) {
+      // Pokud se nepodaří, pokračuj
+    }
+
+    // 17. Přidat chybějící Chrome runtime properties
+    if (!window.chrome) {
+      window.chrome = {};
+    }
+    if (!window.chrome.runtime) {
+      window.chrome.runtime = {
+        OnInstalledReason: {
+          CHROME_UPDATE: 'chrome_update',
+          INSTALL: 'install',
+          SHARED_MODULE_UPDATE: 'shared_module_update',
+          UPDATE: 'update'
+        },
+        OnRestartRequiredReason: {
+          APP_UPDATE: 'app_update',
+          OS_UPDATE: 'os_update',
+          PERIODIC: 'periodic'
+        },
+        PlatformArch: {
+          ARM: 'arm',
+          ARM64: 'arm64',
+          MIPS: 'mips',
+          MIPS64: 'mips64',
+          X86_32: 'x86-32',
+          X86_64: 'x86-64'
+        },
+        PlatformNaclArch: {
+          ARM: 'arm',
+          MIPS: 'mips',
+          MIPS64: 'mips64',
+          X86_32: 'x86-32',
+          X86_64: 'x86-64'
+        },
+        PlatformOs: {
+          ANDROID: 'android',
+          CROS: 'cros',
+          LINUX: 'linux',
+          MAC: 'mac',
+          OPENBSD: 'openbsd',
+          WIN: 'win'
+        },
+        RequestUpdateCheckStatus: {
+          NO_UPDATE: 'no_update',
+          THROTTLED: 'throttled',
+          UPDATE_AVAILABLE: 'update_available'
+        }
+      };
+    }
+
+    // 18. Maskovat connection rtt (round trip time) - bot detekce může měřit
+    if (navigator.connection) {
+      Object.defineProperty(navigator.connection, 'rtt', {
+        get: () => ${Math.floor(Math.random() * 50) + 50}, // 50-100ms
+        configurable: true
+      });
+    }
+
+    // 19. Přidat Battery API maskování
+    if (navigator.getBattery) {
+      const originalGetBattery = navigator.getBattery;
+      navigator.getBattery = function() {
+        return originalGetBattery.call(navigator).then(battery => {
+          Object.defineProperty(battery, 'charging', { value: true });
+          Object.defineProperty(battery, 'chargingTime', { value: 0 });
+          Object.defineProperty(battery, 'dischargingTime', { value: Infinity });
+          Object.defineProperty(battery, 'level', { value: ${(Math.random() * 0.5 + 0.5).toFixed(2)} });
+          return battery;
+        });
+      };
+    }
+
+    // 20. Odstranit automation flags z window.external
+    if (window.external && window.external.toString && window.external.toString().indexOf('Sequentum') !== -1) {
+      delete window.external;
+    }
+
+    // 21. Přidat správné touch support podle zařízení
+    const isTouchDevice = ${fingerprint.screen.width < 1024 ? 'true' : 'false'};
+    if (isTouchDevice) {
+      Object.defineProperty(navigator, 'maxTouchPoints', {
+        get: () => ${Math.floor(Math.random() * 5) + 1}
+      });
+    } else {
+      Object.defineProperty(navigator, 'maxTouchPoints', {
+        get: () => 0
+      });
+    }
+
+    // 22. Console.debug maskování - detekce dev tools
+    const originalDebug = console.debug;
+    console.debug = function() {
+      // Kontrola zda jsou dev tools otevřené
+      // Boti obvykle nemají dev tools otevřené, ale maskujeme to stejně
+      return originalDebug.apply(this, arguments);
+    };
   `;
 }
 
