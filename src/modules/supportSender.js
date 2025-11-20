@@ -98,7 +98,7 @@ class SupportSender {
       }
 
       // Vyplnit formulář
-      await this.page.evaluate((unit, amount, x, y) => {
+      await this.page.evaluate(({ unit, amount, x, y }) => {
         // Vyplnit počet jednotek
         const unitInput = document.querySelector(`input[name="${unit}"]`);
         if (unitInput) {
@@ -110,7 +110,7 @@ class SupportSender {
         const yInput = document.querySelector('input[name="y"]');
         if (xInput) xInput.value = x;
         if (yInput) yInput.value = y;
-      }, unitType, count, targetX, targetY);
+      }, { unit: unitType, amount: count, x: targetX, y: targetY });
 
       await this.page.waitForTimeout(500);
 

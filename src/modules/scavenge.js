@@ -326,7 +326,7 @@ class ScavengeModule {
   async unlockOption(optionIndex) {
     try {
       // Klikni na unlock button
-      await this.page.evaluate((optionIndex) => {
+      await this.page.evaluate(({ optionIndex }) => {
         const options = Array.from(document.querySelectorAll('.scavenge-option'));
         const option = options[optionIndex];
 
@@ -336,7 +336,7 @@ class ScavengeModule {
         if (unlockBtn) {
           unlockBtn.click();
         }
-      }, optionIndex);
+      }, { optionIndex });
 
       // Počkat na popup (1-2s)
       await humanDelay(1000, 2000);
