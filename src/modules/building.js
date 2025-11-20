@@ -917,15 +917,13 @@ class BuildingModule {
       }
 
       if (result.response && result.response.success) {
-        // LOGUJ AKCI - skutečná výstavba
         await humanDelay(1500, 3000);
 
         // Použij čas z tabulky (získaný PŘED kliknutím)
-        let buildTime = buildTimeFromTable;
         let waitTimeMs = 5 * 60 * 1000;
 
-        if (buildTime) {
-          waitTimeMs = this.parseTimeToMs(buildTime);
+        if (buildTimeFromTable) {
+          waitTimeMs = this.parseTimeToMs(buildTimeFromTable);
         } else {
           // Fallback - zkus načíst z build queue (po kliknutí)
           const queueTime = await this.page.evaluate(() => {
@@ -951,12 +949,9 @@ class BuildingModule {
           });
 
           if (queueTime) {
-            buildTime = queueTime;
             waitTimeMs = this.parseTimeToMs(queueTime);
           }
         }
-
-        logger.building(this.getAccountName(), buildingName, level, buildTime);
 
         return { success: true, waitTime: waitTimeMs };
       }

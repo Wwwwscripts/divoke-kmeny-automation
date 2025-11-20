@@ -49,7 +49,7 @@ class Automator {
     // Intervaly pro smyčky - ZVÝŠENO pro snížení captcha rizika
     this.intervals = {
       checks: 0,        // Kontroly běží neustále (žádný wait)
-      recruit: 5 * 60 * 1000,     // 5 minut (zvýšeno z 2min)
+      recruit: 60 * 60 * 1000,    // 60 minut (1 hodina) - NOVĚ
       building: 30 * 1000,        // 30 sekund - COOLDOWN režim (zvýšeno z 5s)
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
       paladin: 60 * 60 * 1000,    // 60 minut (1 hodina)
@@ -467,36 +467,50 @@ class Automator {
 
   /**
    * SMYČKA 3: Rekrutování
-   * Každé 2 minuty projde účty a zkontroluje timing
-   * Zpracovává po 5 účtech paralelně
+   * Každou 1 hodinu projde všechny účty po skupinách 10ti
    * Priorita: 3
    */
   async recruitLoop() {
     console.log('🔄 [P3] Smyčka REKRUT spuštěna');
 
     while (this.isRunning) {
+      const cycleStartTime = Date.now();
+      console.log('\n' + '='.repeat(70));
+      console.log(`🎯 REKRUT - Nový cyklus začíná (${new Date().toLocaleTimeString('cs-CZ')})`);
+      console.log('='.repeat(70));
+
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
-      const accounts = this.db.getAllActiveAccounts();
+      const allAccounts = this.db.getAllActiveAccounts();
 
-      // Filtruj pouze účty, které mají recruit enabled a vypršelý timer
-      const accountsToProcess = accounts.filter(account => {
+      // Filtruj pouze účty, které mají recruit enabled
+      const accountsToProcess = allAccounts.filter(account => {
         const recruitSettings = this.db.getRecruitSettings(account.id);
-        if (!recruitSettings || !recruitSettings.enabled) {
-          return false;
-        }
-
-        const recruitKey = `recruit_${account.id}`;
-        const recruitWaitUntil = this.accountWaitTimes[recruitKey];
-        return !recruitWaitUntil || Date.now() >= recruitWaitUntil;
+        return recruitSettings && recruitSettings.enabled;
       });
 
-      // Zpracuj po 5 účtech paralelně
-      for (let i = 0; i < accountsToProcess.length; i += 5) {
-        const batch = accountsToProcess.slice(i, i + 5);
+      console.log(`📊 Načteno: ${accountsToProcess.length} účtů s povoleným rekrutem (z ${allAccounts.length} celkem)`);
 
-        await Promise.all(
+      if (accountsToProcess.length === 0) {
+        console.log('⚠️  Žádné účty s povoleným rekrutem');
+        await new Promise(resolve => setTimeout(resolve, this.intervals.recruit));
+        continue;
+      }
+
+      const totalBatches = Math.ceil(accountsToProcess.length / 10);
+      console.log(`📦 Rozděleno do ${totalBatches} skupin po max 10 účtech\n`);
+
+      // Zpracuj po 10 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 10) {
+        const batchStartTime = Date.now();
+        const batch = accountsToProcess.slice(i, i + 10);
+        const batchNum = Math.floor(i / 10) + 1;
+
+        console.log(`\n📋 Skupina ${batchNum}/${totalBatches}: Zpracovávám účty ${i + 1}-${Math.min(i + 10, accountsToProcess.length)}`);
+        console.log(`   Účty: ${batch.map(a => a.username).join(', ')}`);
+
+        const results = await Promise.allSettled(
           batch.map(account => {
             const recruitSettings = this.db.getRecruitSettings(account.id);
             return this.workerPool.run(
@@ -507,14 +521,43 @@ class Automator {
           })
         );
 
-        // Pauza mezi dávkami (1-3s)
-        if (i + 5 < accountsToProcess.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+        // Loguj výsledky
+        const successful = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+        const batchElapsed = ((Date.now() - batchStartTime) / 1000).toFixed(1);
+
+        console.log(`   ✅ Úspěšně: ${successful} | ❌ Chyby: ${failed} | ⏱️  Čas: ${batchElapsed}s`);
+
+        // Loguj chyby
+        results.forEach((result, idx) => {
+          if (result.status === 'rejected') {
+            console.log(`   ⚠️  [${batch[idx].username}] Chyba: ${result.reason?.message || result.reason}`);
+          }
+        });
+
+        // Pauza mezi skupinami (10 sekund)
+        if (i + 10 < accountsToProcess.length) {
+          console.log(`   ⏸️  Pauza 10s před další skupinou...`);
+          await new Promise(resolve => setTimeout(resolve, 10000));
         }
       }
 
-      // Počkej 5 minut - s randomizací ±45s
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.recruit, 45000)));
+      // Celý cyklus hotový, počkej 1 hodinu od začátku cyklu
+      const cycleElapsed = Date.now() - cycleStartTime;
+      const waitTime = Math.max(0, this.intervals.recruit - cycleElapsed);
+      const cycleElapsedSec = (cycleElapsed / 1000).toFixed(1);
+
+      console.log('\n' + '-'.repeat(70));
+      console.log(`✅ Cyklus dokončen za ${cycleElapsedSec}s`);
+
+      if (waitTime > 0) {
+        const waitMin = Math.floor(waitTime / 60000);
+        const waitSec = Math.floor((waitTime % 60000) / 1000);
+        console.log(`⏰ Čekám ${waitMin}m ${waitSec}s do dalšího cyklu (1h od začátku)...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        console.log(`⚠️  Cyklus trval déle než 1 hodinu, spouštím další okamžitě`);
+      }
     }
   }
 
