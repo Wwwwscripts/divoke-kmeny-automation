@@ -36,8 +36,21 @@ export async function randomDelay(baseDelay, variation = 1000) {
   return new Promise(resolve => setTimeout(resolve, delay));
 }
 
+/**
+ * Lidské čekání - delší pauzy s vyšší variací
+ * Simuluje čtení stránky, přemýšlení, atd.
+ * @param {number} minMs - Minimální čas v ms (default 2000)
+ * @param {number} maxMs - Maximální čas v ms (default 5000)
+ * @returns {Promise<void>}
+ */
+export async function humanDelay(minMs = 2000, maxMs = 5000) {
+  const delay = randomRange(minMs, maxMs);
+  return new Promise(resolve => setTimeout(resolve, delay));
+}
+
 export default {
   randomizeInterval,
   randomRange,
-  randomDelay
+  randomDelay,
+  humanDelay
 };

@@ -4,6 +4,8 @@
  */
 
 import logger from '../logger.js';
+import { humanDelay } from '../utils/randomize.js';
+import { simulateReading } from '../utils/humanBehavior.js';
 
 class BuildingModule {
   constructor(page, db, accountId) {
@@ -438,14 +440,20 @@ class BuildingModule {
       if (!worldUrl) return null;
 
       if (!currentUrl.includes('screen=main')) {
+        // Human delay před navigací
+        await humanDelay(1000, 2000);
+
         await this.page.goto(`${worldUrl}/game.php?screen=main`, {
-          waitUntil: 'domcontentloaded'
+          waitUntil: 'networkidle',
+          timeout: 30000
         });
-        await this.page.waitForTimeout(1500); // Sníženo z 3000ms
+
+        // Simuluj čtení stránky
+        await simulateReading(this.page, 2000);
       }
 
       await this.page.waitForSelector('#buildings', { timeout: 10000 });
-      await this.page.waitForTimeout(1000); // Sníženo z 2000ms
+      await humanDelay(800, 1500);
 
       const buildings = await this.page.evaluate(() => {
         const buildingsList = [];
@@ -614,7 +622,7 @@ class BuildingModule {
    */
   async checkBuildQueue() {
     try {
-      await this.page.waitForTimeout(1000);
+      await humanDelay(800, 1500);
       
       const queueInfo = await this.page.evaluate(() => {
         const buildQueue = document.getElementById('buildqueue');
@@ -692,14 +700,14 @@ class BuildingModule {
       }
 
       await this.page.click('#new_quest');
-      await this.page.waitForTimeout(1500); // Sníženo z 2000ms
+      await humanDelay(1200, 2000);
 
       await this.page.evaluate(() => {
         const rewardTab = document.querySelector('a[data-tab="reward-tab"]');
         if (rewardTab) rewardTab.click();
       });
 
-      await this.page.waitForTimeout(1000);
+      await humanDelay(800, 1500);
 
       let collected = 0;
       const maxRewards = 50; // Limit to prevent infinite loop
@@ -716,7 +724,7 @@ class BuildingModule {
         if (!claimed) break;
 
         collected++;
-        await this.page.waitForTimeout(1000); // Reduced from 1500ms
+        await humanDelay(800, 1500);
       }
 
       await this.page.evaluate(() => {
@@ -724,7 +732,7 @@ class BuildingModule {
         if (closeBtn) closeBtn.click();
       });
 
-      await this.page.waitForTimeout(1000);
+      await humanDelay(500, 1000);
 
       return collected;
     } catch (error) {
@@ -892,7 +900,7 @@ class BuildingModule {
 
       if (result.response && result.response.success) {
         // LOGUJ AKCI - skutečná výstavba
-        await this.page.waitForTimeout(2000);
+        await humanDelay(1500, 3000);
 
         // Pokus se získat čas z odpovědi API
         let buildTime = '?';

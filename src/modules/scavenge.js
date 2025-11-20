@@ -6,6 +6,9 @@
  * LANGUAGE-INDEPENDENT - používá pouze CSS třídy, ne text.
  */
 
+import { humanDelay } from '../utils/randomize.js';
+import { simulateReading } from '../utils/humanBehavior.js';
+
 class ScavengeModule {
   constructor(page, db, accountId) {
     this.page = page;
@@ -36,13 +39,17 @@ class ScavengeModule {
       // Přejít na stránku sběru
       const worldUrl = this.getWorldUrl();
       console.log(`🌐 Navigace na stránku sběru...`);
+
+      // Human delay před navigací (1-3s)
+      await humanDelay(1000, 3000);
+
       await this.page.goto(`${worldUrl}/game.php?screen=place&mode=scavenge`, {
-        waitUntil: 'domcontentloaded',
+        waitUntil: 'networkidle', // Čeká na kompletní načtení
         timeout: 30000
       });
 
-      // Počkat na načtení stránky
-      await this.page.waitForTimeout(2000);
+      // Simuluj čtení stránky (2-4s)
+      await simulateReading(this.page, 3000);
 
       // Zkontrolovat, zda stránka sběru existuje
       const pageExists = await this.checkPageExists();
@@ -264,8 +271,8 @@ class ScavengeModule {
 
       if (success) {
         sent++;
-        // Čekat mezi odesláními (1.5s)
-        await this.page.waitForTimeout(1500);
+        // Čekat mezi odesláními (2-4s) - human-like
+        await humanDelay(2000, 4000);
       }
     }
 
@@ -331,8 +338,8 @@ class ScavengeModule {
         }
       }, optionIndex);
 
-      // Počkat na popup
-      await this.page.waitForTimeout(1000);
+      // Počkat na popup (1-2s)
+      await humanDelay(1000, 2000);
 
       // Pokus o potvrzení (nebo zavření pokud disabled)
       await this.page.evaluate(() => {

@@ -104,11 +104,11 @@ class SharedBrowserPool {
             const action = actionQueue.shift();
             const timeSinceLastAction = Date.now() - lastActionTime;
 
-            // Realistické zpoždění (300-1200ms)
-            const delay = Math.random() * 900 + 300;
+            // Realistické zpoždění (500-2000ms) - zvýšeno pro anti-captcha
+            const delay = Math.random() * 1500 + 500;
 
-            // Pattern breaking (15% šance)
-            const extraDelay = Math.random() < 0.15 ? Math.random() * 2000 + 1000 : 0;
+            // Pattern breaking (20% šance) - zvýšeno pro anti-captcha
+            const extraDelay = Math.random() < 0.20 ? Math.random() * 3000 + 1500 : 0;
 
             const totalDelay = Math.max(0, delay + extraDelay - timeSinceLastAction);
 
