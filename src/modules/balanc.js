@@ -285,43 +285,43 @@ class BalancModule {
 
   /**
    * Nastavit filtry na tržišti (checkboxy)
-   * Nastaví všechny checkboxy najednou a pak refreshne stránku
+   * Používá skutečné klikání myší přes Puppeteer API
    */
   async setMarketFilters(resourceToBuy, resourceToSell) {
-    // Nastavit všechny checkboxy najednou
-    await this.page.evaluate(({ buy, sell }) => {
-      // 1. Odškrtnout všechno
-      document.querySelectorAll('input[name="res_buy"]').forEach(cb => cb.checked = false);
-      document.querySelectorAll('input[name="res_sell"]').forEach(cb => cb.checked = false);
+    // 1. Kliknout "všechno" pro buy (skutečné kliknutí myší)
+    try {
+      await this.page.click('input[name="res_buy"][value="all"]');
+      await this.page.waitForTimeout(500);
+    } catch (e) {
+      console.log('Checkbox "všechno buy" nenalezen');
+    }
 
-      // 2. Zaškrtnout "všechno" pro buy
-      const buyAllCheckbox = document.querySelector('input[name="res_buy"][value="all"]');
-      if (buyAllCheckbox) {
-        buyAllCheckbox.checked = true;
-        buyAllCheckbox.click();
-      }
+    // 2. Kliknout "všechno" pro sell
+    try {
+      await this.page.click('input[name="res_sell"][value="all"]');
+      await this.page.waitForTimeout(500);
+    } catch (e) {
+      console.log('Checkbox "všechno sell" nenalezen');
+    }
 
-      // 3. Zaškrtnout "všechno" pro sell
-      const sellAllCheckbox = document.querySelector('input[name="res_sell"][value="all"]');
-      if (sellAllCheckbox) {
-        sellAllCheckbox.checked = true;
-        sellAllCheckbox.click();
-      }
+    // 3. Kliknout konkrétní surovinu pro buy
+    try {
+      await this.page.click(`input[name="res_buy"][value="${resourceToBuy}"]`);
+      await this.page.waitForTimeout(500);
+    } catch (e) {
+      console.log(`Checkbox "${resourceToBuy} buy" nenalezen`);
+    }
 
-      // 4. Zaškrtnout konkrétní surovinu pro buy
-      const buyCheckbox = document.querySelector(`input[name="res_buy"][value="${buy}"]`);
-      if (buyCheckbox) {
-        buyCheckbox.checked = true;
-        buyCheckbox.click();
-      }
+    // 4. Kliknout konkrétní surovinu pro sell
+    try {
+      await this.page.click(`input[name="res_sell"][value="${resourceToSell}"]`);
+      await this.page.waitForTimeout(500);
+    } catch (e) {
+      console.log(`Checkbox "${resourceToSell} sell" nenalezen`);
+    }
 
-      // 5. Zaškrtnout konkrétní surovinu pro sell
-      const sellCheckbox = document.querySelector(`input[name="res_sell"][value="${sell}"]`);
-      if (sellCheckbox) {
-        sellCheckbox.checked = true;
-        sellCheckbox.click();
-      }
-    }, { buy: resourceToBuy, sell: resourceToSell });
+    // Počkat chvilku aby se uložily změny
+    await this.page.waitForTimeout(1000);
 
     // Refreshnout stránku pro načtení nabídek
     await this.page.reload({ waitUntil: 'domcontentloaded' });
