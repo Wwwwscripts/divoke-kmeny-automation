@@ -83,8 +83,8 @@ class BalancModule {
         return { success: true, message: 'Žádní dostupní obchodníci', waitTime: 2 * 60 * 60 * 1000 };
       }
 
-      // 7. Přejít na hlavní tržiště pro přijímání nabídek
-      await this.page.goto(`${worldUrl}/game.php?screen=market`, {
+      // 7. Přejít na stránku pro vyhledávání nabídek ostatních hráčů
+      await this.page.goto(`${worldUrl}/game.php?screen=market&mode=other_offer`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000
       });
