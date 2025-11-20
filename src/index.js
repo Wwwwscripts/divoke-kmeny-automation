@@ -24,15 +24,15 @@ import { detectAnyChallenge, detectBan } from './utils/antiBot.js';
  *
  * Architektura:
  * - Globální WorkerPool (max 100 procesů)
- * - 8 nezávislých smyček:
- *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
- *   2. Build - každých 5s po 5 účtech (COOLDOWN režim) [P1]
- *   3. Rekrut - každé 2 minuty po 5 účtech [P3]
- *   4. Výzkum - každých 120 minut po 5 účtech [P4]
- *   5. Paladin - každých 120 minut po 5 účtech [P5]
- *   6. Jednotky - každých 20 minut po 2 účtech [P6]
- *   7. Denní odměny - jednou denně ve 4:00 nebo při startu [P6]
- *   8. Sběr - každých 5 minut po 5 účtech [P2]
+ * - 6 nezávislých smyček:
+ *   1. Build - každých 5 min po 5 účtech [P1]
+ *   2. Sběr - každých 10 min po 5 účtech [P2]
+ *   3. Rekrut - každých 15 min po 5 účtech (po 5 jednotkách) [P3]
+ *   4. Výzkum - každých 120 min po 5 účtech [P4]
+ *   5. Paladin - každých 60 min po 5 účtech [P5]
+ *   6. Denní odměny - 2x denně ve 4:00 a 16:00 + při startu [P6]
+ *
+ * Kontrola CAPTCHA, útoků a jednotek: při každém přihlášení
  */
 class Automator {
   constructor() {
@@ -48,28 +48,24 @@ class Automator {
 
     // Intervaly pro smyčky
     this.intervals = {
-      checks: 0,        // Kontroly běží neustále (žádný wait)
-      recruit: 2 * 60 * 1000,     // 2 minuty
-      building: 5 * 1000,         // 5 sekund - COOLDOWN režim (kontroluje hned jak vyprší)
+      recruit: 15 * 60 * 1000,    // 15 minut (ZPOMALENO pro minimalizaci captchy)
+      building: 5 * 60 * 1000,    // 5 minut (ZPOMALENO z 5s pro minimalizaci captchy)
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
-      paladin: 60 * 60 * 1000,    // 60 minut (1 hodina) - ZMĚNĚNO z 2 hodin
-      units: 10 * 60 * 1000,      // 10 minut (kontrola jednotek) - ZMĚNĚNO z 20 minut
+      paladin: 60 * 60 * 1000,    // 60 minut (1 hodina)
       accountInfo: 20 * 60 * 1000, // 20 minut (sběr statistik)
       dailyRewards: 24 * 60 * 60 * 1000, // Nepoužívá se - denní odměny běží 2x denně (4:00 a 16:00)
-      scavenge: 1 * 60 * 1000,    // 1 minuta (sběr surovin) - ZMĚNĚNO z 5 minut (kvůli per-account timing)
+      scavenge: 10 * 60 * 1000,   // 10 minut (ZPOMALENO z 1 min pro minimalizaci captchy)
       // balance: 120 * 60 * 1000    // VYPNUTO - způsobovalo bany
     };
 
     // Priority (nižší = vyšší priorita)
     this.priorities = {
-      checks: 1,        // Útoky/CAPTCHA
-      building: 1,      // Výstavba - STEJNÁ PRIORITA jako kontroly
-      scavenge: 2,      // Sběr - vyšší priorita než rekrut
+      building: 1,      // Výstavba - nejvyšší priorita
+      scavenge: 2,      // Sběr
       recruit: 3,       // Rekrutování
       research: 4,      // Výzkum
       paladin: 5,       // Paladin
-      units: 6,         // Kontrola jednotek
-      dailyRewards: 6,  // Denní odměny - stejná priorita jako jednotky
+      dailyRewards: 6,  // Denní odměny
       stats: 7,         // Statistiky
       // balance: 7        // VYPNUTO - způsobovalo bany
     };
@@ -196,82 +192,41 @@ class Automator {
     console.log('='.repeat(70));
     console.log('🤖 Spouštím Event-Driven automatizaci');
     console.log('⚡ Worker Pool: Max 100 procesů');
-    console.log('🔄 9 nezávislých smyček:');
-    console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
-    console.log('   [P1] Build: každých 5s po 5 účtech - COOLDOWN režim (VYSOKÁ PRIORITA)');
-    console.log('   [P2] Sběr: každou 1 min po 5 účtech (per-account timing)');
-    console.log('   [P3] Rekrut: každé 2 min po 5 účtech (per-account timing)');
+    console.log('🔄 6 nezávislých smyček:');
+    console.log('   [P1] Build: každých 5 min po 5 účtech (per-account timing)');
+    console.log('   [P2] Sběr: každých 10 min po 5 účtech (per-account timing)');
+    console.log('   [P3] Rekrut: každých 15 min po 5 účtech (po 5 jednotkách, per-account timing)');
     console.log('   [P4] Výzkum: každých 120 min po 5 účtech (2 hod, per-account timing)');
     console.log('   [P5] Paladin: každých 60 min po 5 účtech (1 hod, per-account timing)');
-    console.log('   [P6] Jednotky: každých 10 min po 2 účtech');
     console.log('   [P6] Denní odměny: 2x denně ve 4:00 a 16:00 + při startu');
-    console.log('   [P7] Balance: každých 120 min po 5 účtech (2 hod, per-account timing)');
-    console.log('   [P7] Statistiky: každých 20 min');
+    console.log('');
+    console.log('✅ Kontrola CAPTCHA, útoků a jednotek: při každém přihlášení');
+    console.log('✅ Randomizace: ±20% variace všech intervalů');
     console.log('='.repeat(70));
 
     this.isRunning = true;
 
     // Spusť všechny smyčky paralelně
     await Promise.all([
-      this.checksLoop(),       // P1: Neustále po 2 účtech
-      this.buildingLoop(),     // P1: Každých 5s po 5 účtech (COOLDOWN režim)
-      this.scavengeLoop(),     // P2: Každých 5 min po 5 účtech
-      this.recruitLoop(),      // P3: Každé 2 min po 5 účtech
+      this.buildingLoop(),     // P1: Každých 5 min po 5 účtech
+      this.scavengeLoop(),     // P2: Každých 10 min po 5 účtech
+      this.recruitLoop(),      // P3: Každých 15 min po 5 účtech (po 5 jednotkách)
       this.researchLoop(),     // P4: Každých 120 min po 5 účtech
-      this.paladinLoop(),      // P5: Každých 120 min po 5 účtech
-      this.unitsLoop(),        // P6: Každých 20 min po 2 účtech
-      this.dailyRewardsLoop(), // P6: Jednou denně ve 4:00 nebo při startu
-      // this.balanceLoop(),      // P7: VYPNUTO - způsobovalo bany
+      this.paladinLoop(),      // P5: Každých 60 min po 5 účtech
+      this.dailyRewardsLoop(), // P6: 2x denně ve 4:00 a 16:00 + při startu
+      // this.balanceLoop(),      // VYPNUTO - způsobovalo bany
       this.statsMonitor()      // Monitoring
     ]);
   }
 
   /**
-   * SMYČKA 1: Kontroly (útoky/CAPTCHA)
-   * Běží neustále dokola po 2 účtech
-   * Priorita: 1 (nejvyšší)
-   */
-  async checksLoop() {
-    console.log('🔄 [P1] Smyčka KONTROLY spuštěna');
-
-    while (this.isRunning) {
-      // Zkontroluj shutdown flag
-      await this.checkShutdownFlag();
-
-      const accounts = this.db.getAllActiveAccounts();
-
-      // Zpracuj po 2 účtech
-      for (let i = 0; i < accounts.length; i += 2) {
-        const batch = accounts.slice(i, i + 2);
-
-        // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
-        await Promise.all(
-          batch.map(account =>
-            this.workerPool.run(
-              () => this.processChecks(account),
-              this.priorities.checks,
-              `Kontroly: ${account.username}`
-            )
-          )
-        );
-
-        // Malá pauza mezi dávkami (100ms)
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      // Celý cyklus hotový, krátká pauza před dalším kolem
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
-
-  /**
-   * SMYČKA 2: Výstavba
-   * Každých 5 sekund projde účty - COOLDOWN režim (kontroluje hned jak vyprší čas)
+   * SMYČKA 1: Výstavba
+   * Každých 5 minut projde účty a zkontroluje per-account timing
    * Zpracovává po 5 účtech paralelně
    * Priorita: 1
    */
   async buildingLoop() {
-    console.log('🔄 [P2] Smyčka BUILD spuštěna');
+    console.log('🔄 [P1] Smyčka BUILD spuštěna');
 
     while (this.isRunning) {
       // Zkontroluj shutdown flag
@@ -312,14 +267,14 @@ class Automator {
         }
       }
 
-      // Počkej 5 sekund před další kontrolou (COOLDOWN režim) - s randomizací ±10s
+      // Počkej 5 minut před další kontrolou - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.building)));
     }
   }
 
   /**
-   * SMYČKA 2.5: Sběr (Scavenge)
-   * Každou 1 minutu projde účty a zkontroluje per-account timing
+   * SMYČKA 2: Sběr (Scavenge)
+   * Každých 10 minut projde účty a zkontroluje per-account timing
    * Zpracovává po 5 účtech paralelně
    * Priorita: 2
    */
@@ -370,14 +325,14 @@ class Automator {
         }
       }
 
-      // Počkej 1 minutu - s randomizací ±10s
+      // Počkej 10 minut - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.scavenge)));
     }
   }
 
   /**
    * SMYČKA 3: Rekrutování
-   * Každé 2 minuty projde účty a zkontroluje timing
+   * Každých 15 minut projde účty a zkontroluje timing
    * Zpracovává po 5 účtech paralelně
    * Priorita: 3
    */
@@ -423,7 +378,7 @@ class Automator {
         }
       }
 
-      // Počkej 2 minuty - s randomizací ±10s
+      // Počkej 15 minut - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.recruit)));
     }
   }
@@ -476,7 +431,7 @@ class Automator {
         }
       }
 
-      // Počkej 2 hodiny
+      // Počkej 2 hodiny - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.research)));
     }
   }
@@ -523,51 +478,13 @@ class Automator {
         }
       }
 
-      // Počkej 1 hodinu
+      // Počkej 1 hodinu - s randomizací ±20%
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.paladin)));
     }
   }
 
   /**
-   * SMYČKA 6: Kontrola jednotek
-   * Každých 10 minut projde účty a zkontroluje jednotky (po 2 účtech)
-   * Priorita: 6
-   */
-  async unitsLoop() {
-    console.log('🔄 [P6] Smyčka JEDNOTKY spuštěna');
-
-    while (this.isRunning) {
-      // Zkontroluj shutdown flag
-      await this.checkShutdownFlag();
-
-      const accounts = this.db.getAllActiveAccounts();
-
-      // Zpracuj po 2 účtech
-      for (let i = 0; i < accounts.length; i += 2) {
-        const batch = accounts.slice(i, i + 2);
-
-        // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
-        await Promise.all(
-          batch.map(account =>
-            this.workerPool.run(
-              () => this.processUnits(account),
-              this.priorities.units,
-              `Jednotky: ${account.username}`
-            )
-          )
-        );
-
-        // Malá pauza mezi dávkami (100ms)
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      // Počkej 10 minut
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.units)));
-    }
-  }
-
-  /**
-   * SMYČKA 7: Denní odměny
+   * SMYČKA 6: Denní odměny
    * Běží 2x denně: ve 4:00 a 16:00 + při prvním spuštění
    * Priorita: 6
    */
@@ -743,154 +660,6 @@ class Automator {
   }
 
   /**
-   * Zpracuj kontroly (útoky/CAPTCHA)
-   */
-  async processChecks(account) {
-    let browser, context, browserKey;
-
-    try {
-      // Vytvoř context (sdílený browser)
-      ({ browser, context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
-
-      // Přihlásit se
-      const loginSuccess = await this.loginToGame(page, account);
-      if (!loginSuccess) {
-        // Zavři headless browser
-        await this.browserPool.closeContext(context, browserKey);
-        // Zpracuj selhání přihlášení
-        await this.handleFailedLogin(account);
-        return;
-      }
-
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
-
-      // Sbírej statistiky s vlastním intervalem
-      const infoKey = `accountInfo_${account.id}`;
-      const infoWaitUntil = this.accountWaitTimes[infoKey];
-
-      if (!infoWaitUntil || Date.now() >= infoWaitUntil) {
-        const infoModule = new AccountInfoModule(page, this.db, account.id);
-        await infoModule.collectInfo();
-        this.accountWaitTimes[infoKey] = Date.now() + this.intervals.accountInfo;
-      }
-
-      // Kontrola útoků a CAPTCHA (VŽDY) - VOLAT NEJDŘÍV pro aktualizaci incoming_attacks
-      const notificationsModule = new NotificationsModule(page, this.db, account.id);
-      await notificationsModule.detectAttacks();
-
-      const hasCaptcha = await notificationsModule.detectCaptcha();
-      const isConquered = await notificationsModule.detectConqueredVillage();
-
-      if (hasCaptcha) {
-        // Zavři headless browser
-        await this.browserPool.closeContext(context, browserKey);
-
-        // Loguj pouze pokud ještě není zaznamenaná CAPTCHA pro tento účet
-        const isNewCaptcha = !this.captchaDetected.has(account.id);
-
-        if (isNewCaptcha) {
-          console.log(`⚠️  [${account.username}] CAPTCHA detekována!`);
-          this.captchaDetected.add(account.id);
-        }
-
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený nebo se neotvírá (CAPTCHA)
-        if (!this.isBrowserActive(account.id) && !this.openingBrowsers.has(account.id)) {
-          if (isNewCaptcha) {
-            console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
-
-            // Označ že se browser otevírá
-            this.openingBrowsers.add(account.id);
-
-            try {
-              const browserInfo = await this.browserManager.testConnection(account.id, false); // false = nezavře se auto
-
-              if (browserInfo) {
-                const { browser } = browserInfo;
-                this.openBrowsers.set(account.id, browserInfo);
-
-                // Sleduj zavření browseru
-                browser.on('disconnected', () => {
-                  this.openBrowsers.delete(account.id);
-                  this.openingBrowsers.delete(account.id);
-                  this.captchaDetected.delete(account.id);
-                  console.log(`✅ [${account.username}] CAPTCHA vyřešena - browser zavřen`);
-                });
-              }
-            } catch (error) {
-              console.error(`❌ [${account.username}] Chyba při otevírání browseru pro CAPTCHA:`, error.message);
-            } finally {
-              // Vždy odstraň z openingBrowsers
-              this.openingBrowsers.delete(account.id);
-            }
-          }
-        }
-        return;
-      }
-
-      if (isConquered) {
-        console.log(`⚠️  [${account.username}] VESNICE DOBYTA!`);
-
-        // Zavři headless browser
-        await this.browserPool.closeContext(context, browserKey);
-
-        // Označ účet jako dobytý v databázi
-        this.db.updateAccountInfo(account.id, {
-          village_conquered: true,
-          village_conquered_at: new Date().toISOString()
-        });
-
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený nebo se neotvírá (DOBYTÁ VESNICE)
-        if (!this.isBrowserActive(account.id) && !this.openingBrowsers.has(account.id)) {
-          console.log(`🖥️  Otevírám viditelný prohlížeč pro vytvoření nové vesnice`);
-
-          // Označ že se browser otevírá
-          this.openingBrowsers.add(account.id);
-
-          try {
-            const browserInfo = await this.browserManager.testConnection(account.id, false); // false = nezavře se auto
-
-            if (browserInfo) {
-              const { browser } = browserInfo;
-              this.openBrowsers.set(account.id, browserInfo);
-
-              // Sleduj zavření browseru
-              browser.on('disconnected', () => {
-                this.openBrowsers.delete(account.id);
-                this.openingBrowsers.delete(account.id);
-                console.log(`🔒 [${account.username}] Browser zavřen - vesnice vyřešena`);
-              });
-            }
-          } catch (error) {
-            console.error(`❌ [${account.username}] Chyba při otevírání browseru pro conquered:`, error.message);
-          } finally {
-            // Vždy odstraň z openingBrowsers
-            this.openingBrowsers.delete(account.id);
-          }
-        } else {
-          console.log(`⏭️  Viditelný prohlížeč už je otevřený nebo se otevírá - přeskakuji`);
-        }
-        return;
-      }
-
-      // Zavři context (browser zůstane běžet)
-      await this.browserPool.closeContext(context, browserKey);
-
-      // Pokud byl browser otevřený, byl vyřešen CAPTCHA/login (browser se zavře automaticky pomocí startLoginWatcher)
-      if (this.isBrowserActive(account.id)) {
-        console.log(`✅ [${account.username}] Browser stále aktivní - CAPTCHA/login se řeší`);
-      }
-
-    } catch (error) {
-      console.error(`❌ [${account.username}] Chyba při kontrole:`, error.message);
-      if (context && browserKey) {
-        await this.browserPool.closeContext(context, browserKey);
-      }
-    }
-  }
-
-  /**
    * Zpracuj výstavbu
    */
   async processBuilding(account, settings) {
@@ -1042,37 +811,6 @@ class Automator {
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při výzkumu:`, error.message);
-      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
-    }
-  }
-
-  /**
-   * Zpracuj kontrolu jednotek
-   */
-  async processUnits(account) {
-    let context, browserKey;
-
-    try {
-      ({ context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
-
-      const loginSuccess = await this.loginToGame(page, account);
-      if (!loginSuccess) {
-        await this.browserPool.closeContext(context, browserKey);
-        await this.handleFailedLogin(account);
-        return;
-      }
-
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
-
-      const supportModule = new SupportModule(page, this.db, account.id);
-      await supportModule.getAllUnitsInfo();
-
-      await this.browserPool.closeContext(context, browserKey);
-
-    } catch (error) {
-      logger.error(`Chyba při kontrole jednotek: ${error.message}`, account.username);
       if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
     }
   }
@@ -1283,6 +1021,37 @@ class Automator {
       }
 
       console.log(`✅ [${account.username}] Úspěšně přihlášen`);
+
+      // NOVÉ: Kontrola CAPTCHA, útoků a jednotek při každém přihlášení
+      try {
+        const notificationsModule = new NotificationsModule(page, this.db, account.id);
+        const supportModule = new SupportModule(page, this.db, account.id);
+
+        // 1. Kontrola útoků (vždy)
+        await notificationsModule.detectAttacks();
+
+        // 2. Kontrola CAPTCHA
+        const hasCaptcha = await notificationsModule.detectCaptcha();
+        if (hasCaptcha) {
+          console.log(`⚠️  [${account.username}] CAPTCHA detekována při přihlášení!`);
+          // Nezavíráme page, protože to bude řešit volající funkce
+        }
+
+        // 3. Kontrola dobytí vesnice
+        const isConquered = await notificationsModule.detectConqueredVillage();
+        if (isConquered) {
+          console.log(`⚠️  [${account.username}] Vesnice dobyta!`);
+        }
+
+        // 4. Kontrola jednotek (pokud není captcha/dobytí)
+        if (!hasCaptcha && !isConquered) {
+          await supportModule.getAllUnitsInfo();
+        }
+      } catch (checkError) {
+        // Tichá chyba - nepřerušujeme přihlášení kvůli chybě v kontrolách
+        console.error(`⚠️  [${account.username}] Chyba při kontrolách po přihlášení:`, checkError.message);
+      }
+
       return true;
 
     } catch (error) {
