@@ -139,7 +139,7 @@ class SharedBrowserPool {
       }
 
       this.db.updateCookies(accountId, cookies);
-      console.log(`✅ Cookies uloženy pro účet ID: ${accountId}`);
+      // Cookies uloženy - tichý log (příliš časté)
 
     } catch (error) {
       console.error(`❌ [ID:${accountId}] Chyba při ukládání cookies:`, error.message);

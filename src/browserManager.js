@@ -60,11 +60,11 @@ class BrowserManager {
             console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
             cookies = Object.values(cookies);
             await context.addCookies(cookies);
-            console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
+            // Cookies načteny - tichý log
           }
         } else {
           await context.addCookies(cookies);
-          console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
+          // Cookies načteny - tichý log
         }
       } catch (error) {
         console.error('❌ Chyba při načítání cookies:', error.message);
@@ -111,7 +111,7 @@ class BrowserManager {
       }
 
       this.db.updateCookies(accountId, cookies);
-      console.log(`✅ Cookies uloženy pro účet ID: ${accountId}`);
+      // Cookies uloženy - tichý log (příliš časté)
 
     } catch (error) {
       console.error(`❌ [ID:${accountId}] Chyba při ukládání cookies:`, error.message);
@@ -186,11 +186,11 @@ class BrowserManager {
             console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
             cookies = Object.values(cookies);
             await context.addCookies(cookies);
-            console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
+            // Cookies načteny - tichý log
           }
         } else {
           await context.addCookies(cookies);
-          console.log(`🍪 Cookies načteny pro účet: ${account.username}`);
+          // Cookies načteny - tichý log
         }
       } catch (error) {
         console.error('❌ Chyba při načítání cookies:', error.message);
