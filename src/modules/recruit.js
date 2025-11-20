@@ -359,7 +359,7 @@ class RecruitModule {
       await simulateReading(this.page, 3000);
 
       // Najdeme input pro jednotku a nastavíme hodnotu
-      const recruited = await this.page.evaluate((unitType, count) => {
+      const recruited = await this.page.evaluate(({ unitType, count }) => {
         const input = document.querySelector(`input[name="${unitType}"]`);
         if (!input) return false;
 
@@ -379,7 +379,7 @@ class RecruitModule {
         }, 500);
 
         return true;
-      }, unitType, count);
+      }, { unitType, count });
 
       if (recruited) {
         // Počkej na odezvu serveru + human-like delay (1.5-3s)
