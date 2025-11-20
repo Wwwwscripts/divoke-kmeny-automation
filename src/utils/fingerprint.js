@@ -68,6 +68,14 @@ export function generateFingerprint() {
   // User Agent
   const userAgent = `Mozilla/5.0 (${windowsVersion}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
 
+  // Canvas fingerprint noise (malé náhodné číslo pro RGB offset)
+  // Každý účet má jiný noise → jiný canvas fingerprint
+  const canvasNoise = Math.random() * 0.0001 - 0.00005; // -0.00005 až +0.00005
+
+  // Audio fingerprint noise (malé náhodné číslo pro audio output)
+  // Každý účet má jiný audio fingerprint
+  const audioNoise = Math.random() * 0.0001 - 0.00005;
+
   return {
     userAgent,
     viewport: {
@@ -89,7 +97,9 @@ export function generateFingerprint() {
       renderer: webgl.renderer
     },
     platform: 'Win32',
-    languages: ['cs-CZ', 'cs', 'en-US', 'en']
+    languages: ['cs-CZ', 'cs', 'en-US', 'en'],
+    canvasNoise,    // Pro canvas fingerprinting
+    audioNoise      // Pro audio fingerprinting
   };
 }
 
@@ -380,6 +390,172 @@ export function createStealthScript(fingerprint) {
       // Kontrola zda jsou dev tools otevřené
       // Boti obvykle nemají dev tools otevřené, ale maskujeme to stejně
       return originalDebug.apply(this, arguments);
+    };
+
+    // 23. CANVAS FINGERPRINTING - Přidej noise do canvas renderingu
+    // Bot detekce používá canvas fingerprinting k detekci stejných browserů
+    // Každý skutečný browser vykresluje canvas mírně odlišně kvůli GPU/fonty/anti-aliasing
+    const canvasNoiseValue = ${fingerprint.canvasNoise};
+
+    // Přepsat toDataURL (používá se pro canvas fingerprinting)
+    const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+    HTMLCanvasElement.prototype.toDataURL = function(type) {
+      // Přidej malý noise do canvas dat
+      const context = this.getContext('2d');
+      if (context) {
+        const imageData = context.getImageData(0, 0, this.width, this.height);
+        const pixels = imageData.data;
+
+        // Přidej malý noise do každého pixelu (neviditelné lidským okem)
+        for (let i = 0; i < pixels.length; i += 4) {
+          pixels[i] = Math.min(255, Math.max(0, pixels[i] + canvasNoiseValue * 255)); // R
+          pixels[i + 1] = Math.min(255, Math.max(0, pixels[i + 1] + canvasNoiseValue * 255)); // G
+          pixels[i + 2] = Math.min(255, Math.max(0, pixels[i + 2] + canvasNoiseValue * 255)); // B
+        }
+
+        context.putImageData(imageData, 0, 0);
+      }
+
+      return originalToDataURL.apply(this, arguments);
+    };
+
+    // Přepsat toBlob (také se používá pro fingerprinting)
+    const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
+      const context = this.getContext('2d');
+      if (context) {
+        const imageData = context.getImageData(0, 0, this.width, this.height);
+        const pixels = imageData.data;
+
+        for (let i = 0; i < pixels.length; i += 4) {
+          pixels[i] = Math.min(255, Math.max(0, pixels[i] + canvasNoiseValue * 255));
+          pixels[i + 1] = Math.min(255, Math.max(0, pixels[i + 1] + canvasNoiseValue * 255));
+          pixels[i + 2] = Math.min(255, Math.max(0, pixels[i + 2] + canvasNoiseValue * 255));
+        }
+
+        context.putImageData(imageData, 0, 0);
+      }
+
+      return originalToBlob.apply(this, arguments);
+    };
+
+    // Přepsat getImageData (pro přímý přístup k pixelům)
+    const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+    CanvasRenderingContext2D.prototype.getImageData = function(sx, sy, sw, sh) {
+      const imageData = originalGetImageData.apply(this, arguments);
+      const pixels = imageData.data;
+
+      // Přidej noise
+      for (let i = 0; i < pixels.length; i += 4) {
+        pixels[i] = Math.min(255, Math.max(0, pixels[i] + canvasNoiseValue * 255));
+        pixels[i + 1] = Math.min(255, Math.max(0, pixels[i + 1] + canvasNoiseValue * 255));
+        pixels[i + 2] = Math.min(255, Math.max(0, pixels[i + 2] + canvasNoiseValue * 255));
+      }
+
+      return imageData;
+    };
+
+    // 24. AUDIO FINGERPRINTING - Přidej noise do audio contextu
+    // Bot detekce používá AudioContext fingerprinting podobně jako canvas
+    const audioNoiseValue = ${fingerprint.audioNoise};
+
+    // Audio Context fingerprinting obrana
+    const OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
+
+    if (OriginalAudioContext) {
+      const AudioContextProxy = new Proxy(OriginalAudioContext, {
+        construct(target, args) {
+          const context = new target(...args);
+
+          // Přepsat createOscillator (používá se pro audio fingerprinting)
+          const originalCreateOscillator = context.createOscillator.bind(context);
+          context.createOscillator = function() {
+            const oscillator = originalCreateOscillator();
+
+            // Přidej malý noise do frekvence
+            const originalStart = oscillator.start.bind(oscillator);
+            oscillator.start = function(when) {
+              oscillator.frequency.value += audioNoiseValue;
+              return originalStart(when);
+            };
+
+            return oscillator;
+          };
+
+          // Přepsat createAnalyser (také se používá)
+          const originalCreateAnalyser = context.createAnalyser.bind(context);
+          context.createAnalyser = function() {
+            const analyser = originalCreateAnalyser();
+
+            // Přidej noise do frequency/time data
+            const originalGetFloatFrequencyData = analyser.getFloatFrequencyData.bind(analyser);
+            analyser.getFloatFrequencyData = function(array) {
+              originalGetFloatFrequencyData(array);
+              for (let i = 0; i < array.length; i++) {
+                array[i] += audioNoiseValue * 10;
+              }
+              return array;
+            };
+
+            const originalGetByteFrequencyData = analyser.getByteFrequencyData.bind(analyser);
+            analyser.getByteFrequencyData = function(array) {
+              originalGetByteFrequencyData(array);
+              for (let i = 0; i < array.length; i++) {
+                array[i] = Math.min(255, Math.max(0, array[i] + audioNoiseValue * 255));
+              }
+              return array;
+            };
+
+            return analyser;
+          };
+
+          // Přepsat createDynamicsCompressor (fingerprinting vector)
+          const originalCreateDynamicsCompressor = context.createDynamicsCompressor.bind(context);
+          context.createDynamicsCompressor = function() {
+            const compressor = originalCreateDynamicsCompressor();
+
+            // Přidej malé odchylky do parametrů (detekční vektor)
+            if (compressor.threshold) compressor.threshold.value += audioNoiseValue * 10;
+            if (compressor.knee) compressor.knee.value += audioNoiseValue * 5;
+            if (compressor.ratio) compressor.ratio.value += audioNoiseValue;
+            if (compressor.attack) compressor.attack.value += audioNoiseValue * 0.001;
+            if (compressor.release) compressor.release.value += audioNoiseValue * 0.01;
+
+            return compressor;
+          };
+
+          return context;
+        }
+      });
+
+      // Nahraď globální AudioContext
+      window.AudioContext = AudioContextProxy;
+      if (window.webkitAudioContext) {
+        window.webkitAudioContext = AudioContextProxy;
+      }
+
+      // Maskuj AudioContext.toString() aby vypadal nativně
+      AudioContextProxy.toString = function() {
+        return 'function AudioContext() { [native code] }';
+      };
+    }
+
+    // 25. Font fingerprinting obrana - přidej malé odchylky do font metrics
+    const originalMeasureText = CanvasRenderingContext2D.prototype.measureText;
+    CanvasRenderingContext2D.prototype.measureText = function(text) {
+      const metrics = originalMeasureText.apply(this, arguments);
+
+      // Přidej malý noise do width (font fingerprinting detekční vektor)
+      const noisyWidth = metrics.width + canvasNoiseValue * 2;
+
+      return new Proxy(metrics, {
+        get(target, prop) {
+          if (prop === 'width') {
+            return noisyWidth;
+          }
+          return target[prop];
+        }
+      });
     };
   `;
 }
