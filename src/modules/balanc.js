@@ -2,7 +2,8 @@
  * Modul pro automatické balancování surovin přes tržiště
  *
  * Běží každé 2 hodiny a automaticky vyvažuje suroviny na tržišti.
- * Aktivuje se pouze pokud je alespoň jedna surovina nad 10000 kusů.
+ * Aktivuje se pouze pokud je alespoň jedna surovina nad 3000 kusů.
+ * Cílový poměr surovin: 7:7:5 (wood:stone:iron)
  * LANGUAGE-INDEPENDENT - používá pouze CSS třídy a ikony.
  */
 
@@ -12,7 +13,8 @@ class BalancModule {
     this.db = db;
     this.accountId = accountId;
     this.RESOURCES = ['wood', 'stone', 'iron'];
-    this.MIN_THRESHOLD = 10000; // Minimální množství pro aktivaci
+    this.RESOURCE_RATIO = { wood: 7, stone: 7, iron: 5 }; // Cílový poměr
+    this.MIN_THRESHOLD = 3000; // Minimální množství pro aktivaci
     this.OFFER_SIZE = 1000; // Velikost jedné nabídky
   }
 
@@ -147,6 +149,7 @@ class BalancModule {
   /**
    * Vypočítat cílový stav a co je potřeba vyměnit
    * Pracuje pouze s celými tisíci
+   * Cílový poměr: 7:7:5 (wood:stone:iron)
    */
   calculateBalance(resources) {
     // Zaokrouhlit na tisíce dolů
@@ -155,17 +158,30 @@ class BalancModule {
       rounded[res] = Math.floor(resources[res] / 1000) * 1000;
     });
 
-    // Vypočítat průměr (v tisících)
-    const sum = Object.values(rounded).reduce((a, b) => a + b, 0);
-    const avg = sum / this.RESOURCES.length;
-    const target = Math.floor(avg / 1000) * 1000; // Zaokrouhlit dolů na tisíce
+    // Najít "limitující" surovinu (která má nejmenší poměr)
+    // Například: wood=28000, stone=32000, iron=23000
+    // wood/7 = 4000, stone/7 = 4571, iron/5 = 4600
+    // Minimum je wood s 4000, takže scale = 4
+    let minScale = Infinity;
+    this.RESOURCES.forEach(res => {
+      const scale = Math.floor((rounded[res] / 1000) / this.RESOURCE_RATIO[res]);
+      if (scale < minScale) {
+        minScale = scale;
+      }
+    });
+
+    // Vypočítat cílové hodnoty podle poměru
+    const targets = {};
+    this.RESOURCES.forEach(res => {
+      targets[res] = minScale * this.RESOURCE_RATIO[res] * 1000;
+    });
 
     // Vypočítat přebytky a nedostatky
     const surplus = {}; // Co mám navíc (nabízím)
     const deficit = {}; // Co mi chybí (chci)
 
     this.RESOURCES.forEach(res => {
-      const diff = rounded[res] - target;
+      const diff = rounded[res] - targets[res];
       if (diff > 0) {
         surplus[res] = diff;
       } else if (diff < 0) {
@@ -173,7 +189,7 @@ class BalancModule {
       }
     });
 
-    return { target, surplus, deficit, rounded };
+    return { targets, surplus, deficit, rounded };
   }
 
   /**
