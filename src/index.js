@@ -14,7 +14,7 @@ import PaladinModule from './modules/paladin.js';
 import SupportModule from './modules/support.js';
 import DailyRewardsModule from './modules/dailyRewards.js';
 import ScavengeModule from './modules/scavenge.js';
-import BalancModule from './modules/balanc.js';
+// import BalancModule from './modules/balanc.js'; // VYPNUTO - způsobovalo bany
 import logger from './logger.js';
 import { randomizeInterval } from './utils/randomize.js';
 import { detectAnyChallenge, detectBan } from './utils/antiBot.js';
@@ -57,7 +57,7 @@ class Automator {
       accountInfo: 20 * 60 * 1000, // 20 minut (sběr statistik)
       dailyRewards: 24 * 60 * 60 * 1000, // Nepoužívá se - denní odměny běží 2x denně (4:00 a 16:00)
       scavenge: 1 * 60 * 1000,    // 1 minuta (sběr surovin) - ZMĚNĚNO z 5 minut (kvůli per-account timing)
-      balance: 120 * 60 * 1000    // 120 minut (2 hodiny) - balancování surovin na trhu
+      // balance: 120 * 60 * 1000    // VYPNUTO - způsobovalo bany
     };
 
     // Priority (nižší = vyšší priorita)
@@ -71,7 +71,7 @@ class Automator {
       units: 6,         // Kontrola jednotek
       dailyRewards: 6,  // Denní odměny - stejná priorita jako jednotky
       stats: 7,         // Statistiky
-      balance: 7        // Balancování surovin - stejná priorita jako statistiky
+      // balance: 7        // VYPNUTO - způsobovalo bany
     };
   }
 
@@ -221,7 +221,7 @@ class Automator {
       this.paladinLoop(),      // P5: Každých 120 min po 5 účtech
       this.unitsLoop(),        // P6: Každých 20 min po 2 účtech
       this.dailyRewardsLoop(), // P6: Jednou denně ve 4:00 nebo při startu
-      this.balanceLoop(),      // P7: Každých 120 min po 5 účtech (balancování surovin)
+      // this.balanceLoop(),      // P7: VYPNUTO - způsobovalo bany
       this.statsMonitor()      // Monitoring
     ]);
   }
@@ -675,10 +675,9 @@ class Automator {
 
   /**
    * SMYČKA 8: Balance (balancování surovin na trhu)
-   * Každých 120 minut projde účty a zkontroluje per-account timing
-   * Zpracovává po 5 účtech paralelně
-   * Priorita: 7
+   * VYPNUTO - způsobovalo bany
    */
+  /*
   async balanceLoop() {
     console.log('🔄 [P7] Smyčka BALANCE spuštěna');
 
@@ -725,6 +724,7 @@ class Automator {
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.balance)));
     }
   }
+  */
 
   /**
    * Monitoring - vypíše statistiky každých 30 sekund
@@ -1157,7 +1157,9 @@ class Automator {
 
   /**
    * Zpracuj balancování surovin na trhu
+   * VYPNUTO - způsobovalo bany
    */
+  /*
   async processBalance(account) {
     let context, browserKey;
 
@@ -1194,6 +1196,7 @@ class Automator {
       if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
     }
   }
+  */
 
   /**
    * Přihlášení do hry
