@@ -611,10 +611,11 @@ class BalancModule {
           const row = rows[i];
           const cells = row.querySelectorAll('td');
 
-          if (cells.length < 3) continue;
+          if (cells.length < 4) continue;
 
-          // TD 0: co nabízíme (ikona + množství)
-          const offerCell = cells[0];
+          // TD 0: checkbox (přeskočit)
+          // TD 1: co nabízíme (ikona + množství)
+          const offerCell = cells[1];
           const offerIcon = offerCell.querySelector('span.icon.header');
           if (!offerIcon) continue; // Skip řádky bez ikony
 
@@ -622,8 +623,8 @@ class BalancModule {
           const offerAmountText = offerCell.textContent.replace(/\./g, '').replace(/\s/g, '').trim();
           const offerAmount = parseInt(offerAmountText, 10);
 
-          // TD 1: co chceme (ikona + množství)
-          const wantCell = cells[1];
+          // TD 2: co chceme (ikona + množství)
+          const wantCell = cells[2];
           const wantIcon = wantCell.querySelector('span.icon.header');
           if (!wantIcon) continue; // Skip řádky bez ikony
 
@@ -631,8 +632,8 @@ class BalancModule {
           const wantAmountText = wantCell.textContent.replace(/\./g, '').replace(/\s/g, '').trim();
           const wantAmount = parseInt(wantAmountText, 10);
 
-          // TD 2: počet nabídek
-          const countCell = cells[2];
+          // TD 3: počet nabídek
+          const countCell = cells[3];
           const count = parseInt(countCell.textContent.trim(), 10);
 
           if (offerResource && !isNaN(offerAmount) && !isNaN(count)) {
@@ -758,8 +759,8 @@ class BalancModule {
 
         multiInput.value = count.toString();
 
-        // Submit
-        const submitBtn = document.querySelector('input[name="submit_offer"]');
+        // Submit - button má id="submit_offer" ale name je prázdné
+        const submitBtn = document.querySelector('input#submit_offer[type="submit"]');
         if (!submitBtn) return false;
 
         submitBtn.click();
