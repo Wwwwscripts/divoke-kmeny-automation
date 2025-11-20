@@ -827,6 +827,24 @@ class BuildingModule {
     try {
       const internalName = this.getBuildingInternalName(buildingName);
 
+      // NEJDŘÍV získej čas z tabulky budov (PŘED kliknutím)
+      const buildTimeFromTable = await this.page.evaluate((internalName) => {
+        try {
+          const buildRow = document.getElementById(`main_buildrow_${internalName}`);
+          if (!buildRow) return null;
+
+          // Najdi všechny TD elementy v řádku
+          const cells = buildRow.querySelectorAll('td');
+          if (cells.length < 5) return null;
+
+          // 5. sloupec (index 4) obsahuje čas
+          const timeCell = cells[4];
+          return timeCell ? timeCell.textContent.trim() : null;
+        } catch (e) {
+          return null;
+        }
+      }, internalName);
+
       const canBuild = await this.page.evaluate((internalName) => {
         const buildRow = document.getElementById(`main_buildrow_${internalName}`);
         if (!buildRow) return { canBuild: false, reason: 'Budova nenalezena' };
@@ -902,46 +920,39 @@ class BuildingModule {
         // LOGUJ AKCI - skutečná výstavba
         await humanDelay(1500, 3000);
 
-        // Pokus se získat čas z odpovědi API
-        let buildTime = null;
+        // Použij čas z tabulky (získaný PŘED kliknutím)
+        let buildTime = buildTimeFromTable;
         let waitTimeMs = 5 * 60 * 1000;
 
-        // Načti aktuální frontu výstavby ze stránky
-        const queueTime = await this.page.evaluate(() => {
-          try {
-            // Zkus najít buildqueue element
-            const buildQueue = document.getElementById('buildqueue');
-            if (!buildQueue) return null;
-
-            // Získej všechny řádky fronty
-            const rows = buildQueue.querySelectorAll('tr');
-            if (rows.length < 3) return null;
-
-            // Poslední řádek by měl být naše nová stavba
-            const lastRow = rows[rows.length - 1];
-            const timeTd = lastRow.querySelectorAll('td')[1];
-
-            if (timeTd) {
-              const timeSpan = timeTd.querySelector('span');
-              return timeSpan ? timeSpan.textContent.trim() : timeTd.textContent.trim();
-            }
-
-            return null;
-          } catch (e) {
-            return null;
-          }
-        });
-
-        if (queueTime) {
-          buildTime = queueTime;
-          waitTimeMs = this.parseTimeToMs(queueTime);
+        if (buildTime) {
+          waitTimeMs = this.parseTimeToMs(buildTime);
         } else {
-          // Fallback - zkus checkBuildQueue
-          const queueInfo = await this.checkBuildQueue();
-          if (queueInfo.hasQueue && queueInfo.buildings.length > 0) {
-            const lastBuilding = queueInfo.buildings[queueInfo.buildings.length - 1];
-            buildTime = lastBuilding.time;
-            waitTimeMs = this.parseTimeToMs(lastBuilding.time);
+          // Fallback - zkus načíst z build queue (po kliknutí)
+          const queueTime = await this.page.evaluate(() => {
+            try {
+              const buildQueue = document.getElementById('buildqueue');
+              if (!buildQueue) return null;
+
+              const rows = buildQueue.querySelectorAll('tr');
+              if (rows.length < 3) return null;
+
+              const lastRow = rows[rows.length - 1];
+              const timeTd = lastRow.querySelectorAll('td')[1];
+
+              if (timeTd) {
+                const timeSpan = timeTd.querySelector('span');
+                return timeSpan ? timeSpan.textContent.trim() : timeTd.textContent.trim();
+              }
+
+              return null;
+            } catch (e) {
+              return null;
+            }
+          });
+
+          if (queueTime) {
+            buildTime = queueTime;
+            waitTimeMs = this.parseTimeToMs(queueTime);
           }
         }
 
