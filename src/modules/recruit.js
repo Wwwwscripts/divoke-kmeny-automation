@@ -276,7 +276,7 @@ class RecruitModule {
       await randomDelay(1200, 500);
 
       // Najdeme input pro jednotku a nastavíme hodnotu
-      const recruited = await this.page.evaluate((unitType, count) => {
+      const recruited = await this.page.evaluate(({ unitType, count }) => {
         const input = document.querySelector(`input[name="${unitType}"]`);
         if (!input) return false;
 
@@ -296,7 +296,7 @@ class RecruitModule {
         }, 500);
 
         return true;
-      }, unitType, count);
+      }, { unitType, count });
 
       if (recruited) {
         await this.page.waitForTimeout(1500);
