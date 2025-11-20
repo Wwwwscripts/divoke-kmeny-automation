@@ -396,7 +396,7 @@ class RecruitModule {
   }
 
   /**
-   * Hlavní funkce - naplní frontu na 8 hodin podle poměru surovin
+   * Hlavní funkce - naplní frontu na 8 hodin V KAŽDÉ BUDOVĚ ZVLÁŠŤ podle poměru surovin
    */
   async startRecruiting(templateName) {
     try {
@@ -414,30 +414,22 @@ class RecruitModule {
       });
       await simulateReading(this.page, 2000);
 
-      // Zjisti celkový čas ve frontě (barracks + stable + workshop)
+      // Zjisti čas ve frontě KAŽDÉ BUDOVY ZVLÁŠŤ
       const barracksQueue = await this.checkBuildingQueue('barracks');
-      const stableQueue = await this.checkBuildingQueue('stable');
-      const workshopQueue = await this.checkBuildingQueue('workshop');
+      const barracksQueueHours = (barracksQueue / 3600).toFixed(1);
 
-      const totalQueueTime = barracksQueue + stableQueue + workshopQueue;
-      const totalQueueHours = (totalQueueTime / 3600).toFixed(1);
+      console.log(`[${this.getAccountName()}] 📊 Fronta v kasárnách: ${barracksQueueHours}h`);
 
-      console.log(`[${this.getAccountName()}] 📊 Fronta:`);
-      console.log(`  - Kasárna: ${(barracksQueue / 3600).toFixed(1)}h`);
-      console.log(`  - Stáj: ${(stableQueue / 3600).toFixed(1)}h`);
-      console.log(`  - Dílna: ${(workshopQueue / 3600).toFixed(1)}h`);
-      console.log(`  - CELKEM: ${totalQueueHours}h`);
-
-      // Pokud fronta >= 7h, nic nedělej
-      if (totalQueueTime >= 7 * 3600) {
-        console.log(`[${this.getAccountName()}] ✅ Fronta plná (>= 7h), přeskakuji`);
+      // Pokud kasárna >= 7h, přeskoč
+      if (barracksQueue >= 7 * 3600) {
+        console.log(`[${this.getAccountName()}] ✅ Kasárna plná (>= 7h), přeskakuji`);
         return true;
       }
 
-      // Vypočítej kolik chybí do 8h
-      const missingTime = this.targetQueueTime - totalQueueTime;
+      // Vypočítej kolik chybí do 8h v kasárnách
+      const missingTime = this.targetQueueTime - barracksQueue;
       const missingHours = (missingTime / 3600).toFixed(1);
-      console.log(`[${this.getAccountName()}] 📉 Chybí: ${missingHours}h do cíle (8h)`);
+      console.log(`[${this.getAccountName()}] 📉 Kasárna: chybí ${missingHours}h do cíle (8h)`);
 
       // Získej aktuální suroviny
       const resources = await this.getCurrentResources();
@@ -489,7 +481,7 @@ class RecruitModule {
       console.log(`  - Kopí: ${(spearRatio * 100).toFixed(1)}%`);
       console.log(`  - Sermíř: ${(swordRatio * 100).toFixed(1)}%`);
 
-      // Vypočítej kolik jednotek se vejde do času
+      // Vypočítej kolik jednotek se vejde do času (pro kasárna)
       const spearCount = Math.floor((missingTime * spearRatio) / spearTime);
       const swordCount = Math.floor((missingTime * swordRatio) / swordTime);
 
@@ -505,7 +497,7 @@ class RecruitModule {
         resources.iron / this.unitData.sword.iron
       ));
 
-      console.log(`[${this.getAccountName()}] 🧮 Výpočet:`);
+      console.log(`[${this.getAccountName()}] 🧮 Výpočet (kasárna):`);
       console.log(`  - Kopí (čas): ${spearCount}`);
       console.log(`  - Kopí (rozpočet): ${spearAffordable}`);
       console.log(`  - Sermíř (čas): ${swordCount}`);
@@ -514,7 +506,7 @@ class RecruitModule {
       const finalSpearCount = Math.min(spearCount, spearAffordable);
       const finalSwordCount = Math.min(swordCount, swordAffordable);
 
-      console.log(`[${this.getAccountName()}] ✅ FINÁLNÍ POČTY:`);
+      console.log(`[${this.getAccountName()}] ✅ FINÁLNÍ POČTY (kasárna):`);
       console.log(`  - Kopí: ${finalSpearCount}`);
       console.log(`  - Sermíř: ${finalSwordCount}`);
 
