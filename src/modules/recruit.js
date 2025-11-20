@@ -233,8 +233,17 @@ class RecruitModule {
         const queueElement = document.getElementById(queueId);
         if (!queueElement) return 0;
 
-        const rows = queueElement.querySelectorAll('tr.sortable_row, tr.lit');
-        return rows.length;
+        // Najdeme parent tabulku
+        const parentTable = queueElement.closest('table');
+        if (!parentTable) return 0;
+
+        // Spočítáme všechny rekrutace:
+        // 1. tr.lit - aktuálně probíhající rekrutace (mimo sortable tbody)
+        // 2. tr.sortable_row - jednotky ve frontě (uvnitř sortable tbody)
+        const litRows = parentTable.querySelectorAll('tr.lit');
+        const sortableRows = queueElement.querySelectorAll('tr.sortable_row');
+
+        return litRows.length + sortableRows.length;
       }, queueId);
 
       return queueCount;
