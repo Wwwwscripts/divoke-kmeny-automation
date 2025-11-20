@@ -4,7 +4,7 @@
  */
 
 /**
- * Vrátí číslo v rozsahu baseValue ± variation%
+ * Vrátí číslo v rozsahu baseValue ± variationPercent%
  * @param {number} baseValue - Základní hodnota v milisekundách
  * @param {number} variationPercent - Variace v procentech (default ±20%)
  * @returns {number} Randomizovaná hodnota
