@@ -172,23 +172,20 @@ class BalancModule {
    * Zahrnuje:
    * - Aktuální suroviny ve skladu
    * - Příchozí suroviny (z přijatých nabídek)
-   * - Odchozí suroviny (z našich nabídek)
-   * - Vlastní nabídky (co nabízíme / co chceme)
+   * - Vlastní nabídky "Za" (co chceme) - počítáme jako by nám už jedou
    */
   calculateBalance(resources, incomingOutgoing = null, ownOffers = null) {
     // Výchozí prázdné hodnoty
     const incoming = incomingOutgoing ? incomingOutgoing.incoming : { wood: 0, stone: 0, iron: 0 };
-    const outgoing = incomingOutgoing ? incomingOutgoing.outgoing : { wood: 0, stone: 0, iron: 0 };
-    const offering = ownOffers ? ownOffers.offering : { wood: 0, stone: 0, iron: 0 };
     const wanting = ownOffers ? ownOffers.wanting : { wood: 0, stone: 0, iron: 0 };
 
-    // Vypočítat "efektivní" suroviny = sklad + příchozí - odchozí
+    // Vypočítar "efektivní" suroviny = sklad + příchozí + vlastní_nabídky_ZA
     const effective = {};
     this.RESOURCES.forEach(res => {
-      effective[res] = resources[res] + incoming[res] - outgoing[res];
+      effective[res] = resources[res] + incoming[res] + wanting[res];
     });
 
-    console.log(`📊 Efektivní suroviny (sklad + příchozí - odchozí):`, effective);
+    console.log(`📊 Efektivní suroviny (sklad + příchozí + wanting):`, effective);
 
     // Zaokrouhlit na tisíce dolů
     const rounded = {};
@@ -218,21 +215,12 @@ class BalancModule {
       iron: ironTarget
     };
 
-    // Vypočítat přebytky a nedostatky (oproti zaokrouhleným efektivním surovinám)
+    // Vypočítat přebytky a nedostatky
     const surplus = {}; // Co mám navíc (nabízím)
     const deficit = {}; // Co mi chybí (chci)
 
     this.RESOURCES.forEach(res => {
-      // Upravit o vlastní nabídky: přebytek snižuje "offering", deficit snižuje "wanting"
-      let adjustedAmount = rounded[res];
-
-      // Pokud nabízím tuto surovinu ve vlastních nabídkách, je to jako bych ji měl méně
-      adjustedAmount -= offering[res];
-
-      // Pokud chci tuto surovinu ve vlastních nabídkách, je to jako bych ji dostal
-      adjustedAmount += wanting[res];
-
-      const diff = adjustedAmount - targets[res];
+      const diff = rounded[res] - targets[res];
       if (diff > 0) {
         surplus[res] = diff;
       } else if (diff < 0) {
@@ -269,6 +257,7 @@ class BalancModule {
 
   /**
    * Přijmout existující nabídky na tržišti
+   * Po každém přijetí se stránka automaticky refreshne, checkboxy zůstanou nastavené
    */
   async acceptExistingOffers(balance, availableMerchants) {
     const trades = [];
@@ -285,18 +274,24 @@ class BalancModule {
 
         console.log(`🔍 Hledám nabídky: nabízejí ${wantResource}, chtějí ${offerResource}`);
 
-        // Nastavit filtry
+        // Nastavit filtry POUZE JEDNOU na začátku
         await this.setMarketFilters(wantResource, offerResource);
         await this.page.waitForTimeout(1500);
 
-        // Najít vhodné nabídky
-        const offers = await this.findSuitableOffers(wantResource, offerResource);
-        console.log(`  Nalezeno ${offers.length} vhodných nabídek`);
+        // Loop pro přijímání nabídek (po každém přijetí se stránka refreshne)
+        while (stillNeed > 0 && availableMerchants - merchantsUsed > 0) {
+          // Najít vhodné nabídky
+          const offers = await this.findSuitableOffers(wantResource, offerResource);
 
-        // Přijmout nabídky
-        for (const offer of offers) {
-          if (stillNeed <= 0 || availableMerchants - merchantsUsed <= 0) break;
+          if (offers.length === 0) {
+            console.log(`  ℹ️  Žádné další nabídky`);
+            break;
+          }
 
+          console.log(`  Nalezeno ${offers.length} vhodných nabídek`);
+
+          // Přijmout PRVNÍ nabídku
+          const offer = offers[0];
           const canAccept = Math.min(
             stillNeed,
             offer.available,
@@ -319,8 +314,15 @@ class BalancModule {
               merchantsUsed += canAccept;
               count++;
 
-              await this.page.waitForTimeout(2000);
+              // Počkat na automatický refresh stránky (po submitu formuláře)
+              console.log(`  ⏳ Čekám na refresh stránky...`);
+              await this.page.waitForTimeout(3000); // Počkat na reload a načtení
+            } else {
+              // Pokud se nepodařilo přijmout, ukončit loop
+              break;
             }
+          } else {
+            break;
           }
         }
       }
