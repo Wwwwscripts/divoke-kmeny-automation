@@ -84,7 +84,7 @@ class BalancModule {
       }
 
       // 7. Přejít na stránku pro vyhledávání nabídek ostatních hráčů
-      await this.page.goto(`${worldUrl}/game.php?screen=market&mode=other_offer`, {
+      await this.page.goto(`${worldUrl}/game.php?screen=market&mode=other_offer&action=search`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000
       });
