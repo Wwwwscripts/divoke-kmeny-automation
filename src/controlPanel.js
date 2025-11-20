@@ -1,5 +1,5 @@
 import express from 'express';
-import { firefox } from 'playwright';
+import { chromium } from 'playwright';
 import { writeFileSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import DatabaseManager from './database.js';
@@ -57,14 +57,17 @@ async function getOrOpenBrowser(accountId) {
   const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
   const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
 
-  const browser = await firefox.launch({
+  const browser = await chromium.launch({
     headless: true,  // Headless pro automatické operace
-    // Firefox nepotřebuje Chrome-specific args
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process'
+    ]
   });
 
   const contextOptions = {
     viewport: { width: 1280, height: 720 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     locale,
     timezoneId,
     ignoreHTTPSErrors: true,
@@ -93,11 +96,11 @@ async function getOrOpenBrowser(accountId) {
       console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
       cookies = Object.values(cookies);
       await context.addCookies(cookies);
-      console.log(`🍪 Cookies načteny pro účet ${accountId} (${account.username})`);
+      // Cookies načteny - tichý log
     }
   } else {
     await context.addCookies(cookies);
-    console.log(`🍪 Cookies načteny pro účet ${accountId} (${account.username})`);
+    // Cookies načteny - tichý log
   }
 
   const page = await context.newPage();
@@ -564,14 +567,17 @@ app.post('/api/support/open-manual', async (req, res) => {
       const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
       const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
 
-      const browser = await firefox.launch({
+      const browser = await chromium.launch({
         headless: false,  // VIDITELNÝ pro ruční kontrolu
-        // Firefox nepotřebuje Chrome-specific args
+        args: [
+          '--disable-blink-features=AutomationControlled',
+          '--disable-features=IsolateOrigins,site-per-process'
+        ]
       });
 
       const contextOptions = {
         viewport: { width: 1280, height: 720 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         locale,
         timezoneId,
         ignoreHTTPSErrors: true,
@@ -594,7 +600,7 @@ app.post('/api/support/open-manual', async (req, res) => {
 
       const cookies = JSON.parse(account.cookies);
       await context.addCookies(cookies);
-      console.log(`🍪 Cookies načteny pro účet ${accountId} (${account.username})`);
+      // Cookies načteny - tichý log
 
       const page = await context.newPage();
 
