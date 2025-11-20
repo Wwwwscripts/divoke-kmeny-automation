@@ -3,7 +3,7 @@
  *
  * Běží každé 2 hodiny a automaticky vyvažuje suroviny na tržišti.
  * Aktivuje se pouze pokud je alespoň jedna surovina nad 3000 kusů.
- * Cílový poměr surovin: 7:7:5 (wood:stone:iron)
+ * Cílový poměr surovin: 35% wood, 35% stone, 30% iron
  * LANGUAGE-INDEPENDENT - používá pouze CSS třídy a ikony.
  */
 
@@ -13,7 +13,7 @@ class BalancModule {
     this.db = db;
     this.accountId = accountId;
     this.RESOURCES = ['wood', 'stone', 'iron'];
-    this.RESOURCE_RATIO = { wood: 7, stone: 7, iron: 5 }; // Cílový poměr
+    this.RESOURCE_PERCENTAGE = { wood: 0.35, stone: 0.35, iron: 0.30 }; // Cílová procenta
     this.MIN_THRESHOLD = 3000; // Minimální množství pro aktivaci
     this.OFFER_SIZE = 1000; // Velikost jedné nabídky
   }
@@ -54,7 +54,7 @@ class BalancModule {
 
       // 3. Vypočítat cílový stav a co vyměnit
       const balance = this.calculateBalance(resources);
-      console.log(`🎯 Cílový stav: ${balance.target}`);
+      console.log(`🎯 Cílový stav:`, balance.targets);
       console.log(`📊 Přebytky:`, balance.surplus);
       console.log(`📊 Nedostatky:`, balance.deficit);
 
@@ -149,7 +149,7 @@ class BalancModule {
   /**
    * Vypočítat cílový stav a co je potřeba vyměnit
    * Pracuje pouze s celými tisíci
-   * Cílový poměr: 7:7:5 (wood:stone:iron)
+   * Cílová procenta: 35% wood, 35% stone, 30% iron
    */
   calculateBalance(resources) {
     // Zaokrouhlit na tisíce dolů
@@ -158,22 +158,15 @@ class BalancModule {
       rounded[res] = Math.floor(resources[res] / 1000) * 1000;
     });
 
-    // Najít "limitující" surovinu (která má nejmenší poměr)
-    // Například: wood=28000, stone=32000, iron=23000
-    // wood/7 = 4000, stone/7 = 4571, iron/5 = 4600
-    // Minimum je wood s 4000, takže scale = 4
-    let minScale = Infinity;
-    this.RESOURCES.forEach(res => {
-      const scale = Math.floor((rounded[res] / 1000) / this.RESOURCE_RATIO[res]);
-      if (scale < minScale) {
-        minScale = scale;
-      }
-    });
+    // Celkový součet surovin
+    const totalResources = Object.values(rounded).reduce((a, b) => a + b, 0);
 
-    // Vypočítat cílové hodnoty podle poměru
+    // Vypočítat cílové hodnoty podle procent
+    // Například: celkem 17000, wood = 17000 * 35% = 5950 -> zaokrouhleno na 5000
     const targets = {};
     this.RESOURCES.forEach(res => {
-      targets[res] = minScale * this.RESOURCE_RATIO[res] * 1000;
+      const targetAmount = totalResources * this.RESOURCE_PERCENTAGE[res];
+      targets[res] = Math.floor(targetAmount / 1000) * 1000; // Zaokrouhlit dolů na tisíce
     });
 
     // Vypočítat přebytky a nedostatky
@@ -433,7 +426,7 @@ class BalancModule {
       }
     });
 
-    return { surplus: newSurplus, deficit: newDeficit, target: balance.target };
+    return { surplus: newSurplus, deficit: newDeficit, targets: balance.targets };
   }
 
   /**
