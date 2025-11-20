@@ -396,13 +396,32 @@ class RecruitModule {
   }
 
   /**
-   * Hlavní funkce - naplní frontu na 8 hodin V KAŽDÉ BUDOVĚ ZVLÁŠŤ podle poměru surovin
+   * Hlavní funkce - naplní frontu na 8 hodin V KAŽDÉ BUDOVĚ ZVLÁŠŤ podle šablony
    */
   async startRecruiting(templateName) {
     try {
       console.log(`\n${'='.repeat(60)}`);
       console.log(`[${this.getAccountName()}] 🎯 START REKRUTOVÁNÍ`);
       console.log('='.repeat(60));
+
+      // Načti šablonu
+      const template = this.getTemplate(templateName);
+      if (!template) {
+        console.log(`[${this.getAccountName()}] ⚠️  Šablona ${templateName} neexistuje`);
+        return false;
+      }
+
+      // Zjisti co je potřeba narekrutovat
+      const toRecruit = await this.checkWhatToRecruit(template);
+      if (!toRecruit || Object.keys(toRecruit).length === 0) {
+        console.log(`[${this.getAccountName()}] ✅ Všechny jednotky podle šablony splněny`);
+        return true;
+      }
+
+      console.log(`[${this.getAccountName()}] 📋 Deficit jednotek:`);
+      Object.entries(toRecruit).forEach(([unitType, data]) => {
+        console.log(`  - ${unitType}: ${data.current}/${data.target} (chybí ${data.needed})`);
+      });
 
       const worldUrl = this.getWorldUrl();
 
@@ -414,7 +433,7 @@ class RecruitModule {
       });
       await simulateReading(this.page, 2000);
 
-      // Zjisti čas ve frontě KAŽDÉ BUDOVY ZVLÁŠŤ
+      // Zjisti čas ve frontě kasáren
       const barracksQueue = await this.checkBuildingQueue('barracks');
       const barracksQueueHours = (barracksQueue / 3600).toFixed(1);
 
@@ -425,6 +444,30 @@ class RecruitModule {
         console.log(`[${this.getAccountName()}] ✅ Kasárna plná (>= 7h), přeskakuji`);
         return true;
       }
+
+      // Filtruj pouze jednotky z kasáren co jsou v deficitu
+      const spearNeeded = toRecruit['spear']?.needed || 0;
+      const swordNeeded = toRecruit['sword']?.needed || 0;
+      const spearTarget = template['spear'] || 0;
+      const swordTarget = template['sword'] || 0;
+
+      if (spearNeeded === 0 && swordNeeded === 0) {
+        console.log(`[${this.getAccountName()}] ✅ Kasárna: žádný deficit kopí/sermířů`);
+        return true;
+      }
+
+      console.log(`[${this.getAccountName()}] 📊 Deficit v kasárnách:`);
+      console.log(`  - Kopí: ${spearNeeded} (cíl: ${spearTarget})`);
+      console.log(`  - Sermíř: ${swordNeeded} (cíl: ${swordTarget})`);
+
+      // Vypočítej poměr podle ŠABLONY
+      const totalTarget = spearTarget + swordTarget;
+      let spearRatio = totalTarget > 0 ? spearTarget / totalTarget : 0.5;
+      let swordRatio = totalTarget > 0 ? swordTarget / totalTarget : 0.5;
+
+      console.log(`[${this.getAccountName()}] 📊 Poměr podle šablony:`);
+      console.log(`  - Kopí: ${(spearRatio * 100).toFixed(1)}% (${spearTarget}/${totalTarget})`);
+      console.log(`  - Sermíř: ${(swordRatio * 100).toFixed(1)}% (${swordTarget}/${totalTarget})`);
 
       // Vypočítej kolik chybí do 8h v kasárnách
       const missingTime = this.targetQueueTime - barracksQueue;
@@ -451,39 +494,9 @@ class RecruitModule {
         return false;
       }
 
-      // Vypočítej poměr dřeva vs železa
-      const woodRatio = resources.wood / (resources.wood + resources.iron);
-      const ironRatio = resources.iron / (resources.wood + resources.iron);
-
-      console.log(`[${this.getAccountName()}] 📊 Poměr surovin:`);
-      console.log(`  - Dřevo: ${(woodRatio * 100).toFixed(1)}%`);
-      console.log(`  - Železo: ${(ironRatio * 100).toFixed(1)}%`);
-
-      // Rozhodnutí: pokud rozdíl > 30%, upřednostni jednu jednotku
-      let spearRatio = 0.5;
-      let swordRatio = 0.5;
-
-      if (woodRatio > ironRatio * 1.3) {
-        // Hodně dřeva - upřednostni kopí
-        spearRatio = 0.5 + (woodRatio - ironRatio);
-        swordRatio = 1 - spearRatio;
-        console.log(`[${this.getAccountName()}] 🌲 Hodně dřeva -> upřednostňuji kopí`);
-      } else if (ironRatio > woodRatio * 1.3) {
-        // Hodně železa - upřednostni sermíře
-        swordRatio = 0.5 + (ironRatio - woodRatio);
-        spearRatio = 1 - swordRatio;
-        console.log(`[${this.getAccountName()}] ⚙️  Hodně železa -> upřednostňuji sermíře`);
-      } else {
-        console.log(`[${this.getAccountName()}] ⚖️  Podobný poměr -> 50/50`);
-      }
-
-      console.log(`[${this.getAccountName()}] 🎲 Rozložení:`);
-      console.log(`  - Kopí: ${(spearRatio * 100).toFixed(1)}%`);
-      console.log(`  - Sermíř: ${(swordRatio * 100).toFixed(1)}%`);
-
       // Vypočítej kolik jednotek se vejde do času (pro kasárna)
-      const spearCount = Math.floor((missingTime * spearRatio) / spearTime);
-      const swordCount = Math.floor((missingTime * swordRatio) / swordTime);
+      const spearByTime = Math.floor((missingTime * spearRatio) / spearTime);
+      const swordByTime = Math.floor((missingTime * swordRatio) / swordTime);
 
       // Omezení podle rozpočtu
       const spearAffordable = Math.floor(Math.min(
@@ -498,13 +511,16 @@ class RecruitModule {
       ));
 
       console.log(`[${this.getAccountName()}] 🧮 Výpočet (kasárna):`);
-      console.log(`  - Kopí (čas): ${spearCount}`);
+      console.log(`  - Kopí (čas 8h): ${spearByTime}`);
       console.log(`  - Kopí (rozpočet): ${spearAffordable}`);
-      console.log(`  - Sermíř (čas): ${swordCount}`);
+      console.log(`  - Kopí (deficit): ${spearNeeded}`);
+      console.log(`  - Sermíř (čas 8h): ${swordByTime}`);
       console.log(`  - Sermíř (rozpočet): ${swordAffordable}`);
+      console.log(`  - Sermíř (deficit): ${swordNeeded}`);
 
-      const finalSpearCount = Math.min(spearCount, spearAffordable);
-      const finalSwordCount = Math.min(swordCount, swordAffordable);
+      // FINÁLNÍ: MIN z (čas, rozpočet, deficit)
+      const finalSpearCount = Math.min(spearByTime, spearAffordable, spearNeeded);
+      const finalSwordCount = Math.min(swordByTime, swordAffordable, swordNeeded);
 
       console.log(`[${this.getAccountName()}] ✅ FINÁLNÍ POČTY (kasárna):`);
       console.log(`  - Kopí: ${finalSpearCount}`);
