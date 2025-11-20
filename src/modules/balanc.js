@@ -285,47 +285,46 @@ class BalancModule {
 
   /**
    * Nastavit filtry na tržišti (checkboxy)
-   * Používá skutečné klikání myší přes Puppeteer API
+   * Po každém kliknutí čeká na AJAX refresh nabídek
    */
   async setMarketFilters(resourceToBuy, resourceToSell) {
-    // 1. Kliknout "všechno" pro buy (skutečné kliknutí myší)
+    // 1. Kliknout "všechno" pro buy → POČKAT NA AJAX
     try {
       await this.page.click('input[name="res_buy"][value="all"]');
-      await this.page.waitForTimeout(500);
+      console.log('  ✓ Kliknuto: všechno buy, čekám na AJAX refresh...');
+      await this.page.waitForTimeout(2500);
     } catch (e) {
       console.log('Checkbox "všechno buy" nenalezen');
     }
 
-    // 2. Kliknout "všechno" pro sell
+    // 2. Kliknout "všechno" pro sell → POČKAT NA AJAX
     try {
       await this.page.click('input[name="res_sell"][value="all"]');
-      await this.page.waitForTimeout(500);
+      console.log('  ✓ Kliknuto: všechno sell, čekám na AJAX refresh...');
+      await this.page.waitForTimeout(2500);
     } catch (e) {
       console.log('Checkbox "všechno sell" nenalezen');
     }
 
-    // 3. Kliknout konkrétní surovinu pro buy
+    // 3. Kliknout konkrétní surovinu pro buy → POČKAT NA AJAX
     try {
       await this.page.click(`input[name="res_buy"][value="${resourceToBuy}"]`);
-      await this.page.waitForTimeout(500);
+      console.log(`  ✓ Kliknuto: ${resourceToBuy} buy, čekám na AJAX refresh...`);
+      await this.page.waitForTimeout(2500);
     } catch (e) {
       console.log(`Checkbox "${resourceToBuy} buy" nenalezen`);
     }
 
-    // 4. Kliknout konkrétní surovinu pro sell
+    // 4. Kliknout konkrétní surovinu pro sell → POČKAT NA AJAX
     try {
       await this.page.click(`input[name="res_sell"][value="${resourceToSell}"]`);
-      await this.page.waitForTimeout(500);
+      console.log(`  ✓ Kliknuto: ${resourceToSell} sell, čekám na AJAX refresh...`);
+      await this.page.waitForTimeout(2500);
     } catch (e) {
       console.log(`Checkbox "${resourceToSell} sell" nenalezen`);
     }
 
-    // Počkat chvilku aby se uložily změny
-    await this.page.waitForTimeout(1000);
-
-    // Refreshnout stránku pro načtení nabídek
-    await this.page.reload({ waitUntil: 'domcontentloaded' });
-    await this.page.waitForTimeout(2000);
+    console.log('  ✅ Filtry nastaveny, nabídky načtené');
   }
 
   /**
