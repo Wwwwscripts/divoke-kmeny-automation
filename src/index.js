@@ -241,8 +241,8 @@ class Automator {
       await this.checkShutdownFlag();
 
       const allAccounts = this.db.getAllActiveAccounts();
-      const accounts = allAccounts.slice(0, 30); // TESTOVÁNÍ: pouze prvních 30 účtů
-      console.log(`📊 Načteno: ${accounts.length} účtů k zpracování (z ${allAccounts.length} celkem - limit 30 pro test)`);
+      const accounts = allAccounts.slice(0, 20); // TESTOVÁNÍ: pouze prvních 20 účtů
+      console.log(`📊 Načteno: ${accounts.length} účtů k zpracování (z ${allAccounts.length} celkem - limit 20 pro test)`);
 
       if (accounts.length === 0) {
         console.log('⚠️  Žádné aktivní účty k zpracování');
