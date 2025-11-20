@@ -149,7 +149,8 @@ class BalancModule {
   /**
    * Vypočítat cílový stav a co je potřeba vyměnit
    * Pracuje pouze s celými tisíci
-   * Cílová procenta: 35% wood, 35% stone, 30% iron
+   * Logika: Iron max 30%, zbytek rozdělit rovnoměrně mezi wood a stone
+   * Při lichém zbytku má přednost stone (hlína)
    */
   calculateBalance(resources) {
     // Zaokrouhlit na tisíce dolů
@@ -161,13 +162,24 @@ class BalancModule {
     // Celkový součet surovin
     const totalResources = Object.values(rounded).reduce((a, b) => a + b, 0);
 
-    // Vypočítat cílové hodnoty podle procent
-    // Například: celkem 17000, wood = 17000 * 35% = 5950 -> zaokrouhleno na 5000
-    const targets = {};
-    this.RESOURCES.forEach(res => {
-      const targetAmount = totalResources * this.RESOURCE_PERCENTAGE[res];
-      targets[res] = Math.floor(targetAmount / 1000) * 1000; // Zaokrouhlit dolů na tisíce
-    });
+    // Iron má max 30% z celku
+    const ironMaxAmount = totalResources * 0.30;
+    const ironTarget = Math.floor(ironMaxAmount / 1000) * 1000;
+
+    // Zbytek rozdělit rovnoměrně mezi wood a stone
+    const remainingForWoodStone = totalResources - ironTarget;
+
+    // Wood dostane polovinu (zaokrouhleno dolů)
+    const woodTarget = Math.floor((remainingForWoodStone / 2) / 1000) * 1000;
+
+    // Stone dostane zbytek (má přednost při lichém čísle)
+    const stoneTarget = remainingForWoodStone - woodTarget;
+
+    const targets = {
+      wood: woodTarget,
+      stone: stoneTarget,
+      iron: ironTarget
+    };
 
     // Vypočítat přebytky a nedostatky
     const surplus = {}; // Co mám navíc (nabízím)
