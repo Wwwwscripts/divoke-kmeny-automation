@@ -903,7 +903,7 @@ class BuildingModule {
         await humanDelay(1500, 3000);
 
         // Pokus se získat čas z odpovědi API
-        let buildTime = '?';
+        let buildTime = null;
         let waitTimeMs = 5 * 60 * 1000;
 
         // Načti aktuální frontu výstavby ze stránky
