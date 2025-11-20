@@ -880,8 +880,6 @@ class Automator {
     let browser, context, browserKey;
 
     try {
-      console.log(`   🔍 [${account.username}] Zahajuji kontrolu...`);
-
       // Vytvoř context (sdílený browser)
       ({ browser, context, browserKey } = await this.browserPool.createContext(account.id));
       const page = await context.newPage();
@@ -905,15 +903,12 @@ class Automator {
       const infoWaitUntil = this.accountWaitTimes[infoKey];
 
       if (!infoWaitUntil || Date.now() >= infoWaitUntil) {
-        console.log(`   📊 [${account.username}] Sbírám statistiky účtu...`);
         const infoModule = new AccountInfoModule(page, this.db, account.id);
         await infoModule.collectInfo();
         this.accountWaitTimes[infoKey] = Date.now() + this.intervals.accountInfo;
-        console.log(`   ✅ [${account.username}] Statistiky uloženy`);
       }
 
       // Kontrola útoků - VOLAT NEJDŘÍV pro aktualizaci incoming_attacks
-      console.log(`   🛡️  [${account.username}] Kontroluji útoky...`);
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       await notificationsModule.detectAttacks();
 
@@ -967,13 +962,6 @@ class Automator {
 
       // Zavři context (browser zůstane běžet)
       await this.browserPool.closeContext(context, browserKey);
-
-      console.log(`   ✅ [${account.username}] Kontrola dokončena`);
-
-      // Pokud byl browser otevřený, byl vyřešen CAPTCHA/login (browser se zavře automaticky pomocí startLoginWatcher)
-      if (this.isBrowserActive(account.id)) {
-        console.log(`   ℹ️  [${account.username}] Browser stále aktivní - CAPTCHA/login se řeší`);
-      }
 
     } catch (error) {
       console.error(`   ❌ [${account.username}] Chyba při kontrole: ${error.message}`);
@@ -1388,8 +1376,6 @@ class Automator {
 
         return false;
       }
-
-      console.log(`✅ [${account.username}] Úspěšně přihlášen`);
 
       // Zkontroluj CAPTCHA (in-game CAPTCHA kontrola)
       try {
