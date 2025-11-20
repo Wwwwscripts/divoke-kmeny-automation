@@ -4,7 +4,8 @@
  */
 
 import logger from '../logger.js';
-import { randomDelay } from '../utils/randomize.js';
+import { randomDelay, humanDelay } from '../utils/randomize.js';
+import { simulateReading, humanWait } from '../utils/humanBehavior.js';
 
 class RecruitModule {
   constructor(page, db, accountId) {
@@ -265,15 +266,16 @@ class RecruitModule {
       let buildingParam = building;
       if (building === 'workshop') buildingParam = 'garage';
 
-      // Human-like delay před navigací
-      await randomDelay(300, 200);
+      // Human-like delay před navigací (2-4s)
+      await humanDelay(2000, 4000);
 
       await this.page.goto(`${worldUrl}/game.php?screen=${buildingParam}`, {
-        waitUntil: 'domcontentloaded'
+        waitUntil: 'networkidle', // Čeká na kompletní načtení stránky
+        timeout: 30000
       });
 
-      // Human-like delay po načtení stránky (jako když člověk čte)
-      await randomDelay(1200, 500);
+      // Simuluj čtení stránky (2-4s scrollování a pohyby myši)
+      await simulateReading(this.page, 3000);
 
       // Najdeme input pro jednotku a nastavíme hodnotu 1
       const recruited = await this.page.evaluate((unitType) => {
@@ -299,7 +301,8 @@ class RecruitModule {
       }, unitType);
 
       if (recruited) {
-        await this.page.waitForTimeout(1500);
+        // Počkej na odezvu serveru + human-like delay (1.5-3s)
+        await humanDelay(1500, 3000);
 
         // LOGUJ AKCI
         logger.recruit(this.getAccountName(), unitType, 1);

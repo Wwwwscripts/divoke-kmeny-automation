@@ -63,6 +63,22 @@ class BrowserManager {
     const stealthScript = createStealthScript(fingerprint);
     await context.addInitScript(stealthScript);
 
+    // DŮLEŽITÉ: Přidej human-like behavior pro každou novou page
+    context.on('page', async (page) => {
+      try {
+        const { setupWebSocketInterceptor } = await import('./utils/webSocketBehavior.js');
+        await setupWebSocketInterceptor(page, {
+          autoHumanize: true,
+          minDelay: 500,
+          maxDelay: 2000,
+          enableIdleBehavior: false, // Vypnuto pro headless (zbytečné)
+          logActions: false
+        });
+      } catch (error) {
+        // Tichá chyba - WebSocket behavior je optional enhancement
+      }
+    });
+
     if (account.cookies && account.cookies !== 'null') {
       try {
         let cookies = JSON.parse(account.cookies);

@@ -46,17 +46,17 @@ class Automator {
     this.openBrowsers = new Map(); // Tracking otevřených visible browserů (accountId => browser)
     this.openingBrowsers = new Set(); // Tracking účtů pro které se právě otevírá browser (race condition protection)
 
-    // Intervaly pro smyčky
+    // Intervaly pro smyčky - ZVÝŠENO pro snížení captcha rizika
     this.intervals = {
       checks: 0,        // Kontroly běží neustále (žádný wait)
-      recruit: 2 * 60 * 1000,     // 2 minuty
-      building: 5 * 1000,         // 5 sekund - COOLDOWN režim (kontroluje hned jak vyprší)
+      recruit: 5 * 60 * 1000,     // 5 minut (zvýšeno z 2min)
+      building: 30 * 1000,        // 30 sekund - COOLDOWN režim (zvýšeno z 5s)
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
-      paladin: 60 * 60 * 1000,    // 60 minut (1 hodina) - ZMĚNĚNO z 2 hodin
-      units: 10 * 60 * 1000,      // 10 minut (kontrola jednotek) - ZMĚNĚNO z 20 minut
-      accountInfo: 20 * 60 * 1000, // 20 minut (sběr statistik)
+      paladin: 60 * 60 * 1000,    // 60 minut (1 hodina)
+      units: 15 * 60 * 1000,      // 15 minut (zvýšeno z 10min)
+      accountInfo: 25 * 60 * 1000, // 25 minut (zvýšeno z 20min)
       dailyRewards: 24 * 60 * 60 * 1000, // Nepoužívá se - denní odměny běží 2x denně (4:00 a 16:00)
-      scavenge: 1 * 60 * 1000,    // 1 minuta (sběr surovin) - ZMĚNĚNO z 5 minut (kvůli per-account timing)
+      scavenge: 3 * 60 * 1000,    // 3 minuty (zvýšeno z 1min)
       // balance: 120 * 60 * 1000    // VYPNUTO - způsobovalo bany
     };
 
@@ -194,19 +194,19 @@ class Automator {
    */
   async start() {
     console.log('='.repeat(70));
-    console.log('🤖 Spouštím Event-Driven automatizaci');
+    console.log('🤖 Spouštím Event-Driven automatizaci - ANTI-CAPTCHA MODE');
     console.log('⚡ Worker Pool: Max 100 procesů');
-    console.log('🔄 9 nezávislých smyček:');
-    console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
-    console.log('   [P1] Build: každých 5s po 5 účtech - COOLDOWN režim (VYSOKÁ PRIORITA)');
-    console.log('   [P2] Sběr: každou 1 min po 5 účtech (per-account timing)');
-    console.log('   [P3] Rekrut: každé 2 min po 5 účtech (per-account timing)');
-    console.log('   [P4] Výzkum: každých 120 min po 5 účtech (2 hod, per-account timing)');
-    console.log('   [P5] Paladin: každých 60 min po 5 účtech (1 hod, per-account timing)');
-    console.log('   [P6] Jednotky: každých 10 min po 2 účtech');
+    console.log('🛡️  Aktivní ochrana: Human behavior, WebSocket timing, Fingerprinting');
+    console.log('🔄 9 nezávislých smyček (OPTIMALIZOVÁNO PRO NÍZKÉ RIZIKO CAPTCHA):');
+    console.log('   [P1] Kontroly: neustále po 2 účtech s pauzami 3-6s mezi cykly');
+    console.log('   [P1] Build: každých 30s po 5 účtech - COOLDOWN režim (±15s random)');
+    console.log('   [P2] Sběr: každé 3 min po 5 účtech (±30s random, per-account timing)');
+    console.log('   [P3] Rekrut: každých 5 min po 5 účtech (±45s random, per-account timing)');
+    console.log('   [P4] Výzkum: každých 120 min po 5 účtech (±5 min random)');
+    console.log('   [P5] Paladin: každých 60 min po 5 účtech (±3 min random)');
+    console.log('   [P6] Jednotky: každých 15 min po 2 účtech (±2 min random)');
     console.log('   [P6] Denní odměny: 2x denně ve 4:00 a 16:00 + při startu');
-    console.log('   [P7] Balance: každých 120 min po 5 účtech (2 hod, per-account timing)');
-    console.log('   [P7] Statistiky: každých 20 min');
+    console.log('   [P7] Statistiky: každých 25 min');
     console.log('='.repeat(70));
 
     this.isRunning = true;
@@ -255,12 +255,12 @@ class Automator {
           )
         );
 
-        // Malá pauza mezi dávkami (100ms)
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Pauza mezi dávkami (500ms-2s) - human-like
+        await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1500));
       }
 
-      // Celý cyklus hotový, krátká pauza před dalším kolem
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Celý cyklus hotový, delší pauza před dalším kolem (3-6s)
+      await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 3000));
     }
   }
 
@@ -306,14 +306,14 @@ class Automator {
           })
         );
 
-        // Malá pauza mezi dávkami (50ms)
+        // Pauza mezi dávkami (1-3s)
         if (i + 5 < accountsToProcess.length) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
         }
       }
 
-      // Počkej 5 sekund před další kontrolou (COOLDOWN režim) - s randomizací ±10s
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.building)));
+      // Počkej 30s před další kontrolou (COOLDOWN režim) - s randomizací ±15s
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.building, 15000)));
     }
   }
 
@@ -364,14 +364,14 @@ class Automator {
           })
         );
 
-        // Malá pauza mezi dávkami (50ms)
+        // Pauza mezi dávkami (1-3s)
         if (i + 5 < accountsToProcess.length) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
         }
       }
 
-      // Počkej 1 minutu - s randomizací ±10s
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.scavenge)));
+      // Počkej 3 minuty - s randomizací ±30s
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.scavenge, 30000)));
     }
   }
 
@@ -417,14 +417,14 @@ class Automator {
           })
         );
 
-        // Malá pauza mezi dávkami (50ms)
+        // Pauza mezi dávkami (1-3s)
         if (i + 5 < accountsToProcess.length) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
         }
       }
 
-      // Počkej 2 minuty - s randomizací ±10s
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.recruit)));
+      // Počkej 5 minut - s randomizací ±45s
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.recruit, 45000)));
     }
   }
 
@@ -470,14 +470,14 @@ class Automator {
           })
         );
 
-        // Malá pauza mezi dávkami (50ms)
+        // Pauza mezi dávkami (2-5s)
         if (i + 5 < accountsToProcess.length) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
         }
       }
 
-      // Počkej 2 hodiny
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.research)));
+      // Počkej 2 hodiny - s randomizací ±5 minut
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.research, 5 * 60 * 1000)));
     }
   }
 
@@ -517,14 +517,14 @@ class Automator {
           )
         );
 
-        // Malá pauza mezi dávkami (50ms)
+        // Pauza mezi dávkami (2-5s)
         if (i + 5 < accountsToProcess.length) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
         }
       }
 
-      // Počkej 1 hodinu
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.paladin)));
+      // Počkej 1 hodinu - s randomizací ±3 minuty
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.paladin, 3 * 60 * 1000)));
     }
   }
 
@@ -557,12 +557,12 @@ class Automator {
           )
         );
 
-        // Malá pauza mezi dávkami (100ms)
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Pauza mezi dávkami (1-3s)
+        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
       }
 
-      // Počkej 10 minut
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.units)));
+      // Počkej 15 minut - s randomizací ±2 minuty
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.units, 2 * 60 * 1000)));
     }
   }
 
@@ -1205,12 +1205,13 @@ class Automator {
     try {
       const domain = this.getWorldDomain(account.world);
       await page.goto(`https://${account.world}.${domain}/game.php`, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000
+        waitUntil: 'networkidle', // Čeká na kompletní načtení včetně network requestů
+        timeout: 45000
       });
 
-      // Počkej delší dobu na načtení stránky
-      await page.waitForTimeout(3000);
+      // Počkej na stabilizaci stránky (2-4s random)
+      const { humanDelay } = await import('./utils/randomize.js');
+      await humanDelay(2000, 4000);
 
       // Zkontroluj, jestli není přesměrováno na create_village.php (dobytí vesnice)
       const currentUrl = page.url();
