@@ -14,6 +14,7 @@ import PaladinModule from './modules/paladin.js';
 import SupportModule from './modules/support.js';
 import DailyRewardsModule from './modules/dailyRewards.js';
 import ScavengeModule from './modules/scavenge.js';
+import BalancModule from './modules/balanc.js';
 import logger from './logger.js';
 
 /**
@@ -53,7 +54,8 @@ class Automator {
       units: 10 * 60 * 1000,      // 10 minut (kontrola jednotek) - ZMĚNĚNO z 20 minut
       accountInfo: 20 * 60 * 1000, // 20 minut (sběr statistik)
       dailyRewards: 24 * 60 * 60 * 1000, // Nepoužívá se - denní odměny běží 2x denně (4:00 a 16:00)
-      scavenge: 1 * 60 * 1000     // 1 minuta (sběr surovin) - ZMĚNĚNO z 5 minut (kvůli per-account timing)
+      scavenge: 1 * 60 * 1000,    // 1 minuta (sběr surovin) - ZMĚNĚNO z 5 minut (kvůli per-account timing)
+      balance: 120 * 60 * 1000    // 120 minut (2 hodiny) - balancování surovin na trhu
     };
 
     // Priority (nižší = vyšší priorita)
@@ -66,7 +68,8 @@ class Automator {
       paladin: 5,       // Paladin
       units: 6,         // Kontrola jednotek
       dailyRewards: 6,  // Denní odměny - stejná priorita jako jednotky
-      stats: 7          // Statistiky
+      stats: 7,         // Statistiky
+      balance: 7        // Balancování surovin - stejná priorita jako statistiky
     };
   }
 
@@ -191,7 +194,7 @@ class Automator {
     console.log('='.repeat(70));
     console.log('🤖 Spouštím Event-Driven automatizaci');
     console.log('⚡ Worker Pool: Max 100 procesů');
-    console.log('🔄 8 nezávislých smyček:');
+    console.log('🔄 9 nezávislých smyček:');
     console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
     console.log('   [P1] Build: každých 5s po 5 účtech - COOLDOWN režim (VYSOKÁ PRIORITA)');
     console.log('   [P2] Sběr: každou 1 min po 5 účtech (per-account timing)');
@@ -200,6 +203,7 @@ class Automator {
     console.log('   [P5] Paladin: každých 60 min po 5 účtech (1 hod, per-account timing)');
     console.log('   [P6] Jednotky: každých 10 min po 2 účtech');
     console.log('   [P6] Denní odměny: 2x denně ve 4:00 a 16:00 + při startu');
+    console.log('   [P7] Balance: každých 120 min po 5 účtech (2 hod, per-account timing)');
     console.log('   [P7] Statistiky: každých 20 min');
     console.log('='.repeat(70));
 
@@ -215,6 +219,7 @@ class Automator {
       this.paladinLoop(),      // P5: Každých 120 min po 5 účtech
       this.unitsLoop(),        // P6: Každých 20 min po 2 účtech
       this.dailyRewardsLoop(), // P6: Jednou denně ve 4:00 nebo při startu
+      this.balanceLoop(),      // P7: Každých 120 min po 5 účtech (balancování surovin)
       this.statsMonitor()      // Monitoring
     ]);
   }
@@ -667,6 +672,59 @@ class Automator {
   }
 
   /**
+   * SMYČKA 8: Balance (balancování surovin na trhu)
+   * Každých 120 minut projde účty a zkontroluje per-account timing
+   * Zpracovává po 5 účtech paralelně
+   * Priorita: 7
+   */
+  async balanceLoop() {
+    console.log('🔄 [P7] Smyčka BALANCE spuštěna');
+
+    while (this.isRunning) {
+      // Zkontroluj shutdown flag
+      await this.checkShutdownFlag();
+
+      const accounts = this.db.getAllActiveAccounts();
+
+      // Filtruj pouze účty, které mají balance enabled a vypršelý timer
+      const accountsToProcess = accounts.filter(account => {
+        // Kontrola balance_enabled v účtu (default true pro nové účty)
+        const balanceEnabled = account.balance_enabled === 1 || account.balance_enabled === undefined;
+        if (!balanceEnabled) {
+          return false;
+        }
+
+        const balanceKey = `balance_${account.id}`;
+        const balanceWaitUntil = this.accountWaitTimes[balanceKey];
+        return !balanceWaitUntil || Date.now() >= balanceWaitUntil;
+      });
+
+      // Zpracuj po 5 účtech paralelně
+      for (let i = 0; i < accountsToProcess.length; i += 5) {
+        const batch = accountsToProcess.slice(i, i + 5);
+
+        await Promise.all(
+          batch.map(account => {
+            return this.workerPool.run(
+              () => this.processBalance(account),
+              this.priorities.balance,
+              `Balance: ${account.username}`
+            );
+          })
+        );
+
+        // Malá pauza mezi dávkami (50ms)
+        if (i + 5 < accountsToProcess.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+
+      // Počkej 120 minut
+      await new Promise(resolve => setTimeout(resolve, this.intervals.balance));
+    }
+  }
+
+  /**
    * Monitoring - vypíše statistiky každých 30 sekund
    */
   async statsMonitor() {
@@ -1091,6 +1149,46 @@ class Automator {
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při zpracování paladina:`, error.message);
+      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+    }
+  }
+
+  /**
+   * Zpracuj balancování surovin na trhu
+   */
+  async processBalance(account) {
+    let context, browserKey;
+
+    try {
+      ({ context, browserKey } = await this.browserPool.createContext(account.id));
+      const page = await context.newPage();
+
+      const loginSuccess = await this.loginToGame(page, account);
+      if (!loginSuccess) {
+        await this.browserPool.closeContext(context, browserKey);
+        await this.handleFailedLogin(account);
+        return;
+      }
+
+      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
+      await this.browserPool.saveCookies(context, account.id);
+
+      const balancModule = new BalancModule(page, this.db, account.id);
+      const balanceResult = await balancModule.execute();
+
+      if (balanceResult && balanceResult.waitTime) {
+        // Použij minimálně interval smyčky (120 min)
+        const actualWaitTime = Math.max(balanceResult.waitTime, this.intervals.balance);
+        this.accountWaitTimes[`balance_${account.id}`] = Date.now() + actualWaitTime;
+        console.log(`⏰ [${account.username}] Balance: Další za ${Math.ceil(actualWaitTime / 60000)} min`);
+      } else {
+        this.accountWaitTimes[`balance_${account.id}`] = Date.now() + this.intervals.balance;
+      }
+
+      await this.browserPool.closeContext(context, browserKey);
+
+    } catch (error) {
+      console.error(`❌ [${account.username}] Chyba při balancování surovin:`, error.message);
       if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
     }
   }
