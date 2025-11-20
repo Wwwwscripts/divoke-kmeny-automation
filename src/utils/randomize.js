@@ -4,12 +4,13 @@
  */
 
 /**
- * Vrátí číslo v rozsahu baseValue ± variation
+ * Vrátí číslo v rozsahu baseValue ± variation%
  * @param {number} baseValue - Základní hodnota v milisekundách
- * @param {number} variation - Variace v milisekundách (default ±10 sekund)
+ * @param {number} variationPercent - Variace v procentech (default ±20%)
  * @returns {number} Randomizovaná hodnota
  */
-export function randomizeInterval(baseValue, variation = 10000) {
+export function randomizeInterval(baseValue, variationPercent = 20) {
+  const variation = baseValue * (variationPercent / 100);
   const min = baseValue - variation;
   const max = baseValue + variation;
   return Math.floor(Math.random() * (max - min + 1)) + min;
