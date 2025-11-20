@@ -24,15 +24,20 @@ import { detectAnyChallenge, detectBan } from './utils/antiBot.js';
  *
  * Architektura:
  * - Globální WorkerPool (max 100 procesů)
- * - 8 nezávislých smyček:
- *   1. Kontroly (útoky/CAPTCHA) - neustále dokola po 2 účtech [P1]
- *   2. Build - každých 5s po 5 účtech (COOLDOWN režim) [P1]
- *   3. Rekrut - každé 2 minuty po 5 účtech [P3]
- *   4. Výzkum - každých 120 minut po 5 účtech [P4]
- *   5. Paladin - každých 120 minut po 5 účtech [P5]
- *   6. Jednotky - každých 20 minut po 2 účtech [P6]
- *   7. Denní odměny - jednou denně ve 4:00 nebo při startu [P6]
- *   8. Sběr - každých 5 minut po 5 účtech [P2]
+ * - 7 nezávislých smyček (optimalizováno pro minimalizaci CAPTCHA):
+ *   1. Kontroly (CAPTCHA/útoky/jednotky) - po 20 účtech, každá skupina každé 3 min [P1]
+ *      └─ Sloučené: captcha + útoky + kontrola jednotek (dříve samostatné unitsLoop)
+ *   2. Build - každých 5s po 5 účtech (COOLDOWN režim, per-account timing) [P1]
+ *   3. Sběr - každých 10 min po 5 účtech (per-account timing) [P2]
+ *   4. Rekrut - každé 2 min po 5 účtech (per-account timing) [P3]
+ *   5. Výzkum - každých 120 min po 5 účtech (per-account timing, s DB cache) [P4]
+ *   6. Paladin - každé 3 hod po 5 účtech (per-account timing) [P5]
+ *   7. Denní odměny - 2x denně ve 4:00 a 16:00 + při startu [P6]
+ *
+ * Optimalizace:
+ * - Randomizace ±20% všech intervalů (místo ±10s)
+ * - Skupinová kontrola po 20 účtech s 3min intervalem mezi skupinami
+ * - Research cache - ukládá do DB když je vše vyzkoumáno
  */
 class Automator {
   constructor() {
@@ -45,31 +50,31 @@ class Automator {
     this.captchaDetected = new Set(); // Účty s detekovanou CAPTCHA (aby se nespamovalo)
     this.openBrowsers = new Map(); // Tracking otevřených visible browserů (accountId => browser)
     this.openingBrowsers = new Set(); // Tracking účtů pro které se právě otevírá browser (race condition protection)
+    this.checksGroupTimings = {}; // Sledování časů pro skupiny v checksLoop (groupIndex => lastRunTime)
 
     // Intervaly pro smyčky
     this.intervals = {
-      checks: 0,        // Kontroly běží neustále (žádný wait)
+      checks: 3 * 60 * 1000,      // 3 minuty - minimální mezera mezi kontrolami stejné skupiny
+      checksGroupDelay: 10 * 1000, // 10 sekund mezi zpracováním skupin
       recruit: 2 * 60 * 1000,     // 2 minuty
       building: 5 * 1000,         // 5 sekund - COOLDOWN režim (kontroluje hned jak vyprší)
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
-      paladin: 60 * 60 * 1000,    // 60 minut (1 hodina) - ZMĚNĚNO z 2 hodin
-      units: 10 * 60 * 1000,      // 10 minut (kontrola jednotek) - ZMĚNĚNO z 20 minut
+      paladin: 3 * 60 * 60 * 1000, // 3 hodiny (180 minut)
       accountInfo: 20 * 60 * 1000, // 20 minut (sběr statistik)
       dailyRewards: 24 * 60 * 60 * 1000, // Nepoužívá se - denní odměny běží 2x denně (4:00 a 16:00)
-      scavenge: 1 * 60 * 1000,    // 1 minuta (sběr surovin) - ZMĚNĚNO z 5 minut (kvůli per-account timing)
+      scavenge: 10 * 60 * 1000,   // 10 minut
       // balance: 120 * 60 * 1000    // VYPNUTO - způsobovalo bany
     };
 
     // Priority (nižší = vyšší priorita)
     this.priorities = {
-      checks: 1,        // Útoky/CAPTCHA
+      checks: 1,        // Útoky/CAPTCHA/Jednotky
       building: 1,      // Výstavba - STEJNÁ PRIORITA jako kontroly
       scavenge: 2,      // Sběr - vyšší priorita než rekrut
       recruit: 3,       // Rekrutování
       research: 4,      // Výzkum
       paladin: 5,       // Paladin
-      units: 6,         // Kontrola jednotek
-      dailyRewards: 6,  // Denní odměny - stejná priorita jako jednotky
+      dailyRewards: 6,  // Denní odměny
       stats: 7,         // Statistiky
       // balance: 7        // VYPNUTO - způsobovalo bany
     };
@@ -196,57 +201,78 @@ class Automator {
     console.log('='.repeat(70));
     console.log('🤖 Spouštím Event-Driven automatizaci');
     console.log('⚡ Worker Pool: Max 100 procesů');
-    console.log('🔄 9 nezávislých smyček:');
-    console.log('   [P1] Kontroly: neustále po 2 účtech (~10 min/cyklus pro 100 účtů)');
-    console.log('   [P1] Build: každých 5s po 5 účtech - COOLDOWN režim (VYSOKÁ PRIORITA)');
-    console.log('   [P2] Sběr: každou 1 min po 5 účtech (per-account timing)');
+    console.log('🔄 7 nezávislých smyček:');
+    console.log('   [P1] Kontroly: po 20 účtech, každá skupina každé 3 min (s randomizací)');
+    console.log('        └─ Kontroluje: CAPTCHA + útoky + jednotky');
+    console.log('   [P1] Build: každých 5s po 5 účtech - COOLDOWN režim');
+    console.log('   [P2] Sběr: každých 10 min po 5 účtech (per-account timing)');
     console.log('   [P3] Rekrut: každé 2 min po 5 účtech (per-account timing)');
     console.log('   [P4] Výzkum: každých 120 min po 5 účtech (2 hod, per-account timing)');
-    console.log('   [P5] Paladin: každých 60 min po 5 účtech (1 hod, per-account timing)');
-    console.log('   [P6] Jednotky: každých 10 min po 2 účtech');
+    console.log('   [P5] Paladin: každé 3 hod po 5 účtech (per-account timing)');
     console.log('   [P6] Denní odměny: 2x denně ve 4:00 a 16:00 + při startu');
-    console.log('   [P7] Balance: každých 120 min po 5 účtech (2 hod, per-account timing)');
-    console.log('   [P7] Statistiky: každých 20 min');
     console.log('='.repeat(70));
 
     this.isRunning = true;
 
     // Spusť všechny smyčky paralelně
     await Promise.all([
-      this.checksLoop(),       // P1: Neustále po 2 účtech
+      this.checksLoop(),       // P1: Po 20 účtech, každá skupina každé 3 min
       this.buildingLoop(),     // P1: Každých 5s po 5 účtech (COOLDOWN režim)
-      this.scavengeLoop(),     // P2: Každých 5 min po 5 účtech
+      this.scavengeLoop(),     // P2: Každých 10 min po 5 účtech
       this.recruitLoop(),      // P3: Každé 2 min po 5 účtech
       this.researchLoop(),     // P4: Každých 120 min po 5 účtech
-      this.paladinLoop(),      // P5: Každých 120 min po 5 účtech
-      this.unitsLoop(),        // P6: Každých 20 min po 2 účtech
-      this.dailyRewardsLoop(), // P6: Jednou denně ve 4:00 nebo při startu
-      // this.balanceLoop(),      // P7: VYPNUTO - způsobovalo bany
+      this.paladinLoop(),      // P5: Každé 3 hod po 5 účtech
+      this.dailyRewardsLoop(), // P6: 2x denně ve 4:00 a 16:00 + při startu
+      // this.balanceLoop(),      // VYPNUTO - způsobovalo bany
       this.statsMonitor()      // Monitoring
     ]);
   }
 
   /**
-   * SMYČKA 1: Kontroly (útoky/CAPTCHA)
-   * Běží neustále dokola po 2 účtech
+   * SMYČKA 1: Kontroly (útoky/CAPTCHA/jednotky)
+   * Běží po 20 účtech v každé skupině
+   * Každá skupina se kontroluje každé 3 minuty (s randomizací)
+   * Mezi skupinami: 10 sekund
    * Priorita: 1 (nejvyšší)
    */
   async checksLoop() {
     console.log('🔄 [P1] Smyčka KONTROLY spuštěna');
+
+    const GROUP_SIZE = 20;
 
     while (this.isRunning) {
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
       const accounts = this.db.getAllActiveAccounts();
+      const numGroups = Math.ceil(accounts.length / GROUP_SIZE);
 
-      // Zpracuj po 2 účtech
-      for (let i = 0; i < accounts.length; i += 2) {
-        const batch = accounts.slice(i, i + 2);
+      // Zpracuj všechny skupiny
+      for (let groupIndex = 0; groupIndex < numGroups; groupIndex++) {
+        // Zkontroluj jestli už může tato skupina běžet (minimálně 3 min od posledního běhu)
+        const groupKey = `group_${groupIndex}`;
+        const lastRunTime = this.checksGroupTimings[groupKey] || 0;
+        const timeSinceLastRun = Date.now() - lastRunTime;
+        const minInterval = randomizeInterval(this.intervals.checks); // 3 min ±20%
 
-        // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
+        if (timeSinceLastRun < minInterval) {
+          // Skupina ještě nemůže běžet, přeskoč
+          continue;
+        }
+
+        // Označ čas spuštění této skupiny
+        this.checksGroupTimings[groupKey] = Date.now();
+
+        // Vytvoř skupinu účtů
+        const groupStart = groupIndex * GROUP_SIZE;
+        const groupEnd = Math.min(groupStart + GROUP_SIZE, accounts.length);
+        const group = accounts.slice(groupStart, groupEnd);
+
+        console.log(`🔄 [Kontroly] Zpracovávám skupinu ${groupIndex + 1}/${numGroups} (${group.length} účtů)`);
+
+        // Zpracuj všechny účty ve skupině paralelně
         await Promise.all(
-          batch.map(account =>
+          group.map(account =>
             this.workerPool.run(
               () => this.processChecks(account),
               this.priorities.checks,
@@ -255,11 +281,15 @@ class Automator {
           )
         );
 
-        // Malá pauza mezi dávkami (100ms)
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Pauza mezi skupinami (10 sekund s randomizací)
+        if (groupIndex < numGroups - 1) {
+          await new Promise(resolve =>
+            setTimeout(resolve, randomizeInterval(this.intervals.checksGroupDelay))
+          );
+        }
       }
 
-      // Celý cyklus hotový, krátká pauza před dalším kolem
+      // Krátká pauza před dalším kolem všech skupin (1 sekunda)
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
@@ -525,44 +555,6 @@ class Automator {
 
       // Počkej 1 hodinu
       await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.paladin)));
-    }
-  }
-
-  /**
-   * SMYČKA 6: Kontrola jednotek
-   * Každých 10 minut projde účty a zkontroluje jednotky (po 2 účtech)
-   * Priorita: 6
-   */
-  async unitsLoop() {
-    console.log('🔄 [P6] Smyčka JEDNOTKY spuštěna');
-
-    while (this.isRunning) {
-      // Zkontroluj shutdown flag
-      await this.checkShutdownFlag();
-
-      const accounts = this.db.getAllActiveAccounts();
-
-      // Zpracuj po 2 účtech
-      for (let i = 0; i < accounts.length; i += 2) {
-        const batch = accounts.slice(i, i + 2);
-
-        // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
-        await Promise.all(
-          batch.map(account =>
-            this.workerPool.run(
-              () => this.processUnits(account),
-              this.priorities.units,
-              `Jednotky: ${account.username}`
-            )
-          )
-        );
-
-        // Malá pauza mezi dávkami (100ms)
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      // Počkej 10 minut
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.units)));
     }
   }
 
@@ -874,6 +866,15 @@ class Automator {
         return;
       }
 
+      // NOVÉ: Kontrola jednotek (sloučení unitsLoop do checksLoop)
+      try {
+        const supportModule = new SupportModule(page, this.db, account.id);
+        await supportModule.getAllUnitsInfo();
+      } catch (unitsError) {
+        // Tichá chyba - neukončujeme kvůli chybě v kontrole jednotek
+        console.error(`⚠️  [${account.username}] Chyba při kontrole jednotek:`, unitsError.message);
+      }
+
       // Zavři context (browser zůstane běžet)
       await this.browserPool.closeContext(context, browserKey);
 
@@ -1013,6 +1014,15 @@ class Automator {
     let context, browserKey;
 
     try {
+      // OPTIMALIZACE: Zkontroluj jestli už není vše vyzkoumáno (uloženo v DB)
+      const researchSettings = this.db.getResearchSettings(account.id);
+      if (researchSettings && researchSettings.research_completed) {
+        console.log(`✅ [${account.username}] Výzkum již dokončen - přeskakuji`);
+        // Nastav dlouhý wait time (24 hodin) protože už není co dělat
+        this.accountWaitTimes[`research_${account.id}`] = Date.now() + (24 * 60 * 60 * 1000);
+        return;
+      }
+
       ({ context, browserKey } = await this.browserPool.createContext(account.id));
       const page = await context.newPage();
 
@@ -1029,7 +1039,15 @@ class Automator {
       const researchModule = new ResearchModule(page, this.db, account.id);
       const researchResult = await researchModule.autoResearch();
 
-      if (researchResult && researchResult.waitTime) {
+      // OPTIMALIZACE: Pokud je vše hotovo, ulož do DB
+      if (researchResult && researchResult.status === 'completed') {
+        console.log(`✅ [${account.username}] Výzkum dokončen - ukládám do DB`);
+        this.db.updateResearchSettings(account.id, {
+          research_completed: true
+        });
+        // Nastav dlouhý wait time (24 hodin)
+        this.accountWaitTimes[`research_${account.id}`] = Date.now() + (24 * 60 * 60 * 1000);
+      } else if (researchResult && researchResult.waitTime) {
         // Použij minimálně interval smyčky (120 min)
         const actualWaitTime = Math.max(researchResult.waitTime, this.intervals.research);
         this.accountWaitTimes[`research_${account.id}`] = Date.now() + actualWaitTime;
@@ -1042,37 +1060,6 @@ class Automator {
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při výzkumu:`, error.message);
-      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
-    }
-  }
-
-  /**
-   * Zpracuj kontrolu jednotek
-   */
-  async processUnits(account) {
-    let context, browserKey;
-
-    try {
-      ({ context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
-
-      const loginSuccess = await this.loginToGame(page, account);
-      if (!loginSuccess) {
-        await this.browserPool.closeContext(context, browserKey);
-        await this.handleFailedLogin(account);
-        return;
-      }
-
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
-
-      const supportModule = new SupportModule(page, this.db, account.id);
-      await supportModule.getAllUnitsInfo();
-
-      await this.browserPool.closeContext(context, browserKey);
-
-    } catch (error) {
-      logger.error(`Chyba při kontrole jednotek: ${error.message}`, account.username);
       if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
     }
   }
