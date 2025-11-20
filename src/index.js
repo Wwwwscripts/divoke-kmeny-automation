@@ -194,33 +194,30 @@ class Automator {
    */
   async start() {
     console.log('='.repeat(70));
-    console.log('🤖 Spouštím Event-Driven automatizaci - ANTI-CAPTCHA MODE');
+    console.log('🤖 Spouštím Event-Driven automatizaci - TESTOVACÍ REŽIM');
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🛡️  Aktivní ochrana: Human behavior, WebSocket timing, Fingerprinting');
-    console.log('🔄 9 nezávislých smyček (OPTIMALIZOVÁNO PRO NÍZKÉ RIZIKO CAPTCHA):');
-    console.log('   [P1] Kontroly: neustále po 2 účtech s pauzami 3-6s mezi cykly');
+    console.log('🔄 Aktivní smyčky (POUZE PRO TESTOVÁNÍ):');
+    console.log('   [P1] Kontroly útoků: neustále po 2 účtech s pauzami 3-6s mezi cykly');
     console.log('   [P1] Build: každých 30s po 5 účtech - COOLDOWN režim (±15s random)');
-    console.log('   [P2] Sběr: každé 3 min po 5 účtech (±30s random, per-account timing)');
-    console.log('   [P3] Rekrut: každých 5 min po 5 účtech (±45s random, per-account timing)');
-    console.log('   [P4] Výzkum: každých 120 min po 5 účtech (±5 min random)');
-    console.log('   [P5] Paladin: každých 60 min po 5 účtech (±3 min random)');
     console.log('   [P6] Jednotky: každých 15 min po 2 účtech (±2 min random)');
-    console.log('   [P6] Denní odměny: 2x denně ve 4:00 a 16:00 + při startu');
-    console.log('   [P7] Statistiky: každých 25 min');
+    console.log('   ⏸️  CAPTCHA kontrola: při každém přihlášení (ne v loopu)');
+    console.log('');
+    console.log('   ❌ VYPNUTO: Sběr, Rekrut, Výzkum, Paladin, Denní odměny');
     console.log('='.repeat(70));
 
     this.isRunning = true;
 
     // Spusť všechny smyčky paralelně
     await Promise.all([
-      this.checksLoop(),       // P1: Neustále po 2 účtech
-      this.buildingLoop(),     // P1: Každých 5s po 5 účtech (COOLDOWN režim)
-      this.scavengeLoop(),     // P2: Každých 5 min po 5 účtech
-      this.recruitLoop(),      // P3: Každé 2 min po 5 účtech
-      this.researchLoop(),     // P4: Každých 120 min po 5 účtech
-      this.paladinLoop(),      // P5: Každých 120 min po 5 účtech
-      this.unitsLoop(),        // P6: Každých 20 min po 2 účtech
-      this.dailyRewardsLoop(), // P6: Jednou denně ve 4:00 nebo při startu
+      this.checksLoop(),       // P1: Kontroly útoků
+      this.buildingLoop(),     // P1: Výstavba
+      this.unitsLoop(),        // P6: Kontrola jednotek
+      // this.scavengeLoop(),     // P2: VYPNUTO - testování
+      // this.recruitLoop(),      // P3: VYPNUTO - testování
+      // this.researchLoop(),     // P4: VYPNUTO - testování
+      // this.paladinLoop(),      // P5: VYPNUTO - testování
+      // this.dailyRewardsLoop(), // P6: VYPNUTO - testování
       // this.balanceLoop(),      // P7: VYPNUTO - způsobovalo bany
       this.statsMonitor()      // Monitoring
     ]);
@@ -776,58 +773,12 @@ class Automator {
         this.accountWaitTimes[infoKey] = Date.now() + this.intervals.accountInfo;
       }
 
-      // Kontrola útoků a CAPTCHA (VŽDY) - VOLAT NEJDŘÍV pro aktualizaci incoming_attacks
+      // Kontrola útoků - VOLAT NEJDŘÍV pro aktualizaci incoming_attacks
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       await notificationsModule.detectAttacks();
 
-      const hasCaptcha = await notificationsModule.detectCaptcha();
+      // Kontrola dobytí vesnice
       const isConquered = await notificationsModule.detectConqueredVillage();
-
-      if (hasCaptcha) {
-        // Zavři headless browser
-        await this.browserPool.closeContext(context, browserKey);
-
-        // Loguj pouze pokud ještě není zaznamenaná CAPTCHA pro tento účet
-        const isNewCaptcha = !this.captchaDetected.has(account.id);
-
-        if (isNewCaptcha) {
-          console.log(`⚠️  [${account.username}] CAPTCHA detekována!`);
-          this.captchaDetected.add(account.id);
-        }
-
-        // Otevři viditelný prohlížeč POUZE pokud už není otevřený nebo se neotvírá (CAPTCHA)
-        if (!this.isBrowserActive(account.id) && !this.openingBrowsers.has(account.id)) {
-          if (isNewCaptcha) {
-            console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
-
-            // Označ že se browser otevírá
-            this.openingBrowsers.add(account.id);
-
-            try {
-              const browserInfo = await this.browserManager.testConnection(account.id, false); // false = nezavře se auto
-
-              if (browserInfo) {
-                const { browser } = browserInfo;
-                this.openBrowsers.set(account.id, browserInfo);
-
-                // Sleduj zavření browseru
-                browser.on('disconnected', () => {
-                  this.openBrowsers.delete(account.id);
-                  this.openingBrowsers.delete(account.id);
-                  this.captchaDetected.delete(account.id);
-                  console.log(`✅ [${account.username}] CAPTCHA vyřešena - browser zavřen`);
-                });
-              }
-            } catch (error) {
-              console.error(`❌ [${account.username}] Chyba při otevírání browseru pro CAPTCHA:`, error.message);
-            } finally {
-              // Vždy odstraň z openingBrowsers
-              this.openingBrowsers.delete(account.id);
-            }
-          }
-        }
-        return;
-      }
 
       if (isConquered) {
         console.log(`⚠️  [${account.username}] VESNICE DOBYTA!`);
@@ -1284,6 +1235,58 @@ class Automator {
       }
 
       console.log(`✅ [${account.username}] Úspěšně přihlášen`);
+
+      // Zkontroluj CAPTCHA (in-game CAPTCHA kontrola)
+      try {
+        const NotificationsModule = (await import('./modules/notifications.js')).default;
+        const notificationsModule = new NotificationsModule(page, this.db, account.id);
+        const hasCaptcha = await notificationsModule.detectCaptcha();
+
+        if (hasCaptcha) {
+          // Loguj pouze pokud ještě není zaznamenaná CAPTCHA pro tento účet
+          const isNewCaptcha = !this.captchaDetected.has(account.id);
+
+          if (isNewCaptcha) {
+            console.log(`⚠️  [${account.username}] CAPTCHA detekována při přihlášení!`);
+            this.captchaDetected.add(account.id);
+
+            // Otevři viditelný prohlížeč POUZE pokud už není otevřený nebo se neotvírá
+            if (!this.isBrowserActive(account.id) && !this.openingBrowsers.has(account.id)) {
+              console.log(`🖥️  Otevírám viditelný prohlížeč pro vyřešení CAPTCHA`);
+
+              // Označ že se browser otevírá
+              this.openingBrowsers.add(account.id);
+
+              try {
+                const browserInfo = await this.browserManager.testConnection(account.id, false);
+
+                if (browserInfo) {
+                  const { browser } = browserInfo;
+                  this.openBrowsers.set(account.id, browserInfo);
+
+                  // Sleduj zavření browseru
+                  browser.on('disconnected', () => {
+                    this.openBrowsers.delete(account.id);
+                    this.openingBrowsers.delete(account.id);
+                    this.captchaDetected.delete(account.id);
+                    console.log(`✅ [${account.username}] CAPTCHA vyřešena - browser zavřen`);
+                  });
+                }
+              } catch (error) {
+                console.error(`❌ [${account.username}] Chyba při otevírání browseru pro CAPTCHA:`, error.message);
+              } finally {
+                this.openingBrowsers.delete(account.id);
+              }
+            }
+          }
+
+          return false; // CAPTCHA = failed login
+        }
+      } catch (captchaError) {
+        // Ignore CAPTCHA check errors
+        console.log(`⚠️  [${account.username}] Nepodařilo se zkontrolovat CAPTCHA: ${captchaError.message}`);
+      }
+
       return true;
 
     } catch (error) {
