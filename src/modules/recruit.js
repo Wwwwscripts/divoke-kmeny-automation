@@ -472,7 +472,17 @@ class RecruitModule {
 
       // Získej aktuální suroviny
       const resources = await this.getCurrentResources();
-      console.log(`[${this.getAccountName()}] 💰 Suroviny:`);
+      console.log(`[${this.getAccountName()}] 💰 Suroviny (před rezervou):`);
+      console.log(`  - Dřevo: ${resources.wood}`);
+      console.log(`  - Hlína: ${resources.stone}`);
+      console.log(`  - Železo: ${resources.iron}`);
+
+      // Odečti rezervu 1000 od každé suroviny
+      resources.wood -= 1000;
+      resources.stone -= 1000;
+      resources.iron -= 1000;
+
+      console.log(`[${this.getAccountName()}] 💰 Suroviny (po odečtení rezervy 1000):`);
       console.log(`  - Dřevo: ${resources.wood}`);
       console.log(`  - Hlína: ${resources.stone}`);
       console.log(`  - Železo: ${resources.iron}`);
@@ -583,10 +593,30 @@ class RecruitModule {
         console.log(`  - ${unitType}: ${count}`);
       });
 
-      // Rekrutuj jednotky
+      // Rekrutuj jednotky SEKVENČNĚ: nejdřív kopí, pak meče, pak ostatní
+      console.log(`[${this.getAccountName()}] 🎯 Zahajuji sekvenční rekrutování...`);
+
+      // 1. Kopí (spear)
+      if (toRecruitCounts['spear'] && toRecruitCounts['spear'] > 0) {
+        console.log(`[${this.getAccountName()}] 🎯 Rekrutuji ${toRecruitCounts['spear']}x spear...`);
+        await this.recruitUnits('spear', toRecruitCounts['spear']);
+        console.log(`[${this.getAccountName()}] ✅ Kopí potvrzena`);
+      }
+
+      // 2. Meče (sword)
+      if (toRecruitCounts['sword'] && toRecruitCounts['sword'] > 0) {
+        console.log(`[${this.getAccountName()}] 🎯 Rekrutuji ${toRecruitCounts['sword']}x sword...`);
+        await this.recruitUnits('sword', toRecruitCounts['sword']);
+        console.log(`[${this.getAccountName()}] ✅ Meče potvrzeny`);
+      }
+
+      // 3. Ostatní jednotky (axe, archer)
       for (const [unitType, count] of Object.entries(toRecruitCounts)) {
-        console.log(`[${this.getAccountName()}] 🎯 Rekrutuji ${count}x ${unitType}...`);
-        await this.recruitUnits(unitType, count);
+        if (unitType !== 'spear' && unitType !== 'sword' && count > 0) {
+          console.log(`[${this.getAccountName()}] 🎯 Rekrutuji ${count}x ${unitType}...`);
+          await this.recruitUnits(unitType, count);
+          console.log(`[${this.getAccountName()}] ✅ ${unitType} potvrzeny`);
+        }
       }
 
       console.log(`[${this.getAccountName()}] ✅ HOTOVO`);
