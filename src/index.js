@@ -198,7 +198,7 @@ class Automator {
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🛡️  Aktivní ochrana: Human behavior, WebSocket timing, Fingerprinting');
     console.log('🔄 Aktivní smyčky (POUZE PRO TESTOVÁNÍ):');
-    console.log('   [P1] Kontroly útoků: neustále po 2 účtech s pauzami 3-6s mezi cykly');
+    console.log('   [P1] Kontroly útoků: po 10 účtech (10s pauzy), cyklus každé 3 min');
     console.log('   [P1] Build: každých 30s po 5 účtech - COOLDOWN režim (±15s random)');
     console.log('   [P6] Jednotky: každých 15 min po 2 účtech (±2 min random)');
     console.log('   ⏸️  CAPTCHA kontrola: při každém přihlášení (ne v loopu)');
@@ -225,21 +225,25 @@ class Automator {
 
   /**
    * SMYČKA 1: Kontroly (útoky/CAPTCHA)
-   * Běží neustále dokola po 2 účtech
+   * Běží po 10 účtech s 10s pauzami, celý cyklus každé 3 minuty
    * Priorita: 1 (nejvyšší)
    */
   async checksLoop() {
     console.log('🔄 [P1] Smyčka KONTROLY spuštěna');
 
     while (this.isRunning) {
+      const cycleStartTime = Date.now();
+
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
       const accounts = this.db.getAllActiveAccounts();
 
-      // Zpracuj po 2 účtech
-      for (let i = 0; i < accounts.length; i += 2) {
-        const batch = accounts.slice(i, i + 2);
+      // Zpracuj po 10 účtech
+      for (let i = 0; i < accounts.length; i += 10) {
+        const batch = accounts.slice(i, i + 10);
+
+        console.log(`📋 Kontroly: Zpracovávám skupinu ${Math.floor(i / 10) + 1} (účty ${i + 1}-${Math.min(i + 10, accounts.length)})`);
 
         // Zpracuj každý účet v dávce paralelně (přes WorkerPool)
         await Promise.all(
@@ -252,12 +256,20 @@ class Automator {
           )
         );
 
-        // Pauza mezi dávkami (500ms-2s) - human-like
-        await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1500));
+        // Pauza mezi skupinami (10 sekund)
+        if (i + 10 < accounts.length) {
+          await new Promise(resolve => setTimeout(resolve, 10000));
+        }
       }
 
-      // Celý cyklus hotový, delší pauza před dalším kolem (3-6s)
-      await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 3000));
+      // Celý cyklus hotový, počkej 3 minuty od začátku cyklu
+      const cycleElapsed = Date.now() - cycleStartTime;
+      const waitTime = Math.max(0, 3 * 60 * 1000 - cycleElapsed);
+
+      if (waitTime > 0) {
+        console.log(`⏰ Kontroly: Další cyklus za ${Math.ceil(waitTime / 1000)}s`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
   }
 
