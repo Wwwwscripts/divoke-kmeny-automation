@@ -5,6 +5,7 @@ import { join } from 'path';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
 import { generateFingerprint, createStealthScript } from './utils/fingerprint.js';
+import { setupWebSocketInterceptor } from './utils/webSocketBehavior.js';
 
 const app = express();
 const db = new DatabaseManager();
@@ -118,6 +119,15 @@ async function getOrOpenBrowser(accountId) {
   }
 
   const page = await context.newPage();
+
+  // Setup WebSocket interceptor pro human-like timing
+  await setupWebSocketInterceptor(page, {
+    autoHumanize: true,
+    minDelay: 300,
+    maxDelay: 1200,
+    enableIdleBehavior: false,
+    logActions: false
+  });
 
   // Jít přímo na game.php s cookies
   await page.goto(`https://${account.world}.${domain}/game.php`, {
@@ -629,6 +639,15 @@ app.post('/api/support/open-manual', async (req, res) => {
       // Cookies načteny - tichý log
 
       const page = await context.newPage();
+
+      // Setup WebSocket interceptor pro human-like timing
+      await setupWebSocketInterceptor(page, {
+        autoHumanize: true,
+        minDelay: 300,
+        maxDelay: 1200,
+        enableIdleBehavior: false,
+        logActions: false
+      });
 
       // Jít přímo na game.php s cookies
       await page.goto(`https://${account.world}.${domain}/game.php`, {

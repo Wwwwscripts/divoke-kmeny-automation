@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import DatabaseManager from './database.js';
 import { generateFingerprint, createStealthScript } from './utils/fingerprint.js';
+import { setupWebSocketInterceptor } from './utils/webSocketBehavior.js';
 
 class BrowserManager {
   constructor(db = null) {
@@ -225,6 +226,15 @@ class BrowserManager {
 
     try {
       const page = await context.newPage();
+
+      // Setup WebSocket interceptor pro human-like timing
+      await setupWebSocketInterceptor(page, {
+        autoHumanize: true,
+        minDelay: 300,
+        maxDelay: 1200,
+        enableIdleBehavior: false, // Vypnuto pro visible browser (uživatel ovládá)
+        logActions: false
+      });
 
       if (account.world) {
         // Vyčisti localStorage/sessionStorage před načtením

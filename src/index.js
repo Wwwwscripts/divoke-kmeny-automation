@@ -17,6 +17,7 @@ import ScavengeModule from './modules/scavenge.js';
 import BalancModule from './modules/balanc.js';
 import logger from './logger.js';
 import { randomizeInterval } from './utils/randomize.js';
+import { detectAnyChallenge, detectBan } from './utils/antiBot.js';
 
 /**
  * 🚀 Event-Driven Automator s nezávislými smyčkami
@@ -1250,6 +1251,31 @@ class Automator {
 
       if (!loginStatus.isLoggedIn) {
         console.log(`❌ [${account.username}] Přihlášení se nezdařilo - nenalezeny herní elementy`);
+
+        // Anti-bot detection - zkontroluj captcha/ban
+        try {
+          const challenges = await detectAnyChallenge(page);
+          const ban = await detectBan(page);
+
+          if (challenges.cloudflare.detected) {
+            console.log(`⚠️  [${account.username}] Detekována Cloudflare challenge`);
+          }
+          if (challenges.hcaptcha.detected) {
+            console.log(`⚠️  [${account.username}] Detekována hCaptcha (sitekey: ${challenges.hcaptcha.sitekey})`);
+          }
+          if (challenges.recaptcha.detected) {
+            console.log(`⚠️  [${account.username}] Detekována reCaptcha (sitekey: ${challenges.recaptcha.sitekey})`);
+          }
+          if (ban.detected) {
+            console.log(`🚫 [${account.username}] Detekován BAN!`);
+            if (ban.ipBan) {
+              console.log(`   └─ IP ban detekován - zkontroluj proxy`);
+            }
+          }
+        } catch (detectionError) {
+          // Ignore detection errors
+        }
+
         return false;
       }
 

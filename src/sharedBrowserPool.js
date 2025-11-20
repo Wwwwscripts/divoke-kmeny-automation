@@ -4,6 +4,7 @@
  */
 import { chromium } from 'playwright';
 import { generateFingerprint, createStealthScript } from './utils/fingerprint.js';
+import { setupWebSocketInterceptor } from './utils/webSocketBehavior.js';
 
 class SharedBrowserPool {
   constructor(db) {
@@ -86,6 +87,74 @@ class SharedBrowserPool {
     // Přidej stealth script s konkrétním fingerprintem
     const stealthScript = createStealthScript(fingerprint);
     await context.addInitScript(stealthScript);
+
+    // Přidej WebSocket interceptor script
+    await context.addInitScript(`
+      (() => {
+        const OriginalWebSocket = window.WebSocket;
+        const actionQueue = [];
+        let isProcessing = false;
+        let lastActionTime = Date.now();
+
+        const processQueue = async () => {
+          if (isProcessing || actionQueue.length === 0) return;
+          isProcessing = true;
+
+          while (actionQueue.length > 0) {
+            const action = actionQueue.shift();
+            const timeSinceLastAction = Date.now() - lastActionTime;
+
+            // Realistické zpoždění (300-1200ms)
+            const delay = Math.random() * 900 + 300;
+
+            // Pattern breaking (15% šance)
+            const extraDelay = Math.random() < 0.15 ? Math.random() * 2000 + 1000 : 0;
+
+            const totalDelay = Math.max(0, delay + extraDelay - timeSinceLastAction);
+
+            if (totalDelay > 0) {
+              await new Promise(r => setTimeout(r, totalDelay));
+            }
+
+            // Pošli akci
+            try {
+              if (action.ws.readyState === 1) {
+                OriginalWebSocket.prototype.send.call(action.ws, action.data);
+                lastActionTime = Date.now();
+              }
+            } catch (error) {
+              console.error('WS send error:', error);
+            }
+
+            // Micro delay
+            await new Promise(r => setTimeout(r, Math.random() * 50 + 30));
+          }
+
+          isProcessing = false;
+        };
+
+        window.WebSocket = function(url, protocols) {
+          const ws = new OriginalWebSocket(url, protocols);
+
+          // Přepsat send metodu pro human-like timing
+          const originalSend = ws.send.bind(ws);
+          ws.send = function(data) {
+            // Přidej do fronty místo okamžitého odeslání
+            actionQueue.push({ ws: this, data, queuedAt: Date.now() });
+            processQueue();
+          };
+
+          return ws;
+        };
+
+        // Zkopíruj properties
+        window.WebSocket.prototype = OriginalWebSocket.prototype;
+        window.WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+        window.WebSocket.OPEN = OriginalWebSocket.OPEN;
+        window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
+        window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
+      })();
+    `);
 
     // Přidej cookies
     if (account.cookies && account.cookies !== 'null') {

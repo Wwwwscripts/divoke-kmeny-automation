@@ -4,6 +4,7 @@
  */
 
 import logger from '../logger.js';
+import { randomDelay } from '../utils/randomize.js';
 
 class RecruitModule {
   constructor(page, db, accountId) {
@@ -264,11 +265,15 @@ class RecruitModule {
       let buildingParam = building;
       if (building === 'workshop') buildingParam = 'garage';
 
+      // Human-like delay před navigací
+      await randomDelay(300, 200);
+
       await this.page.goto(`${worldUrl}/game.php?screen=${buildingParam}`, {
         waitUntil: 'domcontentloaded'
       });
 
-      await this.page.waitForTimeout(1500);
+      // Human-like delay po načtení stránky (jako když člověk čte)
+      await randomDelay(1200, 500);
 
       // Najdeme input pro jednotku a nastavíme hodnotu 1
       const recruited = await this.page.evaluate((unitType) => {

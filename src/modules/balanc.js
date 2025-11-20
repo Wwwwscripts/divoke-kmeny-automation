@@ -7,6 +7,8 @@
  * LANGUAGE-INDEPENDENT - používá pouze CSS třídy a ikony.
  */
 
+import { randomDelay } from '../utils/randomize.js';
+
 class BalancModule {
   constructor(page, db, accountId) {
     this.page = page;
@@ -34,12 +36,17 @@ class BalancModule {
       // Přejít na tržiště - MODE OWN_OFFER (kontrola skladů zde)
       const worldUrl = this.getWorldUrl();
       console.log(`🌐 Navigace na tržiště (own_offer)...`);
+
+      // Human-like delay před navigací
+      await randomDelay(400, 300);
+
       await this.page.goto(`${worldUrl}/game.php?screen=market&mode=own_offer`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000
       });
 
-      await this.page.waitForTimeout(2000);
+      // Human-like delay po načtení (jako když člověk čte)
+      await randomDelay(1500, 700);
 
       // 1. Zkontrolovat aktuální stavy surovin
       const resources = await this.getResourceStates();
@@ -84,11 +91,16 @@ class BalancModule {
       }
 
       // 7. Přejít na stránku pro vyhledávání nabídek ostatních hráčů
+      // Human-like delay před navigací
+      await randomDelay(400, 300);
+
       await this.page.goto(`${worldUrl}/game.php?screen=market&mode=other_offer&action=search`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000
       });
-      await this.page.waitForTimeout(2000);
+
+      // Human-like delay po načtení (jako když člověk čte)
+      await randomDelay(1500, 700);
 
       // 8. Přijmout existující nabídky
       const acceptedOffers = await this.acceptExistingOffers(balance, merchants.available);
