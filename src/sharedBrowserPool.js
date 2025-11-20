@@ -3,6 +3,7 @@
  * Pro účty se stejnou proxy sdílí browser (šetří RAM)
  */
 import { chromium } from 'playwright';
+import stealthScript from './utils/stealth.js';
 
 class SharedBrowserPool {
   constructor(db) {
@@ -72,6 +73,9 @@ class SharedBrowserPool {
 
     // Vytvoř nový context
     const context = await browser.newContext(contextOptions);
+
+    // Přidej stealth script pro maskování automation
+    await context.addInitScript(stealthScript);
 
     // Přidej cookies
     if (account.cookies && account.cookies !== 'null') {

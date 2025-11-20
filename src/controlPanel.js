@@ -4,6 +4,7 @@ import { writeFileSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
+import stealthScript from './utils/stealth.js';
 
 const app = express();
 const db = new DatabaseManager();
@@ -79,6 +80,9 @@ async function getOrOpenBrowser(accountId) {
   }
 
   const context = await browser.newContext(contextOptions);
+
+  // Přidej stealth script pro maskování automation
+  await context.addInitScript(stealthScript);
 
   // Zkontrolovat a načíst cookies
   if (!account.cookies || account.cookies === 'null') {
@@ -589,6 +593,9 @@ app.post('/api/support/open-manual', async (req, res) => {
       }
 
       const context = await browser.newContext(contextOptions);
+
+      // Přidej stealth script pro maskování automation
+      await context.addInitScript(stealthScript);
 
       // Zkontrolovat a načíst cookies
       if (!account.cookies || account.cookies === 'null') {

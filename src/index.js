@@ -16,6 +16,7 @@ import DailyRewardsModule from './modules/dailyRewards.js';
 import ScavengeModule from './modules/scavenge.js';
 import BalancModule from './modules/balanc.js';
 import logger from './logger.js';
+import { randomizeInterval } from './utils/randomize.js';
 
 /**
  * 🚀 Event-Driven Automator s nezávislými smyčkami
@@ -310,8 +311,8 @@ class Automator {
         }
       }
 
-      // Počkej 5 sekund před další kontrolou (COOLDOWN režim)
-      await new Promise(resolve => setTimeout(resolve, this.intervals.building));
+      // Počkej 5 sekund před další kontrolou (COOLDOWN režim) - s randomizací ±10s
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.building)));
     }
   }
 
@@ -368,8 +369,8 @@ class Automator {
         }
       }
 
-      // Počkej 1 minutu
-      await new Promise(resolve => setTimeout(resolve, this.intervals.scavenge));
+      // Počkej 1 minutu - s randomizací ±10s
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.scavenge)));
     }
   }
 
@@ -421,8 +422,8 @@ class Automator {
         }
       }
 
-      // Počkej 2 minuty
-      await new Promise(resolve => setTimeout(resolve, this.intervals.recruit));
+      // Počkej 2 minuty - s randomizací ±10s
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.recruit)));
     }
   }
 
@@ -475,7 +476,7 @@ class Automator {
       }
 
       // Počkej 2 hodiny
-      await new Promise(resolve => setTimeout(resolve, this.intervals.research));
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.research)));
     }
   }
 
@@ -522,7 +523,7 @@ class Automator {
       }
 
       // Počkej 1 hodinu
-      await new Promise(resolve => setTimeout(resolve, this.intervals.paladin));
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.paladin)));
     }
   }
 
@@ -560,7 +561,7 @@ class Automator {
       }
 
       // Počkej 10 minut
-      await new Promise(resolve => setTimeout(resolve, this.intervals.units));
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.units)));
     }
   }
 
@@ -720,7 +721,7 @@ class Automator {
       }
 
       // Počkej 120 minut
-      await new Promise(resolve => setTimeout(resolve, this.intervals.balance));
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.balance)));
     }
   }
 

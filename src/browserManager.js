@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import DatabaseManager from './database.js';
+import stealthScript from './utils/stealth.js';
 
 class BrowserManager {
   constructor(db = null) {
@@ -47,6 +48,9 @@ class BrowserManager {
     });
 
     const context = await browser.newContext(contextOptions);
+
+    // Přidej stealth script pro maskování automation
+    await context.addInitScript(stealthScript);
 
     if (account.cookies && account.cookies !== 'null') {
       try {
@@ -173,6 +177,9 @@ class BrowserManager {
     });
 
     const context = await browser.newContext(contextOptions);
+
+    // Přidej stealth script pro maskování automation
+    await context.addInitScript(stealthScript);
 
     if (account.cookies && account.cookies !== 'null') {
       try {
