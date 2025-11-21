@@ -1039,13 +1039,13 @@ class Automator {
         this.accountWaitTimes[infoKey] = Date.now() + this.intervals.accountInfo;
       }
 
-      // Kontrola útoků - VOLAT NEJDŘÍV pro aktualizaci incoming_attacks
+      // Kontrola útoků - LEHKÁ OPERACE (jen zjištění počtu)
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       const attacksDetected = await notificationsModule.detectAttacks();
 
-      // Pokud byla detekována captcha, okamžitě skončit a pausnout účet
+      // OKAMŽITĚ ZASTAVIT pokud byla detekována captcha
       if (attacksDetected && attacksDetected.captchaDetected) {
-        console.log(`⚠️  [${account.username}] CAPTCHA detekována během kontroly útoků - pausuji účet`);
+        console.log(`⚠️  [${account.username}] CAPTCHA detekována - pausuji účet`);
         await this.browserPool.closeContext(context, browserKey);
         await this.handleFailedLogin(account);
         return;
@@ -1057,6 +1057,19 @@ class Automator {
           console.log(`🚂 [${account.username}] ŠLECHTICKÝ VLAK! (${attacksDetected.count} útoků)`);
         } else {
           console.log(`⚔️  [${account.username}] Detekováno ${attacksDetected.count} příchozích útoků!`);
+        }
+
+        // TĚŽKÁ OPERACE: Fetchuj detaily POUZE pokud jsou útoky
+        if (attacksDetected.commandIds && attacksDetected.commandIds.length > 0) {
+          const fetchResult = await notificationsModule.fetchAttackDetails(attacksDetected.commandIds);
+
+          // Pokud byla detekována captcha během fetchování
+          if (fetchResult && fetchResult.captchaDetected) {
+            console.log(`⚠️  [${account.username}] CAPTCHA detekována během fetchování - pausuji účet`);
+            await this.browserPool.closeContext(context, browserKey);
+            await this.handleFailedLogin(account);
+            return;
+          }
         }
       }
 
