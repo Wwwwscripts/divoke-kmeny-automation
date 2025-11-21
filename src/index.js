@@ -296,9 +296,10 @@ class Automator {
         }
       }
 
-      // Celý cyklus hotový, počkej 5 minut od začátku cyklu
+      // Celý cyklus hotový, počkej 5 minut ± 1 minuta od začátku cyklu (randomizace)
       const cycleElapsed = Date.now() - cycleStartTime;
-      const waitTime = Math.max(0, 5 * 60 * 1000 - cycleElapsed);
+      const targetInterval = randomizeInterval(5 * 60 * 1000, 60 * 1000); // 5 min ± 1 min
+      const waitTime = Math.max(0, targetInterval - cycleElapsed);
       const cycleElapsedSec = (cycleElapsed / 1000).toFixed(1);
 
       console.log('\n' + '-'.repeat(70));
@@ -307,7 +308,7 @@ class Automator {
       if (waitTime > 0) {
         const waitMin = Math.floor(waitTime / 60000);
         const waitSec = Math.floor((waitTime % 60000) / 1000);
-        console.log(`⏰ Čekám ${waitMin}m ${waitSec}s do dalšího cyklu (5min od začátku)...`);
+        console.log(`⏰ Čekám ${waitMin}m ${waitSec}s do dalšího cyklu (5min ±1min)...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       } else {
         console.log(`⚠️  Cyklus trval déle než 5 minut, spouštím další okamžitě`);
@@ -559,9 +560,10 @@ class Automator {
         }
       }
 
-      // Celý cyklus hotový, počkej 3 hodiny od začátku cyklu
+      // Celý cyklus hotový, počkej 3 hodiny ± 15 min od začátku cyklu (randomizace)
       const cycleElapsed = Date.now() - cycleStartTime;
-      const waitTime = Math.max(0, this.intervals.recruit - cycleElapsed);
+      const targetInterval = randomizeInterval(this.intervals.recruit, 15 * 60 * 1000); // 3h ± 15min
+      const waitTime = Math.max(0, targetInterval - cycleElapsed);
       const cycleElapsedSec = (cycleElapsed / 1000).toFixed(1);
 
       console.log('\n' + '-'.repeat(70));
@@ -570,7 +572,7 @@ class Automator {
       if (waitTime > 0) {
         const waitMin = Math.floor(waitTime / 60000);
         const waitSec = Math.floor((waitTime % 60000) / 1000);
-        console.log(`⏰ Čekám ${waitMin}m ${waitSec}s do dalšího cyklu (3h od začátku)...`);
+        console.log(`⏰ Čekám ${waitMin}m ${waitSec}s do dalšího cyklu (3h ±15min)...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       } else {
         console.log(`⚠️  Cyklus trval déle než 3 hodiny, spouštím další okamžitě`);
@@ -683,8 +685,8 @@ class Automator {
         }
       }
 
-      // Počkej 1 hodinu - s randomizací ±3 minuty
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.paladin, 3 * 60 * 1000)));
+      // Počkej 6 hodin - s randomizací ±30 minut
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.paladin, 30 * 60 * 1000)));
     }
   }
 
