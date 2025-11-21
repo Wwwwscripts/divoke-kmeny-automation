@@ -101,7 +101,7 @@ class SharedBrowserPool {
           route.continue(); // Pokračuj (document, script, xhr, fetch)
         }
       });
-      console.log(`💾 [${account.username}] Úspora dat aktivní (blokují se obrázky, fonty, CSS)`);
+      // console.log(`💾 [${account.username}] Úspora dat aktivní (blokují se obrázky, fonty, CSS)`);
     }
 
     // Přidej stealth script s konkrétním fingerprintem
