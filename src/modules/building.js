@@ -699,19 +699,28 @@ class BuildingModule {
         return 0;
       }
 
-      // Zavřít všechny otevřené dialogy před pokusem o otevření quest dialogu
-      await this.page.evaluate(() => {
+      // Zavřít všechny otevřené dialogy a otevřít quest dialog přímo v JS
+      const opened = await this.page.evaluate(() => {
+        // Zavřít všechny popupy
         const popups = document.querySelectorAll('.popup_box_close');
         popups.forEach(btn => btn.click());
+
+        // Malé čekání na zavření (synchronní není ideální, ale je to v prohlížeči)
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            const questBtn = document.querySelector('#new_quest');
+            if (questBtn) {
+              questBtn.click();
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          }, 300);
+        });
       });
 
-      await humanDelay(300, 500);
-
-      // Pokus o kliknutí s krátkým timeoutem (3s místo 30s)
-      try {
-        await this.page.click('#new_quest', { timeout: 3000 });
-      } catch (clickError) {
-        logger.warn('Nelze otevřít quest dialog (pravděpodobně blokováno popupem), přeskakuji sběr odměn', this.getAccountName());
+      if (!opened) {
+        logger.warn('Quest tlačítko nebylo nalezeno, přeskakuji sběr odměn', this.getAccountName());
         return 0;
       }
 
