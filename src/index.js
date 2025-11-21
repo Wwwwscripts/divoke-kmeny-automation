@@ -49,6 +49,7 @@ class Automator {
     this.loginQueue = []; // Fronta účtů čekajících na přihlášení
     this.maxVisibleBrowsers = 5; // Max 5 visible browserů najednou
     this.activeVisibleBrowsers = 0; // Počítadlo aktivních visible browserů
+    this.isProcessingQueue = false; // Mutex pro zpracování fronty (prevence duplicit)
 
     // Intervaly pro smyčky - ZVÝŠENO pro snížení captcha rizika
     this.intervals = {
@@ -139,34 +140,64 @@ class Automator {
   }
 
   /**
-   * 🆕 ANTI-BAN: Zpracuje frontu přihlášení (max 2 visible browsery najednou)
+   * 🆕 ANTI-BAN: Zpracuje frontu přihlášení (max 5 visible browserů najednou)
    */
   async processLoginQueue() {
-    // Pokud už máme max browserů nebo fronta je prázdná, nic nedělej
-    if (this.activeVisibleBrowsers >= this.maxVisibleBrowsers || this.loginQueue.length === 0) {
+    // 🛡️ MUTEX: Pokud už fronta běží, nepouštěj další instance
+    if (this.isProcessingQueue) {
+      console.log('⏸️  Fronta již běží - přeskakuji duplicitní volání');
       return;
     }
 
-    // Vezmi další účet z fronty
-    const account = this.loginQueue.shift();
+    // 🔒 Zamkni frontu
+    this.isProcessingQueue = true;
 
-    // Zkontroluj jestli už není browser otevřený
-    if (this.isBrowserActive(account.id) || this.openingBrowsers.has(account.id)) {
-      // Zkus další z fronty
-      this.processLoginQueue();
-      return;
+    try {
+      // Zpracuj všechny účty co můžeš (dokud je místo)
+      while (this.activeVisibleBrowsers < this.maxVisibleBrowsers && this.loginQueue.length > 0) {
+        // Vezmi další účet z fronty
+        const account = this.loginQueue.shift();
+
+        // Zkontroluj jestli už není browser otevřený
+        if (this.isBrowserActive(account.id) || this.openingBrowsers.has(account.id)) {
+          console.log(`⏭️  [${account.username}] Přeskakuji - browser již otevřen/otevírá se`);
+          continue; // Zkus další z fronty
+        }
+
+        console.log(`🔑 [${account.username}] Otevírám browser pro přihlášení (${this.activeVisibleBrowsers + 1}/${this.maxVisibleBrowsers})`);
+
+        // Označ že se browser otevírá
+        this.openingBrowsers.add(account.id);
+        this.activeVisibleBrowsers++;
+
+        // Otevři browser asynchronně (nepočkej na dokončení, pokračuj další)
+        this.openBrowserForAccount(account).catch(err => {
+          console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, err.message);
+
+          // Cleanup při chybě
+          this.openBrowsers.delete(account.id);
+          this.openingBrowsers.delete(account.id);
+          this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
+
+          // Zkus zpracovat další z fronty
+          this.isProcessingQueue = false;
+          this.processLoginQueue().catch(e => console.error('❌ Chyba při retry fronty:', e));
+        });
+      }
+    } finally {
+      // 🔓 Odemkni frontu
+      this.isProcessingQueue = false;
     }
+  }
 
-    console.log(`🔑 [${account.username}] Otevírám browser pro přihlášení (${this.activeVisibleBrowsers + 1}/${this.maxVisibleBrowsers})`);
-
-    // Označ že se browser otevírá
-    this.openingBrowsers.add(account.id);
-    this.activeVisibleBrowsers++;
-
+  /**
+   * 🆕 Otevře browser pro konkrétní účet
+   */
+  async openBrowserForAccount(account) {
     // 🆕 Cleanup funkce která se zavolá při jakémkoliv zavření
     const cleanup = () => {
       // Kontrola jestli už nebyl vyčištěn
-      if (!this.openBrowsers.has(account.id)) {
+      if (!this.openBrowsers.has(account.id) && !this.openingBrowsers.has(account.id)) {
         console.log(`⚠️  [${account.username}] Cleanup již byl zavolán - přeskakuji`);
         return; // Už byl vyčištěn
       }
@@ -185,7 +216,7 @@ class Automator {
       this.db.updateAccountPause(account.id, false);
       console.log(`▶️  [${account.username}] Účet automaticky aktivován`);
 
-      // Zpracuj další z fronty OKAMŽITĚ (bez delay)
+      // Zpracuj další z fronty
       console.log(`🔄 [${account.username}] Zpracovávám frontu (čeká: ${this.loginQueue.length} účtů)`);
       this.processLoginQueue().catch(err => {
         console.error(`❌ Chyba při zpracování fronty po cleanup:`, err);
