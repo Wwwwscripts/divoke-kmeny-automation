@@ -631,8 +631,6 @@
             }
 
             try {
-                showMessage('Počítám možnosti podpory...', 'info');
-
                 // Získat nastavení světa
                 const worldSettingsRes = await fetch(`/api/world-settings/${world}`);
                 const worldSettings = await worldSettingsRes.json();
@@ -643,8 +641,13 @@
                 const accountsRes = await fetch('/api/accounts');
                 const accounts = await accountsRes.json();
 
-                // Filtrovat podle světa a kmene
-                let worldAccounts = accounts.filter(acc => acc.world === world && acc.coord_x && acc.coord_y);
+                // Filtrovat podle světa, kmene a stavu paused
+                let worldAccounts = accounts.filter(acc =>
+                    acc.world === world &&
+                    acc.coord_x &&
+                    acc.coord_y &&
+                    !acc.paused  // Vyfiltrovat paused účty
+                );
 
                 // Pokud je vybrán konkrétní kmen, filtruj podle něj
                 if (tribe) {
@@ -656,8 +659,43 @@
 
                 if (worldAccounts.length === 0) {
                     const tribePart = tribe ? ` v kmeni ${tribe}` : '';
-                    showMessage(`Žádné vesnice na světě ${world}${tribePart}`, 'error');
+                    showMessage(`Žádné aktivní vesnice na světě ${world}${tribePart}`, 'error');
                     return;
+                }
+
+                // KROK 1: Nejdříve kontrola jednotek
+                showMessage(`Kontroluji jednotky na ${worldAccounts.length} účtech...`, 'info');
+
+                const accountIds = worldAccounts.map(acc => acc.id);
+                const refreshRes = await fetch('/api/units/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ accountIds })
+                });
+
+                if (!refreshRes.ok) {
+                    showMessage('Chyba při kontrole jednotek', 'error');
+                    return;
+                }
+
+                const refreshData = await refreshRes.json();
+                console.log(`✅ Kontrola jednotek dokončena: ${refreshData.results.success}/${refreshData.results.total} úspěšných`);
+
+                // KROK 2: Získat aktualizované údaje o účtech
+                showMessage('Počítám možnosti podpory...', 'info');
+                const updatedAccountsRes = await fetch('/api/accounts');
+                const updatedAccounts = await updatedAccountsRes.json();
+
+                // Znovu filtrovat - tentokrát s aktuálními daty
+                worldAccounts = updatedAccounts.filter(acc =>
+                    acc.world === world &&
+                    acc.coord_x &&
+                    acc.coord_y &&
+                    !acc.paused
+                );
+
+                if (tribe) {
+                    worldAccounts = worldAccounts.filter(acc => acc.tribe_name === tribe);
                 }
 
                 // Vypočítat pro každou vesnici
@@ -775,17 +813,29 @@
 
             resultsSection.style.display = 'block';
 
+            // Filtrovat pouze účty které STÍHAJÍ a MAJÍ jednotky
+            const validResults = calculationResults.filter(r => r.fastestUnit !== null);
+
+            if (validResults.length === 0) {
+                showMessage('Žádné vesnice nestihnou odeslat podporu', 'error');
+                resultsSection.style.display = 'none';
+                return;
+            }
+
             // Seřadit podle vzdálenosti
-            calculationResults.sort((a, b) => a.distance - b.distance);
+            validResults.sort((a, b) => a.distance - b.distance);
 
-            // Spočítat kolik vesnic stihne odeslat podporu
-            const canSendCount = calculationResults.filter(r => r.fastestUnit !== null).length;
-            const totalCount = calculationResults.length;
+            const canSendCount = validResults.length;
+            const totalChecked = calculationResults.length;
 
-            // Spočítat celkový počet jednotek
+            // Spočítat celkový počet jednotek (pouze z validResults)
             const totalUnits = {};
-            calculationResults.forEach(result => {
+            const unitsPerAccount = [];
+
+            validResults.forEach(result => {
                 if (result.fastestUnit !== null && result.unitsToSend) {
+                    const accountUnits = { account: result.account.username, units: {} };
+
                     result.unitsToSend.forEach(unit => {
                         // Získat počet jednotek pro daný typ z account.units_info
                         const account = result.account;
@@ -795,14 +845,29 @@
                                 const count = unitsInfo[unit]?.inVillages || 0;
                                 if (count > 0) {
                                     totalUnits[unit] = (totalUnits[unit] || 0) + count;
+                                    accountUnits.units[unit] = count;
                                 }
                             } catch (e) {
                                 console.error('Chyba při parsování units_info:', e);
                             }
                         }
                     });
+
+                    if (Object.keys(accountUnits.units).length > 0) {
+                        unitsPerAccount.push(accountUnits);
+                    }
                 }
             });
+
+            // Vypsat jednotky do konzole (ZLEPŠENÝ LOG)
+            console.log('\n=== 🛡️ NALEZENÉ JEDNOTKY ===');
+            unitsPerAccount.forEach(({ account, units }) => {
+                const unitsText = Object.entries(units)
+                    .map(([unit, count]) => `${UNIT_NAMES[unit]}: ${count}`)
+                    .join(', ');
+                console.log(`   ${account}: ${unitsText}`);
+            });
+            console.log('=========================\n');
 
             // Vytvořit text s celkovým počtem jednotek
             let totalUnitsText = '';
@@ -813,55 +878,39 @@
                 totalUnitsText = ` | Celkem jednotek: ${unitCounts}`;
             }
 
-            tbody.innerHTML = calculationResults.map((result, index) => {
+            tbody.innerHTML = validResults.map((result, index) => {
                 const account = result.account;
-                const hasUnits = result.fastestUnit !== null;
-                const rowClass = hasUnits ? '' : 'no-units';
 
-                let unitDisplay = '';
-                let travelTimeDisplay = '';
-                let sendTimeDisplay = '';
-                let statusBadge = '';
-                let actions = '';
-
-                if (hasUnits) {
-                    // Zobrazit všechny jednotky, které se pošlou včetně počtu
-                    const unitsInfo = account.units_info ? JSON.parse(account.units_info) : {};
-                    const unitsDisplay = result.unitsToSend.map(unit => {
-                        const count = unitsInfo[unit]?.inVillages || 0;
-                        return `
-                            <div style="display: inline-flex; align-items: center; margin-right: 10px;">
-                                <img src="/images/unit_${unit}.png" class="unit-icon" alt="${UNIT_NAMES[unit]}" title="${UNIT_NAMES[unit]}">
-                                <span style="margin-left: 4px; font-weight: 600;">${count}</span>
-                            </div>
-                        `;
-                    }).join('');
-
-                    unitDisplay = `
-                        <div class="unit-info">
-                            ${unitsDisplay}
+                // Zobrazit všechny jednotky, které se pošlou včetně počtu
+                const unitsInfo = account.units_info ? JSON.parse(account.units_info) : {};
+                const unitsDisplay = result.unitsToSend.map(unit => {
+                    const count = unitsInfo[unit]?.inVillages || 0;
+                    return `
+                        <div style="display: inline-flex; align-items: center; margin-right: 10px;">
+                            <img src="/images/unit_${unit}.png" class="unit-icon" alt="${UNIT_NAMES[unit]}" title="${UNIT_NAMES[unit]}">
+                            <span style="margin-left: 4px; font-weight: 600;">${count}</span>
                         </div>
                     `;
-                    travelTimeDisplay = formatTravelTime(result.travelTime);
-                    sendTimeDisplay = formatDateTime(result.sendTime);
-                    statusBadge = `<span class="badge badge-success" id="status-${index}">Stihne</span>`;
+                }).join('');
 
-                    actions = `
-                        <div class="action-buttons">
-                            <button class="action-btn" onclick="openManual(${account.id}, '${result.unitsToSend.join(',')}', ${result.targetX}, ${result.targetY}, ${index})">📝 Ručně</button>
-                            <button class="action-btn auto" onclick="sendSupport(${account.id}, '${result.unitsToSend.join(',')}', ${result.targetX}, ${result.targetY}, ${index})">⚡ Auto</button>
-                        </div>
-                    `;
-                } else {
-                    unitDisplay = '<span style="color: #8b949e;">Žádné dostupné jednotky</span>';
-                    travelTimeDisplay = '-';
-                    sendTimeDisplay = '-';
-                    statusBadge = '<span class="badge badge-danger">Nestihne</span>';
-                    actions = '-';
-                }
+                const unitDisplay = `
+                    <div class="unit-info">
+                        ${unitsDisplay}
+                    </div>
+                `;
+                const travelTimeDisplay = formatTravelTime(result.travelTime);
+                const sendTimeDisplay = formatDateTime(result.sendTime);
+                const statusBadge = `<span class="badge badge-success" id="status-${index}">Stihne</span>`;
+
+                const actions = `
+                    <div class="action-buttons">
+                        <button class="action-btn" onclick="openManual(${account.id}, '${result.unitsToSend.join(',')}', ${result.targetX}, ${result.targetY}, ${index})">📝 Ručně</button>
+                        <button class="action-btn auto" onclick="sendSupport(${account.id}, '${result.unitsToSend.join(',')}', ${result.targetX}, ${result.targetY}, ${index})">⚡ Auto</button>
+                    </div>
+                `;
 
                 return `
-                    <tr class="${rowClass}" id="row-${index}">
+                    <tr id="row-${index}">
                         <td><strong>${account.village_name || account.username}</strong></td>
                         <td>${account.coord_x}|${account.coord_y}</td>
                         <td>${result.distance.toFixed(2)} polí</td>
@@ -877,7 +926,10 @@
             // Aktualizovat nadpis s počtem vesnic a jednotek
             const tribe = document.getElementById('tribe-select').value;
             const tribePart = tribe ? ` - Kmen: ${tribe}` : '';
-            document.querySelector('.results-header h2').textContent = `📊 Dostupné možnosti podpory (${canSendCount}/${totalCount} vesnic stihne${totalUnitsText})${tribePart}`;
+            document.querySelector('.results-header h2').textContent = `📊 Dostupné možnosti podpory (${canSendCount} vesnic${totalUnitsText})${tribePart}`;
+
+            // Aktualizovat calculationResults aby obsahovaly jen validní výsledky
+            calculationResults = validResults;
         }
 
         function formatDateTime(date) {
@@ -943,6 +995,10 @@
                 // Převést string na pole
                 const unitTypes = unitTypesStr.split(',');
 
+                // Získat jméno účtu pro log
+                const account = calculationResults.find(r => r.account.id === accountId)?.account;
+                const accountName = account?.username || `ID ${accountId}`;
+
                 showMessage('Odesílám podporu...', 'info');
 
                 const response = await fetch('/api/support/send', {
@@ -958,6 +1014,9 @@
 
                 if (response.ok) {
                     showMessage('Podpora odeslána!', 'success');
+
+                    // ZLEPŠENÝ LOG
+                    console.log(`✅ Úspěšně odesláno z: ${accountName}`);
 
                     // Označit jako odesláno
                     const statusEl = document.getElementById(`status-${index}`);
@@ -979,9 +1038,11 @@
                 } else {
                     const error = await response.json();
                     showMessage('Chyba: ' + error.error, 'error');
+                    console.error(`❌ Chyba při odeslání z ${accountName}:`, error.error);
                 }
             } catch (error) {
                 showMessage('Chyba při odesílání: ' + error.message, 'error');
+                console.error('❌ Chyba při odesílání:', error);
             }
         }
 
@@ -997,35 +1058,99 @@
                 return;
             }
 
-            showMessage(`Odesílám ${supportToSend.length} podpor...`, 'info');
+            showMessage(`Odesílám ${supportToSend.length} podpor po skupinách 5ti účtů...`, 'info');
 
             let successCount = 0;
             let errorCount = 0;
+            const successfulAccounts = [];
+            const failedAccounts = [];
 
-            for (const result of supportToSend) {
-                try {
-                    const response = await fetch('/api/support/send', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            accountId: result.account.id,
-                            unitTypes: result.unitsToSend,
-                            targetX: result.targetX,
-                            targetY: result.targetY
-                        })
-                    });
+            // Posílat po skupinách 5ti účtů
+            const batchSize = 5;
+            for (let i = 0; i < supportToSend.length; i += batchSize) {
+                const batch = supportToSend.slice(i, i + batchSize);
 
-                    if (response.ok) {
-                        successCount++;
-                    } else {
+                console.log(`📦 Skupina ${Math.floor(i / batchSize) + 1}/${Math.ceil(supportToSend.length / batchSize)}: Odesílám ${batch.length} podpor...`);
+
+                // Zpracuj skupinu paralelně (všech 5 najednou)
+                const batchPromises = batch.map(async (result, batchIndex) => {
+                    const globalIndex = i + batchIndex;
+
+                    try {
+                        const response = await fetch('/api/support/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                accountId: result.account.id,
+                                unitTypes: result.unitsToSend,
+                                targetX: result.targetX,
+                                targetY: result.targetY
+                            })
+                        });
+
+                        if (response.ok) {
+                            successCount++;
+                            successfulAccounts.push(result.account.username);
+
+                            // Označit jako odesláno v UI
+                            const statusEl = document.getElementById(`status-${globalIndex}`);
+                            if (statusEl) {
+                                statusEl.className = 'badge badge-sent';
+                                statusEl.textContent = '✅ Odesláno';
+                            }
+
+                            const row = document.getElementById(`row-${globalIndex}`);
+                            if (row) {
+                                const buttons = row.querySelectorAll('button');
+                                buttons.forEach(btn => {
+                                    btn.disabled = true;
+                                    btn.style.opacity = '0.5';
+                                    btn.style.cursor = 'not-allowed';
+                                });
+                            }
+
+                            return { success: true, account: result.account.username };
+                        } else {
+                            errorCount++;
+                            failedAccounts.push(result.account.username);
+                            return { success: false, account: result.account.username };
+                        }
+                    } catch (error) {
                         errorCount++;
+                        failedAccounts.push(result.account.username);
+                        return { success: false, account: result.account.username, error: error.message };
                     }
-                } catch (error) {
-                    errorCount++;
-                }
+                });
+
+                // Počkej na dokončení celé skupiny
+                await Promise.allSettled(batchPromises);
+
+                console.log(`   ✓ Skupina dokončena (${successCount} úspěšných, ${errorCount} chyb)`);
+
+                // Zobrazit progress
+                showMessage(`Odesláno ${i + batch.length}/${supportToSend.length} (${successCount} OK, ${errorCount} chyb)`, 'info');
             }
 
-            showMessage(`Odesláno: ${successCount} úspěšně, ${errorCount} s chybou`, successCount > 0 ? 'success' : 'error');
+            // ZLEPŠENÝ LOG - vypsat výsledky
+            console.log('\n=== ✅ ÚSPĚŠNĚ ODESLÁNO ===');
+            if (successfulAccounts.length > 0) {
+                successfulAccounts.forEach(account => {
+                    console.log(`   ${account}`);
+                });
+            } else {
+                console.log('   (žádné)');
+            }
+            console.log('========================\n');
+
+            if (failedAccounts.length > 0) {
+                console.log('=== ❌ SELHALO ===');
+                failedAccounts.forEach(account => {
+                    console.log(`   ${account}`);
+                });
+                console.log('==================\n');
+            }
+
+            showMessage(`Dokončeno: ${successCount} úspěšně, ${errorCount} s chybou`, successCount > 0 ? 'success' : 'error');
         }
 
         function showMessage(text, type) {

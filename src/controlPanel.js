@@ -799,6 +799,107 @@ app.post('/api/support/send', async (req, res) => {
   }
 });
 
+// Endpoint pro hromadnou kontrolu jednotek (pro kalkulátor podpor)
+app.post('/api/units/refresh', async (req, res) => {
+  try {
+    const { accountIds } = req.body;
+
+    if (!accountIds || !Array.isArray(accountIds) || accountIds.length === 0) {
+      return res.status(400).json({ error: 'Chybí seznam účtů (accountIds)' });
+    }
+
+    console.log(`🔄 Začínám kontrolu jednotek pro ${accountIds.length} účtů...`);
+
+    const results = {
+      total: accountIds.length,
+      processed: 0,
+      success: 0,
+      failed: 0,
+      accounts: []
+    };
+
+    // Zpracuj po skupinách 10ti účtů
+    const batchSize = 10;
+    for (let i = 0; i < accountIds.length; i += batchSize) {
+      const batch = accountIds.slice(i, i + batchSize);
+
+      console.log(`   Skupina ${Math.floor(i / batchSize) + 1}/${Math.ceil(accountIds.length / batchSize)}: Kontroluji ${batch.length} účtů...`);
+
+      // Zpracuj skupinu paralelně
+      const batchPromises = batch.map(async (accountId) => {
+        try {
+          const account = db.getAccount(accountId);
+          if (!account) {
+            return { accountId, success: false, error: 'Účet nenalezen' };
+          }
+
+          // Automaticky získat nebo otevřít browser (headless pokud není aktivní)
+          const browserData = await getOrOpenBrowser(accountId);
+
+          // Dynamicky importovat SupportModule
+          const { default: SupportModule } = await import('./modules/support.js');
+          const supportModule = new SupportModule(browserData.page, db, accountId);
+
+          // Získat jednotky
+          await supportModule.getAllUnitsInfo();
+
+          return {
+            accountId,
+            username: account.username,
+            success: true
+          };
+
+        } catch (error) {
+          console.error(`   ❌ [Účet ${accountId}] Chyba: ${error.message}`);
+          return {
+            accountId,
+            success: false,
+            error: error.message
+          };
+        }
+      });
+
+      // Počkej na dokončení celé skupiny
+      const batchResults = await Promise.allSettled(batchPromises);
+
+      // Zpracuj výsledky
+      batchResults.forEach((result) => {
+        results.processed++;
+
+        if (result.status === 'fulfilled') {
+          const accountResult = result.value;
+          results.accounts.push(accountResult);
+
+          if (accountResult.success) {
+            results.success++;
+          } else {
+            results.failed++;
+          }
+        } else {
+          results.failed++;
+          results.accounts.push({
+            success: false,
+            error: result.reason?.message || 'Neznámá chyba'
+          });
+        }
+      });
+
+      console.log(`   ✓ Skupina dokončena (${results.success} úspěšných, ${results.failed} chyb)`);
+    }
+
+    console.log(`✅ Kontrola jednotek dokončena: ${results.success}/${results.total} úspěšných`);
+
+    res.json({
+      success: true,
+      results
+    });
+
+  } catch (error) {
+    console.error('Error in /api/units/refresh:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ ŠABLONY ============
 
 // Získat všechny šablony pro daný typ
