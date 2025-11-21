@@ -45,6 +45,11 @@ class Automator {
     this.openBrowsers = new Map(); // Tracking otevřených visible browserů (accountId => browser)
     this.openingBrowsers = new Set(); // Tracking účtů pro které se právě otevírá browser (race condition protection)
 
+    // 🆕 ANTI-BAN: Fronta pro přihlášení + limit visible browserů
+    this.loginQueue = []; // Fronta účtů čekajících na přihlášení
+    this.maxVisibleBrowsers = 2; // Max 2 visible browsery najednou
+    this.activeVisibleBrowsers = 0; // Počítadlo aktivních visible browserů
+
     // Intervaly pro smyčky - ZVÝŠENO pro snížení captcha rizika
     this.intervals = {
       checks: 0,        // Kontroly běží neustále (žádný wait)
@@ -134,21 +139,32 @@ class Automator {
   }
 
   /**
-   * Zpracuj selhání přihlášení - smaž cookies a otevři browser
+   * 🆕 ANTI-BAN: Zpracuje frontu přihlášení (max 2 visible browsery najednou)
    */
-  async handleFailedLogin(account) {
-    // Zkontroluj jestli už není browser otevřený nebo se právě otevírá
-    if (this.isBrowserActive(account.id) || this.openingBrowsers.has(account.id)) {
+  async processLoginQueue() {
+    // Pokud už máme max browserů nebo fronta je prázdná, nic nedělej
+    if (this.activeVisibleBrowsers >= this.maxVisibleBrowsers || this.loginQueue.length === 0) {
       return;
     }
 
-    console.log(`🔑 [${account.username}] Nutné přihlášení - otevírám browser`);
+    // Vezmi další účet z fronty
+    const account = this.loginQueue.shift();
 
-    // Označ že se browser otevírá (race condition protection)
+    // Zkontroluj jestli už není browser otevřený
+    if (this.isBrowserActive(account.id) || this.openingBrowsers.has(account.id)) {
+      // Zkus další z fronty
+      this.processLoginQueue();
+      return;
+    }
+
+    console.log(`🔑 [${account.username}] Otevírám browser pro přihlášení (${this.activeVisibleBrowsers + 1}/${this.maxVisibleBrowsers})`);
+
+    // Označ že se browser otevírá
     this.openingBrowsers.add(account.id);
+    this.activeVisibleBrowsers++;
 
     try {
-      // Smaž neplatné cookies (pokud existují)
+      // Smaž neplatné cookies
       const accountData = this.db.getAccount(account.id);
       if (accountData && accountData.cookies && accountData.cookies !== 'null') {
         this.db.updateCookies(account.id, null);
@@ -165,15 +181,56 @@ class Automator {
           this.openBrowsers.delete(account.id);
           this.openingBrowsers.delete(account.id);
           this.captchaDetected.delete(account.id);
+          this.activeVisibleBrowsers--;
+
           console.log(`✅ [${account.username}] Přihlášení dokončeno`);
+
+          // 🆕 AUTO-UNPAUSE: Účet se automaticky unpausne po úspěšném přihlášení
+          this.db.updateAccountPause(account.id, false);
+          console.log(`▶️  [${account.username}] Účet automaticky aktivován`);
+
+          // Zpracuj další z fronty
+          this.processLoginQueue();
         });
       }
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, error.message);
-    } finally {
-      // Vždy odstraň z openingBrowsers (i při chybě)
+      this.activeVisibleBrowsers--;
       this.openingBrowsers.delete(account.id);
+
+      // Zkus další z fronty i při chybě
+      this.processLoginQueue();
     }
+  }
+
+  /**
+   * 🆕 ANTI-BAN: Zpracuj selhání přihlášení - pausni účet a přidej do fronty
+   */
+  async handleFailedLogin(account) {
+    // Zkontroluj jestli už není browser otevřený nebo čeká ve frontě
+    if (this.isBrowserActive(account.id) || this.openingBrowsers.has(account.id)) {
+      return;
+    }
+
+    // Zkontroluj jestli už není ve frontě
+    const alreadyInQueue = this.loginQueue.some(a => a.id === account.id);
+    if (alreadyInQueue) {
+      return;
+    }
+
+    console.log(`⏸️  [${account.username}] Přihlášení selhalo - pausuji účet`);
+
+    // 🆕 AUTO-PAUSE: Pausni účet (smyčky ho přeskočí)
+    this.db.updateAccountPause(account.id, true);
+
+    // Přidej do fronty
+    this.loginQueue.push(account);
+
+    const queuePosition = this.loginQueue.length;
+    console.log(`📋 [${account.username}] Přidán do fronty (pozice ${queuePosition}, aktivní browsery: ${this.activeVisibleBrowsers}/${this.maxVisibleBrowsers})`);
+
+    // Zpracuj frontu
+    await this.processLoginQueue();
   }
 
   /**
@@ -181,9 +238,10 @@ class Automator {
    */
   async start() {
     console.log('='.repeat(70));
-    console.log('🤖 Spouštím Event-Driven automatizaci - ANTI-CAPTCHA REŽIM');
+    console.log('🤖 Spouštím Event-Driven automatizaci - ANTI-CAPTCHA & ANTI-BAN REŽIM');
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🛡️  Aktivní ochrana: Human behavior, WebSocket timing, Fingerprinting');
+    console.log('🚫 ANTI-BAN: Max 2 visible browsery, auto-pause při selhání přihlášení');
     console.log('🔄 Aktivní smyčky (ANTI-CAPTCHA režim):');
     console.log('   [P1] Kontroly útoků: po 10 účtech (10s pauzy), cyklus každých 5 min');
     console.log('   [P1] Build: každých 30s po 5 účtech (±15s random, 12-18min při chybě)');
