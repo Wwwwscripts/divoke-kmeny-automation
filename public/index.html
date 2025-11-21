@@ -531,6 +531,26 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- 🆕 Sekce neaktivních účtů -->
+        <div id="pausedAccountsSection" style="margin-top: 40px; display: none;">
+            <h2 style="font-size: 1.3em; margin-bottom: 15px; color: #f85149;">⏸️ Neaktivní účty (<span id="pausedCount">0</span>)</h2>
+            <div class="table-container">
+                <table id="pausedAccountsTable">
+                    <thead>
+                        <tr>
+                            <th>Účet</th>
+                            <th>Svět</th>
+                            <th>Kmen</th>
+                            <th style="width: 40%;">Poznámka</th>
+                            <th style="width: 120px;">Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pausedAccountsList">
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -632,6 +652,7 @@
 
                 updateStats();
                 filterAccounts();
+                renderPausedAccounts(); // Vykresli neaktivní účty
 
             } catch (error) {
                 tbody.innerHTML = `<tr><td colspan="12" class="loading" style="color: #f85149;">❌ Chyba: ${error.message}</td></tr>`;
@@ -916,8 +937,15 @@
                 if ((await response.json()).success) {
                     const acc = allAccounts.find(a => a.id === accountId);
                     acc.paused = paused;
-                    renderAccounts(filteredAccounts);
+
+                    // Pokud aktivujeme, vymažeme poznámku
+                    if (!paused) {
+                        acc.pause_note = null;
+                    }
+
+                    filterAccounts();
                     updateStats();
+                    renderPausedAccounts(); // Aktualizuj sekci neaktivních účtů
                 }
             } catch (error) {
                 console.error('❌ Chyba:', error);
@@ -1114,6 +1142,97 @@
                 }
             } catch (error) {
                 alert('❌ Chyba: ' + error.message);
+            }
+        }
+
+        // Debouncer pro auto-save poznámek
+        let noteDebounceTimers = {};
+
+        // Vykreslí tabulku neaktivních účtů s poznámkami
+        function renderPausedAccounts() {
+            const pausedAccounts = allAccounts.filter(acc => acc.paused);
+            const section = document.getElementById('pausedAccountsSection');
+            const tbody = document.getElementById('pausedAccountsList');
+            const countEl = document.getElementById('pausedCount');
+
+            // Zobraz/skryj sekci podle počtu neaktivních účtů
+            if (pausedAccounts.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+
+            section.style.display = 'block';
+            countEl.textContent = pausedAccounts.length;
+
+            // Vykresli tabulku
+            tbody.innerHTML = pausedAccounts.map(acc => `
+                <tr>
+                    <td><span class="account-name">${acc.username}</span></td>
+                    <td><span class="world-badge">${acc.world || '-'}</span></td>
+                    <td>${acc.tribe_name || '-'}</td>
+                    <td>
+                        <input type="text"
+                               id="note-${acc.id}"
+                               value="${acc.pause_note || ''}"
+                               placeholder="Napište poznámku..."
+                               oninput="debounceSaveNote(${acc.id}, this.value)"
+                               style="width: 100%; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                    </td>
+                    <td>
+                        <button class="btn-small"
+                                onclick="activateAccount(${acc.id})"
+                                style="background: #238636; width: 100%;">
+                            ▶️ Aktivovat
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Debounced auto-save pro poznámky (500ms po posledním zápisu)
+        function debounceSaveNote(accountId, note) {
+            // Zruš předchozí timer pro tento účet
+            if (noteDebounceTimers[accountId]) {
+                clearTimeout(noteDebounceTimers[accountId]);
+            }
+
+            // Nastav nový timer
+            noteDebounceTimers[accountId] = setTimeout(() => {
+                savePauseNote(accountId, note);
+            }, 500);
+        }
+
+        // Uloží poznámku k neaktivnímu účtu
+        async function savePauseNote(accountId, note) {
+            try {
+                const response = await fetch(`/api/accounts/${accountId}/pause-note`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ note })
+                });
+
+                if ((await response.json()).success) {
+                    // Aktualizuj lokální data
+                    const acc = allAccounts.find(a => a.id === accountId);
+                    if (acc) {
+                        acc.pause_note = note;
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Chyba při ukládání poznámky:', error);
+            }
+        }
+
+        // Aktivuje účet (auto-delete poznámky)
+        async function activateAccount(accountId) {
+            try {
+                // Aktivuj účet (paused = false) - poznámka se smaže automaticky v DB
+                await togglePause(accountId, false);
+
+                // Refresh obou tabulek
+                await loadAccounts();
+            } catch (error) {
+                console.error('❌ Chyba při aktivaci účtu:', error);
             }
         }
 

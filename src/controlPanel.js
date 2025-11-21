@@ -110,6 +110,20 @@ app.put('/api/accounts/:id/pause', async (req, res) => {
   }
 });
 
+// 🆕 Aktualizovat poznámku k pausnutému účtu
+app.put('/api/accounts/:id/pause-note', async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    const { note } = req.body;
+
+    db.updatePauseNote(accountId, note);
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.put('/api/accounts/:id/recruit', async (req, res) => {
   try {
     const accountId = parseInt(req.params.id);
