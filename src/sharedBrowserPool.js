@@ -93,7 +93,7 @@ class SharedBrowserPool {
         const resourceType = request.resourceType();
 
         // Blokuj nepotřebné typy pro automation
-        const blockedTypes = ['image', 'media', 'font', 'stylesheet'];
+        const blockedTypes = ['image', 'media', 'font'];
 
         if (blockedTypes.includes(resourceType)) {
           route.abort(); // Blokuj request (ušetří data)
