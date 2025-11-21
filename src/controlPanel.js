@@ -734,12 +734,13 @@ app.post('/api/support/send', async (req, res) => {
     // Retry loop
     while (attempt < maxAttempts) {
       attempt++;
+      let browserData = null;
 
       try {
         console.log(`[${account.username}] Pokus ${attempt}/${maxAttempts} - odesílám podporu`);
 
         // Automaticky získat nebo otevřít browser (headless pokud není aktivní)
-        const browserData = await getOrOpenBrowser(accountId);
+        browserData = await getOrOpenBrowser(accountId);
 
         // Dynamicky importovat SupportSender
         const { default: SupportSender } = await import('./modules/supportSender.js');
@@ -755,6 +756,17 @@ app.post('/api/support/send', async (req, res) => {
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
         console.log(`✅ [${account.username}] Podpora odeslána za ${duration}s (pokus ${attempt}/${maxAttempts})`);
 
+        // Zavřít browser po úspěšném odeslání
+        if (browserData && browserData.browser) {
+          try {
+            await browserData.browser.close();
+            removeBrowser(accountId);
+            console.log(`🔒 [${account.username}] Browser uzavřen po odeslání podpory`);
+          } catch (e) {
+            console.error(`⚠️  [${account.username}] Chyba při zavírání browseru:`, e.message);
+          }
+        }
+
         return res.json({
           success: true,
           result,
@@ -765,6 +777,17 @@ app.post('/api/support/send', async (req, res) => {
       } catch (error) {
         lastError = error;
         console.error(`❌ [${account.username}] Pokus ${attempt}/${maxAttempts} selhal:`, error.message);
+
+        // Zavřít browser i při chybě (aby se nehromadily)
+        if (browserData && browserData.browser) {
+          try {
+            await browserData.browser.close();
+            removeBrowser(accountId);
+            console.log(`🔒 [${account.username}] Browser uzavřen po chybě`);
+          } catch (e) {
+            // Ignorovat chyby při zavírání
+          }
+        }
 
         // Pokud je to chyba cookies, nepokračuj v retry
         if (error.message.includes('cookies') || error.message.includes('Cookie')) {
@@ -827,6 +850,7 @@ app.post('/api/units/refresh', async (req, res) => {
 
       // Zpracuj skupinu paralelně
       const batchPromises = batch.map(async (accountId) => {
+        let browserData = null;
         try {
           const account = db.getAccount(accountId);
           if (!account) {
@@ -834,7 +858,7 @@ app.post('/api/units/refresh', async (req, res) => {
           }
 
           // Automaticky získat nebo otevřít browser (headless pokud není aktivní)
-          const browserData = await getOrOpenBrowser(accountId);
+          browserData = await getOrOpenBrowser(accountId);
 
           // Dynamicky importovat SupportModule
           const { default: SupportModule } = await import('./modules/support.js');
@@ -842,6 +866,16 @@ app.post('/api/units/refresh', async (req, res) => {
 
           // Získat jednotky
           await supportModule.getAllUnitsInfo();
+
+          // Zavřít browser po kontrole jednotek
+          if (browserData && browserData.browser) {
+            try {
+              await browserData.browser.close();
+              removeBrowser(accountId);
+            } catch (e) {
+              // Ignorovat chyby při zavírání
+            }
+          }
 
           return {
             accountId,
@@ -851,6 +885,17 @@ app.post('/api/units/refresh', async (req, res) => {
 
         } catch (error) {
           console.error(`   ❌ [Účet ${accountId}] Chyba: ${error.message}`);
+
+          // Zavřít browser i při chybě
+          if (browserData && browserData.browser) {
+            try {
+              await browserData.browser.close();
+              removeBrowser(accountId);
+            } catch (e) {
+              // Ignorovat chyby při zavírání
+            }
+          }
+
           return {
             accountId,
             success: false,
