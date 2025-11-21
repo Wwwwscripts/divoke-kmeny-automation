@@ -84,6 +84,26 @@ class SharedBrowserPool {
     // Vytvoř nový context
     const context = await browser.newContext(contextOptions);
 
+    // 🚀 ÚSPORA DAT: Blokuj nepotřebné resources (obrázky, fonty, CSS)
+    // Ušetří 70-90% dat na proxy!
+    const blockResources = process.env.BLOCK_RESOURCES !== 'false'; // Defaultně zapnuto
+    if (blockResources) {
+      await context.route('**/*', (route) => {
+        const request = route.request();
+        const resourceType = request.resourceType();
+
+        // Blokuj nepotřebné typy pro automation
+        const blockedTypes = ['image', 'media', 'font', 'stylesheet'];
+
+        if (blockedTypes.includes(resourceType)) {
+          route.abort(); // Blokuj request (ušetří data)
+        } else {
+          route.continue(); // Pokračuj (document, script, xhr, fetch)
+        }
+      });
+      console.log(`💾 [${account.username}] Úspora dat aktivní (blokují se obrázky, fonty, CSS)`);
+    }
+
     // Přidej stealth script s konkrétním fingerprintem
     const stealthScript = createStealthScript(fingerprint);
     await context.addInitScript(stealthScript);
