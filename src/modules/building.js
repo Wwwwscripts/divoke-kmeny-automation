@@ -699,7 +699,14 @@ class BuildingModule {
         return 0;
       }
 
-      await this.page.click('#new_quest');
+      // Pokus o kliknutí s krátkým timeoutem (3s místo 30s)
+      try {
+        await this.page.click('#new_quest', { timeout: 3000 });
+      } catch (clickError) {
+        logger.warn('Nelze otevřít quest dialog (pravděpodobně blokováno popupem), přeskakuji sběr odměn', this.getAccountName());
+        return 0;
+      }
+
       await humanDelay(1200, 2000);
 
       await this.page.evaluate(() => {
