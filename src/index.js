@@ -1043,6 +1043,14 @@ class Automator {
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       const attacksDetected = await notificationsModule.detectAttacks();
 
+      // Pokud byla detekována captcha, okamžitě skončit a pausnout účet
+      if (attacksDetected && attacksDetected.captchaDetected) {
+        console.log(`⚠️  [${account.username}] CAPTCHA detekována během kontroly útoků - pausuji účet`);
+        await this.browserPool.closeContext(context, browserKey);
+        await this.handleFailedLogin(account);
+        return;
+      }
+
       // Loguj pouze pokud byly detekovány útoky
       if (attacksDetected && attacksDetected.count > 0) {
         if (attacksDetected.isTrain) {

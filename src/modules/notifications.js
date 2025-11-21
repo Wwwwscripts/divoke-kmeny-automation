@@ -100,6 +100,13 @@ class NotificationsModule {
    */
   async detectAttacks() {
     try {
+      // BEZPEČNOSTNÍ KONTROLA: Zkontroluj captcha PŘED jakýmkoli fetchováním
+      const hasCaptchaBeforeFetch = await this.detectCaptcha();
+      if (hasCaptchaBeforeFetch) {
+        logger.warn('⚠️ Captcha detekována před fetchováním útoků - přeskakuji', this.getAccountName());
+        return { count: 0, attacks: [], captchaDetected: true };
+      }
+
       // Nejdřív získáme základní info z hlavní stránky
       const basicInfo = await this.page.evaluate(() => {
         const attackElement = document.querySelector('#incomings_amount');
