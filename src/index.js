@@ -1045,7 +1045,11 @@ class Automator {
 
       // Loguj pouze pokud byly detekovány útoky
       if (attacksDetected && attacksDetected.count > 0) {
-        console.log(`⚔️  [${account.username}] Detekováno ${attacksDetected.count} příchozích útoků!`);
+        if (attacksDetected.isTrain) {
+          console.log(`🚂 [${account.username}] ŠLECHTICKÝ VLAK! (${attacksDetected.count} útoků)`);
+        } else {
+          console.log(`⚔️  [${account.username}] Detekováno ${attacksDetected.count} příchozích útoků!`);
+        }
       }
 
       // Kontrola dobytí vesnice
