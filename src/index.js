@@ -1039,9 +1039,17 @@ class Automator {
         this.accountWaitTimes[infoKey] = Date.now() + this.intervals.accountInfo;
       }
 
-      // Kontrola útoků - VOLAT NEJDŘÍV pro aktualizaci incoming_attacks
+      // Kontrola útoků - LEHKÁ OPERACE (jen zjištění počtu)
       const notificationsModule = new NotificationsModule(page, this.db, account.id);
       const attacksDetected = await notificationsModule.detectAttacks();
+
+      // OKAMŽITĚ ZASTAVIT pokud byla detekována captcha
+      if (attacksDetected && attacksDetected.captchaDetected) {
+        console.log(`⚠️  [${account.username}] CAPTCHA detekována - pausuji účet`);
+        await this.browserPool.closeContext(context, browserKey);
+        await this.handleFailedLogin(account);
+        return;
+      }
 
       // Loguj pouze pokud byly detekovány útoky
       if (attacksDetected && attacksDetected.count > 0) {
@@ -1049,6 +1057,27 @@ class Automator {
           console.log(`🚂 [${account.username}] ŠLECHTICKÝ VLAK! (${attacksDetected.count} útoků)`);
         } else {
           console.log(`⚔️  [${account.username}] Detekováno ${attacksDetected.count} příchozích útoků!`);
+        }
+
+        // CHECK: Jsou NOVÉ útoky k fetchování?
+        if (attacksDetected.commandIds && attacksDetected.commandIds.length > 0) {
+          const existingAttacks = attacksDetected.attacks || [];
+          const existingCommandIds = new Set(existingAttacks.map(a => a.commandId));
+          const newCommandIds = attacksDetected.commandIds.filter(item => !existingCommandIds.has(item.commandId));
+
+          // TĚŽKÁ OPERACE: Fetchuj detaily POUZE pokud jsou NOVÉ útoky
+          if (newCommandIds.length > 0) {
+            console.log(`📥 [${account.username}] Fetchuji detaily ${newCommandIds.length} nových útoků...`);
+            const fetchResult = await notificationsModule.fetchAttackDetails(attacksDetected.commandIds);
+
+            // Pokud byla detekována captcha během fetchování
+            if (fetchResult && fetchResult.captchaDetected) {
+              console.log(`⚠️  [${account.username}] CAPTCHA detekována během fetchování - pausuji účet`);
+              await this.browserPool.closeContext(context, browserKey);
+              await this.handleFailedLogin(account);
+              return;
+            }
+          }
         }
       }
 

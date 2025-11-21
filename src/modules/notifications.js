@@ -96,11 +96,19 @@ class NotificationsModule {
   }
 
   /**
-   * Detekce příchozích útoků
+   * Detekce příchozích útoků (LEHKÁ OPERACE - jen zjištění počtu)
+   * ŽÁDNÉ fetche, jen čtení z HTML
    */
   async detectAttacks() {
     try {
-      // Nejdřív získáme základní info z hlavní stránky
+      // BEZPEČNOSTNÍ KONTROLA: Zkontroluj captcha NEJDŘÍV
+      const hasCaptcha = await this.detectCaptcha();
+      if (hasCaptcha) {
+        logger.warn('⚠️ Captcha detekována - zastavuji všechny operace', this.getAccountName());
+        return { count: 0, attacks: [], captchaDetected: true };
+      }
+
+      // Získáme základní info z hlavní stránky (BEZ fetchování!)
       const basicInfo = await this.page.evaluate(() => {
         const attackElement = document.querySelector('#incomings_amount');
         if (!attackElement) return null;
@@ -132,11 +140,70 @@ class NotificationsModule {
         return { count: 0, attacks: [] };
       }
 
-      // Nyní fetchujeme detaily každého útoku
-      const attacks = [];
+      const currentCount = basicInfo.count;
+      const lastAttackCount = this.getLastAttackCount();
 
-      for (let i = 0; i < basicInfo.commandIds.length; i++) {
-        const { commandId, arrivalTimestamp } = basicInfo.commandIds[i];
+      // Získáme existující útoky z databáze
+      const existingAttacks = this.getExistingAttacks();
+
+      // Detekce šlechtického vlaku (4 útoky s rozestupem max 300ms)
+      const isTrain = this.detectNoblesTrain(existingAttacks);
+
+      // Pošleme notifikaci POUZE pokud počet STOUPL
+      if (currentCount > lastAttackCount) {
+        await this.sendDiscordNotification('attack', {
+          count: currentCount,
+          attacks: existingAttacks,
+          isTrain: isTrain
+        });
+      }
+
+      // Uložíme aktuální počet pro příští kontrolu
+      this.saveLastAttackCount(currentCount);
+
+      return {
+        count: currentCount,
+        attacks: existingAttacks,
+        isTrain: isTrain,
+        commandIds: basicInfo.commandIds
+      };
+    } catch (error) {
+      logger.error('Chyba při detekci útoků', this.getAccountName(), error);
+      return null;
+    }
+  }
+
+  /**
+   * Fetchování detailů útoků (TĚŽKÁ OPERACE - fetch requesty)
+   * Volá se POUZE pokud jsou útoky
+   */
+  async fetchAttackDetails(commandIds) {
+    try {
+      // BEZPEČNOSTNÍ KONTROLA: Zkontroluj captcha PŘED jakýmkoli fetchováním
+      const hasCaptchaBeforeFetch = await this.detectCaptcha();
+      if (hasCaptchaBeforeFetch) {
+        logger.warn('⚠️ Captcha detekována před fetchováním útoků - přeskakuji', this.getAccountName());
+        return { captchaDetected: true };
+      }
+
+      // Získáme existující útoky
+      const existingAttacks = this.getExistingAttacks();
+      const existingCommandIds = new Set(existingAttacks.map(a => a.commandId));
+
+      // Fetchujeme POUZE nové útoky (které ještě nemáme v DB)
+      const newCommandIds = commandIds.filter(item => !existingCommandIds.has(item.commandId));
+
+      if (newCommandIds.length === 0) {
+        return { newAttacks: [] };
+      }
+
+      const newAttacks = [];
+
+      // Randomizuj pořadí fetchů (vypadá lidštěji)
+      const shuffled = [...newCommandIds].sort(() => Math.random() - 0.5);
+
+      for (let i = 0; i < shuffled.length; i++) {
+        const { commandId, arrivalTimestamp } = shuffled[i];
 
         try {
           // Fetchujeme detail útoku
@@ -188,50 +255,55 @@ class NotificationsModule {
                 })
               : attackDetails.arrivalTime;
 
-            attacks.push({
+            newAttacks.push({
               attacker: attackDetails.attackerName,
               origin: attackDetails.attackerCoords,
               arrival_timestamp: arrivalTimestamp,
               arrival_time: arrivalTime,
               commandId: commandId
             });
+
+            logger.info(`✅ Načten detail útoku ${i + 1}/${shuffled.length}`, this.getAccountName());
           }
 
-          // Malá pauza mezi requesty
-          await this.page.waitForTimeout(300);
+          // VELKÁ random pauza mezi fechy (2-5s) - vypadá velmi lidsky
+          if (i < shuffled.length - 1) {
+            const randomDelay = 2000 + Math.random() * 3000;
+            await this.page.waitForTimeout(randomDelay);
+          }
 
         } catch (error) {
           logger.error(`Chyba při načítání detailu útoku ${commandId}`, this.getAccountName(), error);
         }
       }
 
-      const currentCount = basicInfo.count;
-      const lastAttackCount = this.getLastAttackCount();
+      // Spojíme existující útoky s novými
+      const allAttacks = [...existingAttacks, ...newAttacks];
 
-      // Uložíme detaily útoků do databáze
-      if (attacks.length > 0) {
-        this.saveAttacksInfo(attacks);
+      // Uložíme do databáze
+      if (allAttacks.length > 0) {
+        this.saveAttacksInfo(allAttacks);
       }
 
-      // Detekce šlechtického vlaku (4 útoky s rozestupem max 300ms)
-      const isTrain = this.detectNoblesTrain(attacks);
-
-      // Pošleme notifikaci POUZE pokud počet STOUPL
-      if (currentCount > lastAttackCount) {
-        await this.sendDiscordNotification('attack', {
-          count: currentCount,
-          attacks: attacks,
-          isTrain: isTrain
-        });
-      }
-
-      // Uložíme aktuální počet pro příští kontrolu
-      this.saveLastAttackCount(currentCount);
-
-      return { count: currentCount, attacks: attacks, isTrain: isTrain };
+      return { newAttacks, allAttacks };
     } catch (error) {
-      logger.error('Chyba při detekci útoků', this.getAccountName(), error);
+      logger.error('Chyba při fetchování detailů útoků', this.getAccountName(), error);
       return null;
+    }
+  }
+
+  /**
+   * Získání existujících útoků z databáze
+   */
+  getExistingAttacks() {
+    try {
+      const account = this.db.getAccount(this.accountId);
+      if (!account?.attacks_info) return [];
+
+      const attacks = JSON.parse(account.attacks_info);
+      return Array.isArray(attacks) ? attacks : [];
+    } catch (e) {
+      return [];
     }
   }
 
