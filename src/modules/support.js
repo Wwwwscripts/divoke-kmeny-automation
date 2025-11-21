@@ -265,7 +265,6 @@ class SupportModule {
       // Obsahují: inVillages, totalOwn, foreignSupport, totalInVillage, breakdown
 
       await this.saveUnitsToDatabase(unitsData);
-      console.log(`💾 [Support] Jednotky uloženy do DB pro účet ID ${this.accountId}`);
 
       return unitsData;
 
