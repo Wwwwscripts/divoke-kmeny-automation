@@ -202,7 +202,7 @@ class Automator {
       const browserInfo = await this.browserManager.testConnection(account.id, true); // true = auto-close po přihlášení
 
       if (browserInfo) {
-        const { browser } = browserInfo;
+        const { browser, page } = browserInfo;
         this.openBrowsers.set(account.id, browserInfo);
 
         // Sleduj zavření browseru (event)
@@ -211,20 +211,58 @@ class Automator {
           cleanup();
         });
 
-        // 🆕 FAILSAFE: Kontroluj každou sekundu jestli je browser stále připojený (pro manuální zavření)
+        // Sleduj zavření page (pro případ že browser zůstane ale page se zavře)
+        if (page) {
+          page.on('close', () => {
+            console.log(`📄 [${account.username}] Page closed event fired`);
+            cleanup();
+          });
+        }
+
+        // 🆕 FAILSAFE: Kontroluj každých 500ms jestli je browser stále připojený (AGRESIVNÍ detekce)
+        let checkCounter = 0;
         const checkInterval = setInterval(async () => {
-          let isAlive = false;
+          checkCounter++;
+          let isAlive = true;
 
           try {
-            // Zkus získat browser stav - force detection
-            isAlive = browser.isConnected();
+            // Check 1: Browser connected?
+            if (!browser.isConnected()) {
+              console.log(`🔍 [${account.username}] Check ${checkCounter}: browser.isConnected() = false`);
+              isAlive = false;
+            }
 
-            // Extra check - zkus získat pages (force error pokud je browser mrtvý)
+            // Check 2: Page closed?
+            if (isAlive && page && page.isClosed()) {
+              console.log(`🔍 [${account.username}] Check ${checkCounter}: page.isClosed() = true`);
+              isAlive = false;
+            }
+
+            // Check 3: Can we get pages? (force detection)
             if (isAlive) {
-              await browser.pages();
+              try {
+                await browser.pages();
+              } catch (pagesError) {
+                console.log(`🔍 [${account.username}] Check ${checkCounter}: browser.pages() failed - ${pagesError.message}`);
+                isAlive = false;
+              }
+            }
+
+            // Check 4: Can we get targets?
+            if (isAlive) {
+              try {
+                const targets = await browser.targets();
+                if (targets.length === 0) {
+                  console.log(`🔍 [${account.username}] Check ${checkCounter}: No targets found`);
+                  isAlive = false;
+                }
+              } catch (targetsError) {
+                console.log(`🔍 [${account.username}] Check ${checkCounter}: browser.targets() failed - ${targetsError.message}`);
+                isAlive = false;
+              }
             }
           } catch (error) {
-            // Pokud selže, browser je mrtvý
+            console.log(`🔍 [${account.username}] Check ${checkCounter}: Unexpected error - ${error.message}`);
             isAlive = false;
           }
 
@@ -233,16 +271,22 @@ class Automator {
 
             // Pokud není v openBrowsers, už byl zpracován
             if (this.openBrowsers.has(account.id)) {
-              console.log(`🔍 [${account.username}] Browser zavřen ručně (detekováno intervalem)`);
+              console.log(`🔍 [${account.username}] Browser zavřen ručně (detekováno intervalem po ${checkCounter} checks)`);
               cleanup();
             }
           }
-        }, 1000);
+        }, 500); // Každých 500ms!
 
         // Vyčisti interval když se browser zavře normálně
         browser.once('disconnected', () => {
           clearInterval(checkInterval);
         });
+
+        if (page) {
+          page.once('close', () => {
+            clearInterval(checkInterval);
+          });
+        }
       }
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, error.message);
