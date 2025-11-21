@@ -177,6 +177,7 @@ class DatabaseManager {
         balance_enabled: 1,
         // 🆕 PAUSE - Pozastavení účtu
         paused: 0,
+        pause_note: null, // 🆕 Poznámka k pausnutému účtu
         last_login: null,
         active: 1,
         created_at: new Date().toISOString()
@@ -297,8 +298,23 @@ class DatabaseManager {
 
     if (account) {
       account.paused = paused ? 1 : 0;
+      // 🆕 Smaž poznámku při unpause
+      if (!paused) {
+        account.pause_note = null;
+      }
       this._saveAccounts(data);
       console.log(`✅ Účet ${paused ? 'POZASTAVEN' : 'OBNOVEN'} ID: ${accountId}`);
+    }
+  }
+
+  // 🆕 Aktualizovat poznámku k pausnutému účtu
+  updatePauseNote(accountId, note) {
+    const data = this._loadAccounts();
+    const account = data.accounts.find(a => a.id === accountId);
+
+    if (account) {
+      account.pause_note = note || null;
+      this._saveAccounts(data);
     }
   }
 

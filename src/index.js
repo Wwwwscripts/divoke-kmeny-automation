@@ -47,7 +47,7 @@ class Automator {
 
     // 🆕 ANTI-BAN: Fronta pro přihlášení + limit visible browserů
     this.loginQueue = []; // Fronta účtů čekajících na přihlášení
-    this.maxVisibleBrowsers = 2; // Max 2 visible browsery najednou
+    this.maxVisibleBrowsers = 5; // Max 5 visible browserů najednou
     this.activeVisibleBrowsers = 0; // Počítadlo aktivních visible browserů
 
     // Intervaly pro smyčky - ZVÝŠENO pro snížení captcha rizika
@@ -167,6 +167,7 @@ class Automator {
     const cleanup = () => {
       // Kontrola jestli už nebyl vyčištěn
       if (!this.openBrowsers.has(account.id)) {
+        console.log(`⚠️  [${account.username}] Cleanup již byl zavolán - přeskakuji`);
         return; // Už byl vyčištěn
       }
 
@@ -175,15 +176,17 @@ class Automator {
       this.captchaDetected.delete(account.id);
 
       // Sníž počítadlo (ale nikdy ne pod 0)
+      const oldCount = this.activeVisibleBrowsers;
       this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
 
-      console.log(`✅ [${account.username}] Browser zavřen (aktivní: ${this.activeVisibleBrowsers}/${this.maxVisibleBrowsers})`);
+      console.log(`✅ [${account.username}] Browser zavřen (${oldCount} → ${this.activeVisibleBrowsers}/${this.maxVisibleBrowsers})`);
 
       // 🆕 AUTO-UNPAUSE: Účet se automaticky unpausne po zavření browseru
       this.db.updateAccountPause(account.id, false);
       console.log(`▶️  [${account.username}] Účet automaticky aktivován`);
 
       // Zpracuj další z fronty (s malou pauzou)
+      console.log(`🔄 [${account.username}] Zpracovávám frontu (čeká: ${this.loginQueue.length} účtů)`);
       setTimeout(() => this.processLoginQueue(), 1000);
     };
 
@@ -201,20 +204,23 @@ class Automator {
         this.openBrowsers.set(account.id, browserInfo);
 
         // Sleduj zavření browseru (event)
-        browser.on('disconnected', cleanup);
+        browser.on('disconnected', () => {
+          console.log(`📡 [${account.username}] Browser disconnected event fired`);
+          cleanup();
+        });
 
-        // 🆕 FAILSAFE: Kontroluj každých 5s jestli je browser stále připojený
+        // 🆕 FAILSAFE: Kontroluj každé 2s jestli je browser stále připojený (pro manuální zavření)
         const checkInterval = setInterval(() => {
           if (!browser.isConnected()) {
             clearInterval(checkInterval);
 
             // Pokud není v openBrowsers, už byl zpracován
             if (this.openBrowsers.has(account.id)) {
-              console.log(`🔍 [${account.username}] Browser zavřen (detekováno intervalem)`);
+              console.log(`🔍 [${account.username}] Browser zavřen ručně (detekováno intervalem)`);
               cleanup();
             }
           }
-        }, 5000);
+        }, 2000);
 
         // Vyčisti interval když se browser zavře normálně
         browser.once('disconnected', () => {
