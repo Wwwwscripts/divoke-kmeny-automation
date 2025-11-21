@@ -48,14 +48,14 @@ class Automator {
     // Intervaly pro smyčky - ZVÝŠENO pro snížení captcha rizika
     this.intervals = {
       checks: 0,        // Kontroly běží neustále (žádný wait)
-      recruit: 180 * 60 * 1000,   // 180 minut (3 hodiny) - SNÍŽENO PROTI CAPTCHA
+      recruit: 180 * 60 * 1000,   // 180 minut (3 hodiny) - ANTI-CAPTCHA
       building: 30 * 1000,        // 30 sekund - COOLDOWN režim (zvýšeno z 5s)
-      research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
+      research: 6 * 60 * 60 * 1000,  // 6 hodin - ANTI-CAPTCHA
       paladin: 6 * 60 * 60 * 1000,    // 6 hodin - ANTI-CAPTCHA
       units: 60 * 60 * 1000,      // 60 minut (1 hodina) - ANTI-CAPTCHA
       accountInfo: 25 * 60 * 1000, // 25 minut (zvýšeno z 20min)
       dailyRewards: 24 * 60 * 60 * 1000, // Nepoužívá se - denní odměny běží 2x denně (4:00 a 16:00)
-      scavenge: 3 * 60 * 1000,    // 3 minuty (zvýšeno z 1min)
+      scavenge: 30 * 60 * 1000,    // 30 minut - ANTI-CAPTCHA
     };
 
     // Priority (nižší = vyšší priorita)
@@ -191,19 +191,19 @@ class Automator {
    */
   async start() {
     console.log('='.repeat(70));
-    console.log('🤖 Spouštím Event-Driven automatizaci - TESTOVACÍ REŽIM');
+    console.log('🤖 Spouštím Event-Driven automatizaci - ANTI-CAPTCHA REŽIM');
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🛡️  Aktivní ochrana: Human behavior, WebSocket timing, Fingerprinting');
     console.log('🔄 Aktivní smyčky (ANTI-CAPTCHA režim):');
     console.log('   [P1] Kontroly útoků: po 10 účtech (10s pauzy), cyklus každých 5 min');
-    console.log('   [P1] Build: každých 30s po 5 účtech (±15s random, 10min fallback)');
+    console.log('   [P1] Build: každých 30s po 5 účtech (±15s random, 12-18min při chybě)');
+    console.log('   [P2] Sběr: každých 30 MINUT po 5 účtech (±5 min random)');
     console.log('   [P3] Rekrut: každé 3 HODINY po 10 účtech (delší delays 5-8s)');
-    console.log('   [P5] Paladin: každých 6 HODIN');
+    console.log('   [P4] Výzkum: každých 6 HODIN (±30 min random)');
+    console.log('   [P5] Paladin: každých 6 HODIN (±30 min random)');
     console.log('   [P6] Jednotky: každou 1 HODINU po 2 účtech (±10 min random)');
     console.log('   [P6] Denní odměny: 2x denně (4:00 a 16:00)');
     console.log('   ⏸️  CAPTCHA kontrola: při každém přihlášení (ne v loopu)');
-    console.log('');
-    console.log('   ❌ VYPNUTO: Sběr, Výzkum');
     console.log('='.repeat(70));
 
     this.isRunning = true;
@@ -213,9 +213,9 @@ class Automator {
       this.checksLoop(),       // P1: Kontroly útoků
       this.buildingLoop(),     // P1: Výstavba
       this.unitsLoop(),        // P6: Kontrola jednotek
-      // this.scavengeLoop(),     // P2: VYPNUTO - testování
+      this.scavengeLoop(),     // P2: ZAPNUTO - každých 30 min
       this.recruitLoop(),      // P3: ZAPNUTO
-      // this.researchLoop(),     // P4: VYPNUTO - testování
+      this.researchLoop(),     // P4: ZAPNUTO - každých 6h
       this.paladinLoop(),      // P5: ZAPNUTO - každých 6h
       this.dailyRewardsLoop(), // P6: ZAPNUTO - 2x denně
       this.statsMonitor()      // Monitoring
@@ -473,8 +473,8 @@ class Automator {
         }
       }
 
-      // Počkej 3 minuty - s randomizací ±30s
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.scavenge, 30000)));
+      // Počkej 30 minut - s randomizací ±5 minut
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.scavenge, 5 * 60 * 1000)));
     }
   }
 
@@ -633,8 +633,8 @@ class Automator {
         }
       }
 
-      // Počkej 2 hodiny - s randomizací ±5 minut
-      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.research, 5 * 60 * 1000)));
+      // Počkej 6 hodin - s randomizací ±30 minut
+      await new Promise(resolve => setTimeout(resolve, randomizeInterval(this.intervals.research, 30 * 60 * 1000)));
     }
   }
 
