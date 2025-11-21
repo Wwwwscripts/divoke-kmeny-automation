@@ -326,33 +326,78 @@ class Automator {
   }
 
   /**
-   * 🆕 ANTI-BAN: Zpracuj selhání přihlášení - pausni účet a přidej do fronty
+   * 🆕 ANTI-BAN: Zpracuj selhání přihlášení - pausni účet a otevři browser
+   * Browser zůstane otevřený dokud se uživatel ručně nepřihlásí
    */
   async handleFailedLogin(account) {
-    // Zkontroluj jestli už není browser otevřený nebo čeká ve frontě
+    // Zkontroluj jestli už není browser otevřený nebo se otevírá
     if (this.isBrowserActive(account.id) || this.openingBrowsers.has(account.id)) {
+      console.log(`⏭️  [${account.username}] Browser již otevřen/otevírá se - přeskakuji`);
       return;
     }
 
-    // Zkontroluj jestli už není ve frontě
-    const alreadyInQueue = this.loginQueue.some(a => a.id === account.id);
-    if (alreadyInQueue) {
-      return;
-    }
-
-    console.log(`⏸️  [${account.username}] Přihlášení selhalo - pausuji účet`);
+    console.log(`⏸️  [${account.username}] Přihlášení selhalo - pausuji účet a otevírám browser`);
 
     // 🆕 AUTO-PAUSE: Pausni účet (smyčky ho přeskočí)
     this.db.updateAccountPause(account.id, true);
 
-    // Přidej do fronty
-    this.loginQueue.push(account);
+    // Označ že se browser otevírá (zabráníme duplicitním otevíráním)
+    this.openingBrowsers.add(account.id);
+    this.activeVisibleBrowsers++;
 
-    const queuePosition = this.loginQueue.length;
-    console.log(`📋 [${account.username}] Přidán do fronty (pozice ${queuePosition}, aktivní browsery: ${this.activeVisibleBrowsers}/${this.maxVisibleBrowsers})`);
+    try {
+      // Otevři browser BEZ auto-close (zůstane otevřený dokud uživatel nepřihlásí)
+      const browserInfo = await this.browserManager.testConnection(account.id, false);
 
-    // Zpracuj frontu
-    await this.processLoginQueue();
+      if (browserInfo) {
+        const { browser, page } = browserInfo;
+        this.openBrowsers.set(account.id, browserInfo);
+
+        console.log(`🖥️  [${account.username}] Browser otevřen - čeká na přihlášení`);
+
+        // Cleanup funkce při zavření
+        const cleanup = () => {
+          if (!this.openBrowsers.has(account.id)) {
+            return; // Už byl vyčištěn
+          }
+
+          this.openBrowsers.delete(account.id);
+          this.openingBrowsers.delete(account.id);
+          this.captchaDetected.delete(account.id);
+          this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
+
+          // AUTO-UNPAUSE po zavření
+          this.db.updateAccountPause(account.id, false);
+          console.log(`✅ [${account.username}] Browser zavřen - účet aktivován`);
+        };
+
+        // Sleduj zavření browseru
+        browser.on('disconnected', () => {
+          console.log(`📡 [${account.username}] Browser disconnected`);
+          cleanup();
+        });
+
+        // Sleduj zavření page
+        if (page) {
+          page.on('close', () => {
+            console.log(`📄 [${account.username}] Page closed`);
+            cleanup();
+          });
+        }
+      } else {
+        throw new Error('Nepodařilo se otevřít browser');
+      }
+    } catch (error) {
+      console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, error.message);
+      // Cleanup při chybě
+      this.openingBrowsers.delete(account.id);
+      this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
+    } finally {
+      // Odstraň z openingBrowsers po úspěšném otevření
+      if (this.openBrowsers.has(account.id)) {
+        this.openingBrowsers.delete(account.id);
+      }
+    }
   }
 
   /**
@@ -1496,42 +1541,7 @@ class Automator {
         const hasCaptcha = await notificationsModule.detectCaptcha();
 
         if (hasCaptcha) {
-          // Loguj pouze pokud ještě není zaznamenaná CAPTCHA pro tento účet
-          const isNewCaptcha = !this.captchaDetected.has(account.id);
-
-          if (isNewCaptcha) {
-            console.log(`🤖 [${account.username}] CAPTCHA detekována - otevírám browser`);
-            this.captchaDetected.add(account.id);
-
-            // Otevři viditelný prohlížeč POUZE pokud už není otevřený nebo se neotvírá
-            if (!this.isBrowserActive(account.id) && !this.openingBrowsers.has(account.id)) {
-              // Označ že se browser otevírá
-              this.openingBrowsers.add(account.id);
-
-              try {
-                const browserInfo = await this.browserManager.testConnection(account.id, false);
-
-                if (browserInfo) {
-                  const { browser } = browserInfo;
-                  this.openBrowsers.set(account.id, browserInfo);
-
-                  // Sleduj zavření browseru
-                  browser.on('disconnected', () => {
-                    this.openBrowsers.delete(account.id);
-                    this.openingBrowsers.delete(account.id);
-                    this.captchaDetected.delete(account.id);
-                    console.log(`✅ [${account.username}] CAPTCHA vyřešena`);
-                  });
-                }
-              } catch (error) {
-                console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, error.message);
-              } finally {
-                this.openingBrowsers.delete(account.id);
-              }
-            }
-          }
-
-          return false; // CAPTCHA = failed login
+          return false; // CAPTCHA = failed login (vrátí se z loginToGame jako false)
         }
       } catch (captchaError) {
         // Ignore CAPTCHA check errors
