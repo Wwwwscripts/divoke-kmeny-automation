@@ -701,6 +701,11 @@
                 // Vypočítat pro každou vesnici
                 calculationResults = [];
                 for (const account of worldAccounts) {
+                    // Přeskočit účet pokud má stejné souřadnice jako cíl (nemůže poslat podporu sám sobě)
+                    if (account.coord_x === targetX && account.coord_y === targetY) {
+                        continue;
+                    }
+
                     const distance = calculateDistance(account.coord_x, account.coord_y, targetX, targetY);
                     const availableTime = (arrivalDate - now) / 1000 / 60; // minuty
 
