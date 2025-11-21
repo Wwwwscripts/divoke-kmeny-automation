@@ -715,9 +715,7 @@
                 attacks.forEach((attack, index) => {
                     const now = Math.floor(Date.now() / 1000);
                     const attacker = attack.attacker || 'Neznámý';
-                    const name = attack.name || 'Útok';
-                    const impact = attack.impact || name;
-                    const source = attack.source || '-';
+                    const origin = attack.origin || '-'; // Souřadnice útočníka
                     const arrivalTime = attack.arrival_time || attack.arrival_date || '-';
                     const timestamp = attack.arrival_timestamp;
 
@@ -729,26 +727,24 @@
                     if (currentContentType === 'notifications' && !isCompleted) return; // Přeskoč budoucí v záložce Oznámení
 
                     // Ikona a barva podle stavu
-                    let impactIcon = isCompleted ? '📋' : '⚔️';
-                    let impactColor = isCompleted ? '#8b949e' : '#f85149';
+                    let attackIcon = isCompleted ? '📋' : '⚔️';
                     let attackerColor = isCompleted ? '#8b949e' : '#f85149';
 
                     // Jedinečné ID pro countdown element
                     const countdownId = `countdown-${acc.id}-${index}`;
 
                     let attackDisplay = '';
-                    if (attacker === '-') {
+                    if (attacker === '-' || attacker === 'Neznámý') {
                         attackDisplay = '-';
                     } else if (isCompleted) {
                         // Dopadlý útok (oznámení) - horizontální layout
-                        const sourceDisplay = source && source !== '-' ? `📍 <span style="color: #8b949e; font-weight: 600;">Z: ${source}</span>` : '';
+                        const originDisplay = origin && origin !== '-' ? `📍 <span style="color: #8b949e; font-weight: 600;">${origin}</span>` : '';
                         attackDisplay = `
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div>
-                                    👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span>
-                                    ${sourceDisplay}
+                                    ${attackIcon} <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span>
+                                    ${originDisplay}
                                     🕐 <span style="color: #ffa657; font-weight: 600;">Dopad: ${arrivalTime}</span>
-                                    ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span>
                                 </div>
                                 <button onclick="deleteCompletedAttack(${acc.id}, '${timestamp}')"
                                     style="background: none; border: none; color: #8b949e; cursor: pointer; font-size: 14px; padding: 0 4px; opacity: 0.7; transition: opacity 0.2s;"
@@ -759,11 +755,10 @@
                         `;
                     } else {
                         // Aktivní útok - horizontální layout
-                        const sourceDisplay = source && source !== '-' ? `📍 <span style="color: ${attackerColor}; font-weight: 600;">Z: ${source}</span>` : '';
+                        const originDisplay = origin && origin !== '-' ? `📍 <span style="color: ${attackerColor}; font-weight: 600;">${origin}</span>` : '';
                         attackDisplay = `
-                            👤 <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span>
-                            ${sourceDisplay}
-                            ${impactIcon} <span style="color: ${impactColor}; font-weight: 600;">${impact}</span>
+                            ${attackIcon} <span style="color: ${attackerColor}; font-weight: 600;">${attacker}</span>
+                            ${originDisplay}
                             🕐 <span style="color: #ffa657; font-weight: 600;">Dopad: ${arrivalTime}</span>
                             ⏱️ <span style="color: #ffa657; font-weight: 600;">Odpočet:</span> <span class="attack-time" id="${countdownId}" data-timestamp="${timestamp}">Počítám...</span>
                         `;

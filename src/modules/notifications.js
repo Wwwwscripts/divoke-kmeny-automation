@@ -100,103 +100,112 @@ class NotificationsModule {
    */
   async detectAttacks() {
     try {
-      const attackInfo = await this.page.evaluate(() => {
+      // Nejdřív získáme základní info z hlavní stránky
+      const basicInfo = await this.page.evaluate(() => {
         const attackElement = document.querySelector('#incomings_amount');
         if (!attackElement) return null;
 
         const count = parseInt(attackElement.textContent.trim(), 10) || 0;
-        if (count === 0) return { count: 0, attacks: [] };
+        if (count === 0) return { count: 0, commandIds: [] };
 
-        // Parsování příchozích útoků z .command-row
-        const attacks = [...document.querySelectorAll('.command-row')]
-          .filter(row => row.querySelector('img[src*="attack.webp"]'))  // jen příchozí útoky
-          .map(row => {
+        // Získáme ID všech příchozích útoků
+        const commandRows = [...document.querySelectorAll('#commands_incomings tr.command-row')];
+        const commandIds = commandRows.map(row => {
+          const detailLink = row.querySelector('a[href*="info_command"]');
+          const commandId = detailLink?.href.match(/id=(\d+)/)?.[1];
+          const timer = row.querySelector('span[data-endtime]');
+          const timestamp = timer?.getAttribute('data-endtime');
+
+          return {
+            commandId,
+            arrivalTimestamp: timestamp
+          };
+        }).filter(item => item.commandId);
+
+        return { count, commandIds };
+      });
+
+      if (!basicInfo || basicInfo.count === 0) {
+        const currentCount = 0;
+        const lastAttackCount = this.getLastAttackCount();
+        this.saveLastAttackCount(currentCount);
+        return { count: 0, attacks: [] };
+      }
+
+      // Nyní fetchujeme detaily každého útoku
+      const attacks = [];
+
+      for (let i = 0; i < basicInfo.commandIds.length; i++) {
+        const { commandId, arrivalTimestamp } = basicInfo.commandIds[i];
+
+        try {
+          // Fetchujeme detail útoku
+          const attackDetails = await this.page.evaluate(async (cmdId) => {
+            const detailUrl = `https://${window.location.host}/game.php?screen=info_command&id=${cmdId}`;
+
             try {
-              // Název útoku
-              const name = row.querySelector('.quickedit-label')?.textContent.trim() || 'Útok';
+              const response = await fetch(detailUrl);
+              const html = await response.text();
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(html, 'text/html');
 
-              // Čas dopadu
-              const arrivalSpan = row.querySelector('[data-endtime]');
-              const arrivalCountdown = arrivalSpan?.textContent.trim() || '-';
-              const arrivalTimestamp = arrivalSpan?.dataset.endtime || null;
+              // Najdi útočníka
+              const attackerLink = doc.querySelector('a[href*="info_player"][href*="id="]');
+              const attackerName = attackerLink?.textContent.trim() || 'Neznámý';
 
-              // Převedení timestampu na čitelný formát
-              const arrivalTime = arrivalTimestamp
-                ? new Date(Number(arrivalTimestamp) * 1000).toLocaleString('cs-CZ', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                  })
-                : '-';
+              // Najdi vesnici útočníka
+              const attackerVillageLink = Array.from(doc.querySelectorAll('a[href*="info_village"]'))
+                .find(link => link.textContent.includes('(') && link.textContent.includes('|'));
+              const attackerVillage = attackerVillageLink?.textContent.trim() || '';
+              const attackerCoords = attackerVillage.match(/\((\d+\|\d+)\)/)?.[1] || '-';
 
-              // Útočník - hledáme link s jménem hráče
-              let attacker = 'Neznámý';
-              const attackerLink = row.querySelector('a[href*="info_player"]');
-              if (attackerLink) {
-                attacker = attackerLink.textContent.trim();
-              }
+              // Čas příjezdu z tabulky
+              const arrivalCell = Array.from(doc.querySelectorAll('table.vis tr')).find(tr =>
+                tr.textContent.includes('Příchod:')
+              );
+              const arrivalTime = arrivalCell?.querySelectorAll('td')[1]?.textContent.trim() || '-';
 
-              // Vesnice odkud útok přichází (může být název nebo souřadnice)
-              let origin = '-';
-
-              // Hledáme link na vesnici - může obsahovat název nebo souřadnice
-              const villageLinks = row.querySelectorAll('a[href*="screen=info_village"]');
-
-              // První link je obvykle cílová vesnice (naše), druhý je útočníkova
-              if (villageLinks.length >= 2) {
-                // Druhý link = odkud útok přichází
-                const originText = villageLinks[1].textContent.trim();
-                origin = originText; // Použijeme celý text (název nebo souřadnice)
-              } else if (villageLinks.length === 1) {
-                // Pokud je jen jeden link, zkusíme ho
-                const originText = villageLinks[0].textContent.trim();
-
-                // Pokud to vypadá jako souřadnice, použijeme
-                if (originText.includes('|')) {
-                  origin = originText;
-                } else {
-                  // Jinak je to pravděpodobně název vesnice
-                  origin = originText;
-                }
-              }
-
-              // Fallback: hledáme souřadnice kdekoli v textu
-              if (origin === '-') {
-                const rowText = row.textContent;
-                const coordMatch = rowText.match(/(\d{1,3})\|(\d{1,3})/);
-                if (coordMatch) {
-                  origin = `${coordMatch[1]}|${coordMatch[2]}`;
-                }
-              }
-
-              const attackData = {
-                name: name,
-                attacker: attacker,
-                origin: origin,
-                arrival_countdown: arrivalCountdown,
-                arrival_timestamp: arrivalTimestamp,
-                arrival_time: arrivalTime,  // Formátovaný čas pro Discord
-                countdown: arrivalCountdown, // Alias pro Discord
-                impact: name  // Název útoku = dopad
+              return {
+                attackerName,
+                attackerCoords,
+                arrivalTime
               };
-
-              return attackData;
             } catch (e) {
               return null;
             }
-          })
-          .filter(attack => attack !== null);  // Odfiltrujeme neúspěšné pokusy
+          }, commandId);
 
-        return { count, attacks };
-      });
+          if (attackDetails) {
+            // Převedení timestampu na čitelný formát pro countdown
+            const arrivalTime = arrivalTimestamp
+              ? new Date(Number(arrivalTimestamp) * 1000).toLocaleString('cs-CZ', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
+                })
+              : attackDetails.arrivalTime;
 
-      const currentCount = attackInfo ? attackInfo.count : 0;
-      const attacks = attackInfo ? attackInfo.attacks : [];
+            attacks.push({
+              attacker: attackDetails.attackerName,
+              origin: attackDetails.attackerCoords,
+              arrival_timestamp: arrivalTimestamp,
+              arrival_time: arrivalTime,
+              commandId: commandId
+            });
+          }
 
-      // Získáme poslední uložený počet útoků
+          // Malá pauza mezi requesty
+          await this.page.waitForTimeout(300);
+
+        } catch (error) {
+          logger.error(`Chyba při načítání detailu útoku ${commandId}`, this.getAccountName(), error);
+        }
+      }
+
+      const currentCount = basicInfo.count;
       const lastAttackCount = this.getLastAttackCount();
 
       // Uložíme detaily útoků do databáze
@@ -204,22 +213,57 @@ class NotificationsModule {
         this.saveAttacksInfo(attacks);
       }
 
+      // Detekce šlechtického vlaku (4 útoky s rozestupem max 300ms)
+      const isTrain = this.detectNoblesTrain(attacks);
+
       // Pošleme notifikaci POUZE pokud počet STOUPL
       if (currentCount > lastAttackCount) {
         await this.sendDiscordNotification('attack', {
           count: currentCount,
-          attacks: attacks
+          attacks: attacks,
+          isTrain: isTrain
         });
       }
 
       // Uložíme aktuální počet pro příští kontrolu
       this.saveLastAttackCount(currentCount);
 
-      return attackInfo;
+      return { count: currentCount, attacks: attacks, isTrain: isTrain };
     } catch (error) {
       logger.error('Chyba při detekci útoků', this.getAccountName(), error);
       return null;
     }
+  }
+
+  /**
+   * Detekce šlechtického vlaku
+   * Vlak = 4 útoky s rozestupem max 300ms (0.3s)
+   */
+  detectNoblesTrain(attacks) {
+    if (attacks.length < 4) return false;
+
+    // Seřadíme útoky podle timestampu
+    const sorted = [...attacks]
+      .filter(a => a.arrival_timestamp)
+      .sort((a, b) => Number(a.arrival_timestamp) - Number(b.arrival_timestamp));
+
+    if (sorted.length < 4) return false;
+
+    // Zkontrolujeme první 4 útoky - rozestup max 300ms (0.3s)
+    for (let i = 0; i < 3; i++) {
+      const current = Number(sorted[i].arrival_timestamp);
+      const next = Number(sorted[i + 1].arrival_timestamp);
+      const diff = Math.abs(next - current);
+
+      // Timestamp je v sekundách, ale milisekundy jsou v desetinné části
+      // Pro cs117 je formát "20:19:23:611" což znamená timestamp má milisekundy
+      // ale v data-endtime je to v sekundách s desetinnou částí
+      if (diff > 0.3) { // více než 300ms
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -388,6 +432,15 @@ class NotificationsModule {
       } else if (type === 'attack') {
         content = '@everyone';
 
+        let title = '⚔️ NOVÝ PŘÍCHOZÍ ÚTOK!';
+        let description = `Účet **${account.username}** má nový útok!`;
+
+        // Detekce šlechtického vlaku
+        if (data.isTrain) {
+          title = '🚂 PŘÍCHOZÍ ŠLECHTICKÝ VLAK!';
+          description = `Účet **${account.username}** má příchozí šlechtický vlak!`;
+        }
+
         const fields = [
           {
             name: '🌍 Svět',
@@ -406,36 +459,13 @@ class NotificationsModule {
           }
         ];
 
-        // Přidáme detaily útoků pokud jsou dostupné
-        if (data.attacks && data.attacks.length > 0) {
-          data.attacks.slice(0, 3).forEach((attack, index) => {
-            fields.push({
-              name: `\u200b`, // Prázdný řádek pro vizuální oddělení
-              value: `**Útok ${index + 1}:**\n` +
-                     `👤 ${attack.attacker}\n` +
-                     `📍 Z: ${attack.origin}\n` +
-                     `🕐 Dopad: ${attack.arrival_time}\n` +
-                     `⏱️ Odpočet: ${attack.countdown}`,
-              inline: false
-            });
-          });
-
-          if (data.attacks.length > 3) {
-            fields.push({
-              name: '\u200b',
-              value: `_... a další ${data.attacks.length - 3} útoky_`,
-              inline: false
-            });
-          }
-        }
-
         embed = {
-          title: '⚔️ NOVÝ PŘÍCHOZÍ ÚTOK!',
-          description: `Účet **${account.username}** má nový útok!`,
-          color: 0xFF0000, // Červená pro urgentnost
+          title: title,
+          description: description,
+          color: data.isTrain ? 0xFF4500 : 0xFF0000, // Oranžová pro vlak, červená pro běžný útok
           fields: fields,
           footer: {
-            text: '⚠️ Zkontrolujte obranou strategie!'
+            text: data.isTrain ? '⚠️ VLAK DETEKOVÁN! Zkontrolujte obranu!' : '⚠️ Zkontrolujte obranou strategii!'
           }
         };
       }
