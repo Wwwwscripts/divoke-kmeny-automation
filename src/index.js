@@ -163,6 +163,30 @@ class Automator {
     this.openingBrowsers.add(account.id);
     this.activeVisibleBrowsers++;
 
+    // 🆕 Cleanup funkce která se zavolá při jakémkoliv zavření
+    const cleanup = () => {
+      // Kontrola jestli už nebyl vyčištěn
+      if (!this.openBrowsers.has(account.id)) {
+        return; // Už byl vyčištěn
+      }
+
+      this.openBrowsers.delete(account.id);
+      this.openingBrowsers.delete(account.id);
+      this.captchaDetected.delete(account.id);
+
+      // Sníž počítadlo (ale nikdy ne pod 0)
+      this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
+
+      console.log(`✅ [${account.username}] Browser zavřen (aktivní: ${this.activeVisibleBrowsers}/${this.maxVisibleBrowsers})`);
+
+      // 🆕 AUTO-UNPAUSE: Účet se automaticky unpausne po zavření browseru
+      this.db.updateAccountPause(account.id, false);
+      console.log(`▶️  [${account.username}] Účet automaticky aktivován`);
+
+      // Zpracuj další z fronty (s malou pauzou)
+      setTimeout(() => this.processLoginQueue(), 1000);
+    };
+
     try {
       // Smaž neplatné cookies
       const accountData = this.db.getAccount(account.id);
@@ -176,30 +200,30 @@ class Automator {
         const { browser } = browserInfo;
         this.openBrowsers.set(account.id, browserInfo);
 
-        // Sleduj zavření browseru
-        browser.on('disconnected', () => {
-          this.openBrowsers.delete(account.id);
-          this.openingBrowsers.delete(account.id);
-          this.captchaDetected.delete(account.id);
-          this.activeVisibleBrowsers--;
+        // Sleduj zavření browseru (event)
+        browser.on('disconnected', cleanup);
 
-          console.log(`✅ [${account.username}] Přihlášení dokončeno`);
+        // 🆕 FAILSAFE: Kontroluj každých 5s jestli je browser stále připojený
+        const checkInterval = setInterval(() => {
+          if (!browser.isConnected()) {
+            clearInterval(checkInterval);
 
-          // 🆕 AUTO-UNPAUSE: Účet se automaticky unpausne po úspěšném přihlášení
-          this.db.updateAccountPause(account.id, false);
-          console.log(`▶️  [${account.username}] Účet automaticky aktivován`);
+            // Pokud není v openBrowsers, už byl zpracován
+            if (this.openBrowsers.has(account.id)) {
+              console.log(`🔍 [${account.username}] Browser zavřen (detekováno intervalem)`);
+              cleanup();
+            }
+          }
+        }, 5000);
 
-          // Zpracuj další z fronty
-          this.processLoginQueue();
+        // Vyčisti interval když se browser zavře normálně
+        browser.once('disconnected', () => {
+          clearInterval(checkInterval);
         });
       }
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, error.message);
-      this.activeVisibleBrowsers--;
-      this.openingBrowsers.delete(account.id);
-
-      // Zkus další z fronty i při chybě
-      this.processLoginQueue();
+      cleanup(); // Zavolej cleanup i při chybě
     }
   }
 
