@@ -52,7 +52,7 @@ class Automator {
       building: 30 * 1000,        // 30 sekund - COOLDOWN režim (zvýšeno z 5s)
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
       paladin: 6 * 60 * 60 * 1000,    // 6 hodin - ANTI-CAPTCHA
-      units: 15 * 60 * 1000,      // 15 minut (zvýšeno z 10min)
+      units: 60 * 60 * 1000,      // 60 minut (1 hodina) - ANTI-CAPTCHA
       accountInfo: 25 * 60 * 1000, // 25 minut (zvýšeno z 20min)
       dailyRewards: 24 * 60 * 60 * 1000, // Nepoužívá se - denní odměny běží 2x denně (4:00 a 16:00)
       scavenge: 3 * 60 * 1000,    // 3 minuty (zvýšeno z 1min)
@@ -199,7 +199,7 @@ class Automator {
     console.log('   [P1] Build: každých 30s po 5 účtech (±15s random, 10min fallback)');
     console.log('   [P3] Rekrut: každé 3 HODINY po 10 účtech (delší delays 5-8s)');
     console.log('   [P5] Paladin: každých 6 HODIN');
-    console.log('   [P6] Jednotky: každých 15 min po 2 účtech (±2 min random)');
+    console.log('   [P6] Jednotky: každou 1 HODINU po 2 účtech (±10 min random)');
     console.log('   [P6] Denní odměny: 2x denně (4:00 a 16:00)');
     console.log('   ⏸️  CAPTCHA kontrola: při každém přihlášení (ne v loopu)');
     console.log('');
@@ -751,8 +751,8 @@ class Automator {
         console.log(`⚠️  JEDNOTKY Cyklus #${loopCount}: ${errorCount} chyb`);
       }
 
-      // Počkej 15 minut - s randomizací ±2 minuty
-      const interval = randomizeInterval(this.intervals.units, 2 * 60 * 1000);
+      // Počkej 1 hodinu - s randomizací ±10 minut
+      const interval = randomizeInterval(this.intervals.units, 10 * 60 * 1000);
       await new Promise(resolve => setTimeout(resolve, interval));
     }
   }
