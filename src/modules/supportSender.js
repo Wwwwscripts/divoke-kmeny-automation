@@ -63,6 +63,16 @@ class SupportSender {
    */
   async sendSupport(unitType, targetX, targetY, count = 1) {
     try {
+      // BEZPEČNOSTNÍ KONTROLA: Zkontroluj captcha PŘED odesláním podpory
+      const NotificationsModule = (await import('./notifications.js')).default;
+      const notificationsModule = new NotificationsModule(this.page, this.db, this.accountId);
+      const hasCaptcha = await notificationsModule.detectCaptcha();
+
+      if (hasCaptcha) {
+        logger.warn('⚠️ Captcha detekována před odesláním podpory - přerušuji', this.getAccountName());
+        return { success: false, captchaDetected: true, error: 'Captcha detekována' };
+      }
+
       const worldUrl = this.getWorldUrl();
       const villageId = await this.getVillageId();
 
@@ -244,6 +254,16 @@ class SupportSender {
    */
   async sendMultipleUnits(unitTypes, targetX, targetY) {
     try {
+      // BEZPEČNOSTNÍ KONTROLA: Zkontroluj captcha PŘED odesláním podpory
+      const NotificationsModule = (await import('./notifications.js')).default;
+      const notificationsModule = new NotificationsModule(this.page, this.db, this.accountId);
+      const hasCaptcha = await notificationsModule.detectCaptcha();
+
+      if (hasCaptcha) {
+        logger.warn('⚠️ Captcha detekována před odesláním podpory - přerušuji', this.getAccountName());
+        return { success: false, captchaDetected: true, error: 'Captcha detekována' };
+      }
+
       const worldUrl = this.getWorldUrl();
 
       logger.info(`Odesílám komplexní podporu: ${unitTypes.join(', ')} na ${targetX}|${targetY}`, this.getAccountName());
