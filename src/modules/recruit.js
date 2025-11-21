@@ -347,16 +347,16 @@ class RecruitModule {
       let buildingParam = building;
       if (building === 'workshop') buildingParam = 'garage';
 
-      // Human-like delay před navigací (2-4s)
-      await humanDelay(2000, 4000);
+      // Human-like delay před navigací (5-8s) - prodlouženo proti CAPTCHA
+      await humanDelay(5000, 8000);
 
       await this.page.goto(`${worldUrl}/game.php?screen=${buildingParam}`, {
         waitUntil: 'networkidle',
         timeout: 30000
       });
 
-      // Simuluj čtení stránky (2-4s scrollování a pohyby myši)
-      await simulateReading(this.page, 3000);
+      // Simuluj čtení stránky (4-7s scrollování a pohyby myši) - prodlouženo
+      await simulateReading(this.page, 5000);
 
       // Najdeme input pro jednotku a nastavíme hodnotu
       const recruited = await this.page.evaluate(({ unitType, count }) => {
@@ -414,13 +414,13 @@ class RecruitModule {
 
       const worldUrl = this.getWorldUrl();
 
-      // Přejdeme na kasárna pro zjištění fronty
-      await humanDelay(2000, 4000);
+      // Přejdeme na kasárna pro zjištění fronty (delší delay proti CAPTCHA)
+      await humanDelay(5000, 8000);
       await this.page.goto(`${worldUrl}/game.php?screen=barracks`, {
         waitUntil: 'networkidle',
         timeout: 30000
       });
-      await simulateReading(this.page, 2000);
+      await simulateReading(this.page, 5000);
 
       // Zjisti čas ve frontě kasáren
       const barracksQueue = await this.checkBuildingQueue('barracks');
@@ -525,15 +525,18 @@ class RecruitModule {
       // Rekrutuj jednotky SEKVENČNĚ: nejdřív kopí, pak meče, pak ostatní
       if (toRecruitCounts['spear'] && toRecruitCounts['spear'] > 0) {
         await this.recruitUnits('spear', toRecruitCounts['spear']);
+        await humanDelay(3000, 5000); // Delší pauza mezi jednotkami
       }
 
       if (toRecruitCounts['sword'] && toRecruitCounts['sword'] > 0) {
         await this.recruitUnits('sword', toRecruitCounts['sword']);
+        await humanDelay(3000, 5000); // Delší pauza mezi jednotkami
       }
 
       for (const [unitType, count] of Object.entries(toRecruitCounts)) {
         if (unitType !== 'spear' && unitType !== 'sword' && count > 0) {
           await this.recruitUnits(unitType, count);
+          await humanDelay(3000, 5000); // Delší pauza mezi jednotkami
         }
       }
 
