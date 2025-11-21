@@ -1058,15 +1058,15 @@
                 return;
             }
 
-            showMessage(`Odesílám ${supportToSend.length} podpor po skupinách 5ti účtů...`, 'info');
+            showMessage(`Odesílám ${supportToSend.length} podpor po skupinách 2 účtů...`, 'info');
 
             let successCount = 0;
             let errorCount = 0;
             const successfulAccounts = [];
             const failedAccounts = [];
 
-            // Posílat po skupinách 5ti účtů
-            const batchSize = 5;
+            // Posílat po skupinách 2 účtů
+            const batchSize = 2;
             for (let i = 0; i < supportToSend.length; i += batchSize) {
                 const batch = supportToSend.slice(i, i + batchSize);
 
