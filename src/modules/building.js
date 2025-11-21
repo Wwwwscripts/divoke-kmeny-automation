@@ -882,7 +882,7 @@ class BuildingModule {
 
       if (!canBuild.canBuild) {
         // Tichý fail - nedostatek surovin je normální
-        return { success: false, reason: canBuild.reason, waitTime: 5 * 60 * 1000 };
+        return { success: false, reason: canBuild.reason, waitTime: 15 * 60 * 1000 }; // 15 minut když nejsou suroviny
       }
 
       const gameData = await this.page.evaluate(() => {
@@ -913,7 +913,7 @@ class BuildingModule {
 
       if (result.error) {
         logger.error(`Chyba při stavbě ${buildingName}`, this.getAccountName());
-        return { success: false, reason: result.error[0], waitTime: 5 * 60 * 1000 };
+        return { success: false, reason: result.error[0], waitTime: 15 * 60 * 1000 }; // 15 minut při chybě
       }
 
       if (result.response && result.response.success) {
@@ -956,11 +956,11 @@ class BuildingModule {
         return { success: true, waitTime: waitTimeMs };
       }
 
-      return { success: false, reason: 'Neznámá chyba', waitTime: 5 * 60 * 1000 };
+      return { success: false, reason: 'Neznámá chyba', waitTime: 15 * 60 * 1000 }; // 15 minut při neznámé chybě
 
     } catch (error) {
       logger.error(`Chyba při stavbě ${buildingName}`, this.getAccountName(), error);
-      return { success: false, reason: error.message, waitTime: 5 * 60 * 1000 };
+      return { success: false, reason: error.message, waitTime: 15 * 60 * 1000 }; // 15 minut při exception
     }
   }
 
@@ -974,7 +974,7 @@ class BuildingModule {
 
       if (!template) {
         logger.error(`Šablona ${templateName} neexistuje`, this.getAccountName());
-        return { success: false, waitTime: 5 * 60 * 1000 };
+        return { success: false, waitTime: 15 * 60 * 1000 }; // 15 minut - chyba konfigurace
       }
 
       await this.collectAllRewards();
@@ -982,7 +982,7 @@ class BuildingModule {
       const currentBuildings = await this.getCurrentBuildings();
       if (!currentBuildings) {
         logger.error(`Nepodařilo se získat aktuální budovy`, this.getAccountName());
-        return { success: false, waitTime: 5 * 60 * 1000 };
+        return { success: false, waitTime: 15 * 60 * 1000 }; // 15 minut - chyba načítání budov
       }
 
       const queueInfo = await this.checkBuildQueue();
@@ -1072,7 +1072,7 @@ class BuildingModule {
 
     } catch (error) {
       logger.error(`Chyba při výstavbě`, this.getAccountName(), error);
-      return { success: false, waitTime: 5 * 60 * 1000 };
+      return { success: false, waitTime: 15 * 60 * 1000 }; // 15 minut při exception
     }
   }
 }
