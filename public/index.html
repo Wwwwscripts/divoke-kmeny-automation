@@ -1180,6 +1180,12 @@
                     </td>
                     <td>
                         <button class="btn-small"
+                                onclick="forceCloseBrowser(${acc.id})"
+                                style="background: #6e7681; width: 100%; margin-bottom: 5px;"
+                                title="Zavře browser pokud detekce selhala">
+                            🔧 Zavřít browser
+                        </button>
+                        <button class="btn-small"
                                 onclick="activateAccount(${acc.id})"
                                 style="background: #238636; width: 100%;">
                             ▶️ Aktivovat
@@ -1233,6 +1239,31 @@
                 await loadAccounts();
             } catch (error) {
                 console.error('❌ Chyba při aktivaci účtu:', error);
+            }
+        }
+
+        // Force close browser - pokud automatická detekce selhala
+        async function forceCloseBrowser(accountId) {
+            try {
+                const response = await fetch(`/api/accounts/${accountId}/force-close-browser`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    console.log(`✅ Browser zavřen, fronta spuštěna (čeká: ${result.queueLength}, aktivní: ${result.activeBrowsers})`);
+
+                    // Refresh tabulek
+                    await loadAccounts();
+
+                    // Ukaž zprávu
+                    alert(`✅ ${result.message}\n\n📋 Ve frontě: ${result.queueLength} účtů\n🌐 Aktivní browsery: ${result.activeBrowsers}`);
+                } else {
+                    alert('❌ Chyba: ' + (result.error || 'Neznámá chyba'));
+                }
+            } catch (error) {
+                console.error('❌ Chyba při force close:', error);
+                alert('❌ Chyba: ' + error.message);
             }
         }
 

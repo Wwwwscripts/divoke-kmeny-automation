@@ -124,6 +124,56 @@ app.put('/api/accounts/:id/pause-note', async (req, res) => {
   }
 });
 
+// 🆕 Force close browser - manuální cleanup pokud automatická detekce selže
+app.post('/api/accounts/:id/force-close-browser', async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    const account = db.getAccount(accountId);
+
+    if (!account) {
+      return res.status(404).json({ error: 'Účet nenalezen' });
+    }
+
+    // Odeber z openBrowsers, openingBrowsers a captchaDetected
+    if (automationEngine.openBrowsers.has(accountId)) {
+      automationEngine.openBrowsers.delete(accountId);
+      console.log(`🔧 [${account.username}] Browser ručně zavřen z fronty`);
+    }
+
+    if (automationEngine.openingBrowsers.has(accountId)) {
+      automationEngine.openingBrowsers.delete(accountId);
+    }
+
+    if (automationEngine.captchaDetected.has(accountId)) {
+      automationEngine.captchaDetected.delete(accountId);
+    }
+
+    // Sníž počítadlo (ale nikdy ne pod 0)
+    const oldCount = automationEngine.activeVisibleBrowsers;
+    automationEngine.activeVisibleBrowsers = Math.max(0, automationEngine.activeVisibleBrowsers - 1);
+
+    console.log(`🔧 [${account.username}] Force cleanup: ${oldCount} → ${automationEngine.activeVisibleBrowsers}/${automationEngine.maxVisibleBrowsers}`);
+
+    // Unpausni účet
+    db.updateAccountPause(accountId, false);
+
+    // Zpracuj frontu
+    console.log(`🔧 [${account.username}] Spouštím frontu (čeká: ${automationEngine.loginQueue.length} účtů)`);
+    automationEngine.processLoginQueue().catch(err => {
+      console.error('❌ Chyba při zpracování fronty po force cleanup:', err);
+    });
+
+    res.json({
+      success: true,
+      message: 'Browser byl ručně zavřen a fronta byla spuštěna',
+      queueLength: automationEngine.loginQueue.length,
+      activeBrowsers: automationEngine.activeVisibleBrowsers
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.put('/api/accounts/:id/recruit', async (req, res) => {
   try {
     const accountId = parseInt(req.params.id);
