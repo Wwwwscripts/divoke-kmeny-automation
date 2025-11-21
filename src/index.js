@@ -241,8 +241,12 @@ class Automator {
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
-      const accounts = this.db.getAllActiveAccounts();
-      console.log(`📊 Načteno: ${accounts.length} účtů k zpracování`);
+      const allAccounts = this.db.getAllActiveAccounts();
+
+      // Filtruj účty s CAPTCHA - ty se zpracovávají pouze ve visible browseru
+      const accounts = allAccounts.filter(account => !this.captchaDetected.has(account.id));
+
+      console.log(`📊 Načteno: ${accounts.length} účtů k zpracování (${allAccounts.length - accounts.length} má CAPTCHA)`);
 
       if (accounts.length === 0) {
         console.log('⚠️  Žádné aktivní účty k zpracování');
@@ -334,6 +338,11 @@ class Automator {
 
       // Filtruj pouze účty, které mají build enabled a vypršelý timer
       const accountsToProcess = accounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         const buildingSettings = this.db.getBuildingSettings(account.id);
         if (!buildingSettings || !buildingSettings.enabled) {
           return false;
@@ -424,6 +433,11 @@ class Automator {
 
       // Filtruj pouze účty, které mají scavenge enabled a vypršelý timer
       const accountsToProcess = accounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         // Kontrola scavenge_enabled v účtu
         if (!account.scavenge_enabled) {
           return false;
@@ -486,6 +500,11 @@ class Automator {
 
       // Filtruj pouze účty, které mají recruit enabled
       const accountsToProcess = allAccounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         const recruitSettings = this.db.getRecruitSettings(account.id);
         return recruitSettings && recruitSettings.enabled;
       });
@@ -578,6 +597,11 @@ class Automator {
 
       // Filtruj pouze účty, které mají research enabled a vypršelý timer
       const accountsToProcess = accounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         const researchSettings = this.db.getResearchSettings(account.id);
         if (!researchSettings || !researchSettings.enabled) {
           return false;
@@ -631,6 +655,11 @@ class Automator {
 
       // Filtruj pouze účty s vypršelým timerem
       const accountsToProcess = accounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         const paladinKey = `paladin_${account.id}`;
         const paladinWaitUntil = this.accountWaitTimes[paladinKey];
         return !paladinWaitUntil || Date.now() >= paladinWaitUntil;
@@ -677,7 +706,11 @@ class Automator {
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
-      const accounts = this.db.getAllActiveAccounts();
+      const allAccounts = this.db.getAllActiveAccounts();
+
+      // Filtruj účty s CAPTCHA - ty se zpracovávají pouze ve visible browseru
+      const accounts = allAccounts.filter(account => !this.captchaDetected.has(account.id));
+
       let errorCount = 0;
 
       // Zpracuj po 2 účtech
@@ -781,6 +814,11 @@ class Automator {
 
       // Filtruj pouze účty, které mají denní odměny povoleny na jejich světě
       const accountsToProcess = accounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         const worldSettings = this.db.getWorldSettings(account.world);
         if (!worldSettings || !worldSettings.dailyRewardsEnabled) {
           return false;
