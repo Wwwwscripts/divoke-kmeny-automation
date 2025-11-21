@@ -49,7 +49,7 @@ class Automator {
     // Intervaly pro smyčky - ZVÝŠENO pro snížení captcha rizika
     this.intervals = {
       checks: 0,        // Kontroly běží neustále (žádný wait)
-      recruit: 60 * 60 * 1000,    // 60 minut (1 hodina) - NOVĚ
+      recruit: 180 * 60 * 1000,   // 180 minut (3 hodiny) - SNÍŽENO PROTI CAPTCHA
       building: 30 * 1000,        // 30 sekund - COOLDOWN režim (zvýšeno z 5s)
       research: 120 * 60 * 1000,  // 120 minut (2 hodiny)
       paladin: 60 * 60 * 1000,    // 60 minut (1 hodina)
@@ -197,10 +197,10 @@ class Automator {
     console.log('🤖 Spouštím Event-Driven automatizaci - TESTOVACÍ REŽIM');
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🛡️  Aktivní ochrana: Human behavior, WebSocket timing, Fingerprinting');
-    console.log('🔄 Aktivní smyčky (POUZE PRO TESTOVÁNÍ):');
-    console.log('   [P1] Kontroly útoků: po 10 účtech (10s pauzy), cyklus každé 3 min');
-    console.log('   [P1] Build: každých 30s po 5 účtech - COOLDOWN režim (±15s random)');
-    console.log('   [P3] Rekrut: každou 1h po 10 účtech (10s pauzy mezi skupinami)');
+    console.log('🔄 Aktivní smyčky (ANTI-CAPTCHA režim):');
+    console.log('   [P1] Kontroly útoků: po 10 účtech (10s pauzy), cyklus každých 5 min');
+    console.log('   [P1] Build: každých 30s po 5 účtech (±15s random, 10min fallback)');
+    console.log('   [P3] Rekrut: každé 3 HODINY po 10 účtech (delší delays 5-8s)');
     console.log('   [P6] Jednotky: každých 15 min po 2 účtech (±2 min random)');
     console.log('   ⏸️  CAPTCHA kontrola: při každém přihlášení (ne v loopu)');
     console.log('');
@@ -241,8 +241,12 @@ class Automator {
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
-      const accounts = this.db.getAllActiveAccounts();
-      console.log(`📊 Načteno: ${accounts.length} účtů k zpracování`);
+      const allAccounts = this.db.getAllActiveAccounts();
+
+      // Filtruj účty s CAPTCHA - ty se zpracovávají pouze ve visible browseru
+      const accounts = allAccounts.filter(account => !this.captchaDetected.has(account.id));
+
+      console.log(`📊 Načteno: ${accounts.length} účtů k zpracování (${allAccounts.length - accounts.length} má CAPTCHA)`);
 
       if (accounts.length === 0) {
         console.log('⚠️  Žádné aktivní účty k zpracování');
@@ -294,9 +298,9 @@ class Automator {
         }
       }
 
-      // Celý cyklus hotový, počkej 3 minuty od začátku cyklu
+      // Celý cyklus hotový, počkej 5 minut od začátku cyklu
       const cycleElapsed = Date.now() - cycleStartTime;
-      const waitTime = Math.max(0, 3 * 60 * 1000 - cycleElapsed);
+      const waitTime = Math.max(0, 5 * 60 * 1000 - cycleElapsed);
       const cycleElapsedSec = (cycleElapsed / 1000).toFixed(1);
 
       console.log('\n' + '-'.repeat(70));
@@ -305,10 +309,10 @@ class Automator {
       if (waitTime > 0) {
         const waitMin = Math.floor(waitTime / 60000);
         const waitSec = Math.floor((waitTime % 60000) / 1000);
-        console.log(`⏰ Čekám ${waitMin}m ${waitSec}s do dalšího cyklu (3min od začátku)...`);
+        console.log(`⏰ Čekám ${waitMin}m ${waitSec}s do dalšího cyklu (5min od začátku)...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       } else {
-        console.log(`⚠️  Cyklus trval déle než 3 minuty, spouštím další okamžitě`);
+        console.log(`⚠️  Cyklus trval déle než 5 minut, spouštím další okamžitě`);
       }
     }
   }
@@ -334,6 +338,11 @@ class Automator {
 
       // Filtruj pouze účty, které mají build enabled a vypršelý timer
       const accountsToProcess = accounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         const buildingSettings = this.db.getBuildingSettings(account.id);
         if (!buildingSettings || !buildingSettings.enabled) {
           return false;
@@ -424,6 +433,11 @@ class Automator {
 
       // Filtruj pouze účty, které mají scavenge enabled a vypršelý timer
       const accountsToProcess = accounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         // Kontrola scavenge_enabled v účtu
         if (!account.scavenge_enabled) {
           return false;
@@ -486,6 +500,11 @@ class Automator {
 
       // Filtruj pouze účty, které mají recruit enabled
       const accountsToProcess = allAccounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         const recruitSettings = this.db.getRecruitSettings(account.id);
         return recruitSettings && recruitSettings.enabled;
       });
@@ -542,7 +561,7 @@ class Automator {
         }
       }
 
-      // Celý cyklus hotový, počkej 1 hodinu od začátku cyklu
+      // Celý cyklus hotový, počkej 3 hodiny od začátku cyklu
       const cycleElapsed = Date.now() - cycleStartTime;
       const waitTime = Math.max(0, this.intervals.recruit - cycleElapsed);
       const cycleElapsedSec = (cycleElapsed / 1000).toFixed(1);
@@ -553,10 +572,10 @@ class Automator {
       if (waitTime > 0) {
         const waitMin = Math.floor(waitTime / 60000);
         const waitSec = Math.floor((waitTime % 60000) / 1000);
-        console.log(`⏰ Čekám ${waitMin}m ${waitSec}s do dalšího cyklu (1h od začátku)...`);
+        console.log(`⏰ Čekám ${waitMin}m ${waitSec}s do dalšího cyklu (3h od začátku)...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       } else {
-        console.log(`⚠️  Cyklus trval déle než 1 hodinu, spouštím další okamžitě`);
+        console.log(`⚠️  Cyklus trval déle než 3 hodiny, spouštím další okamžitě`);
       }
     }
   }
@@ -578,6 +597,11 @@ class Automator {
 
       // Filtruj pouze účty, které mají research enabled a vypršelý timer
       const accountsToProcess = accounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         const researchSettings = this.db.getResearchSettings(account.id);
         if (!researchSettings || !researchSettings.enabled) {
           return false;
@@ -631,6 +655,11 @@ class Automator {
 
       // Filtruj pouze účty s vypršelým timerem
       const accountsToProcess = accounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         const paladinKey = `paladin_${account.id}`;
         const paladinWaitUntil = this.accountWaitTimes[paladinKey];
         return !paladinWaitUntil || Date.now() >= paladinWaitUntil;
@@ -677,7 +706,11 @@ class Automator {
       // Zkontroluj shutdown flag
       await this.checkShutdownFlag();
 
-      const accounts = this.db.getAllActiveAccounts();
+      const allAccounts = this.db.getAllActiveAccounts();
+
+      // Filtruj účty s CAPTCHA - ty se zpracovávají pouze ve visible browseru
+      const accounts = allAccounts.filter(account => !this.captchaDetected.has(account.id));
+
       let errorCount = 0;
 
       // Zpracuj po 2 účtech
@@ -781,6 +814,11 @@ class Automator {
 
       // Filtruj pouze účty, které mají denní odměny povoleny na jejich světě
       const accountsToProcess = accounts.filter(account => {
+        // Skip účty s CAPTCHA
+        if (this.captchaDetected.has(account.id)) {
+          return false;
+        }
+
         const worldSettings = this.db.getWorldSettings(account.world);
         if (!worldSettings || !worldSettings.dailyRewardsEnabled) {
           return false;
@@ -1030,8 +1068,8 @@ class Automator {
         const waitMin = Math.ceil(buildResult.waitTime / 60000);
         console.log(`      ⏰ [${account.username}] Build dokončen, další za ${waitMin} min`);
       } else {
-        this.accountWaitTimes[`building_${account.id}`] = Date.now() + 1 * 60 * 1000; // 1 min fallback
-        console.log(`      ✅ [${account.username}] Build zkontrolován (fallback 1min)`);
+        this.accountWaitTimes[`building_${account.id}`] = Date.now() + 10 * 60 * 1000; // 10 min fallback
+        console.log(`      ✅ [${account.username}] Build zkontrolován (fallback 10min)`);
       }
 
       await this.browserPool.closeContext(context, browserKey);
