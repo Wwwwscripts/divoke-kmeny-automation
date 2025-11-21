@@ -4,164 +4,17 @@ import { writeFileSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
+import SharedBrowserPool from './sharedBrowserPool.js';
 import { generateFingerprint, createStealthScript } from './utils/fingerprint.js';
 import { setupWebSocketInterceptor } from './utils/webSocketBehavior.js';
 
 const app = express();
 const db = new DatabaseManager();
 const browserManager = new BrowserManager(db);
+const browserPool = new SharedBrowserPool(db);
 
 // Mapa aktivních visible browserů (accountId => { browser, context, page })
 const visibleBrowsers = new Map();
-
-// Mapa aktivních headless browserů (accountId => { browser, context, page })
-const activeBrowsers = new Map();
-
-// Pomocná funkce pro získání aktivního browseru
-function getBrowser(accountId) {
-  return activeBrowsers.get(accountId);
-}
-
-// Pomocná funkce pro uložení browseru
-function setBrowser(accountId, browserData) {
-  activeBrowsers.set(accountId, browserData);
-}
-
-// Pomocná funkce pro odstranění browseru
-function removeBrowser(accountId) {
-  activeBrowsers.delete(accountId);
-}
-
-// Pomocná funkce pro získání nebo automatické otevření browseru (headless)
-async function getOrOpenBrowser(accountId) {
-  // Zkontroluj jestli už je browser aktivní
-  let browserData = getBrowser(accountId);
-  if (browserData) {
-    // Ověř že browser je opravdu ještě připojený
-    const isConnected = browserData.browser && browserData.browser.isConnected();
-    if (isConnected) {
-      return browserData;
-    }
-    // Browser byl zavřen - odstraň z mapy
-    console.log(`🔌 Browser pro účet ${accountId} již není aktivní - otevírám nový`);
-    removeBrowser(accountId);
-  }
-
-  // Pokud ne, otevři ho headless
-  console.log(`🔧 Automaticky otevírám headless browser pro účet ${accountId}`);
-
-  const account = db.getAccount(accountId);
-  if (!account) {
-    throw new Error(`Účet s ID ${accountId} nebyl nalezen`);
-  }
-
-  // Získej nebo vygeneruj fingerprint pro účet
-  let fingerprint = db.getFingerprint(accountId);
-  if (!fingerprint) {
-    fingerprint = generateFingerprint();
-    db.saveFingerprint(accountId, fingerprint);
-    console.log(`🎨 Vygenerován nový fingerprint pro účet ${account.username}`);
-  }
-
-  const domain = db.getDomainForAccount(account);
-  const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
-  const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
-
-  const browser = await chromium.launch({
-    headless: true,  // Headless pro automatické operace
-    args: [
-      '--disable-blink-features=AutomationControlled',
-      '--disable-features=IsolateOrigins,site-per-process'
-    ]
-  });
-
-  // Použij fingerprint pro context options
-  const contextOptions = {
-    viewport: fingerprint.viewport,
-    userAgent: fingerprint.userAgent,
-    locale,
-    timezoneId,
-    ignoreHTTPSErrors: true,
-  };
-
-  if (account.proxy) {
-    const proxy = browserManager.parseProxy(account.proxy);
-    contextOptions.proxy = proxy;
-  }
-
-  const context = await browser.newContext(contextOptions);
-
-  // Přidej stealth script s konkrétním fingerprintem
-  const stealthScript = createStealthScript(fingerprint);
-  await context.addInitScript(stealthScript);
-
-  // Zkontrolovat a načíst cookies
-  if (!account.cookies || account.cookies === 'null') {
-    await browser.close();
-    throw new Error('Účet nemá uložené cookies. Nejprve se přihlaste přes "Otevřít browser" v hlavním menu.');
-  }
-
-  let cookies = JSON.parse(account.cookies);
-  // Zajistit že cookies jsou pole (Playwright vyžaduje array)
-  if (!Array.isArray(cookies)) {
-    // Pokud jsou cookies null nebo undefined, přeskoč
-    if (cookies === null || cookies === undefined) {
-      console.warn(`⚠️  Cookies pro ${account.username} jsou null/undefined - přeskakuji`);
-    } else {
-      console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
-      cookies = Object.values(cookies);
-      await context.addCookies(cookies);
-      // Cookies načteny - tichý log
-    }
-  } else {
-    await context.addCookies(cookies);
-    // Cookies načteny - tichý log
-  }
-
-  const page = await context.newPage();
-
-  // Setup WebSocket interceptor pro human-like timing
-  await setupWebSocketInterceptor(page, {
-    autoHumanize: true,
-    minDelay: 300,
-    maxDelay: 1200,
-    enableIdleBehavior: false,
-    logActions: false
-  });
-
-  // Jít přímo na game.php s cookies
-  await page.goto(`https://${account.world}.${domain}/game.php`, {
-    waitUntil: 'domcontentloaded',
-    timeout: 30000
-  });
-
-  // Počkat chvíli na načtení
-  await page.waitForTimeout(1500);
-
-  // Zkontrolovat jestli jsme přihlášení (detekovat #menu_row)
-  const isLoggedIn = await page.evaluate(() => {
-    return document.querySelector('#menu_row') !== null;
-  });
-
-  if (!isLoggedIn) {
-    await browser.close();
-    throw new Error('Cookies jsou neplatné nebo vypršely. Přihlaste se znovu přes "Otevřít browser" v hlavním menu.');
-  }
-
-  console.log(`✅ Účet ${account.username} je přihlášen (headless)`);
-
-  // Ulož browser do mapy
-  browserData = { browser, context, page, account };
-  setBrowser(accountId, browserData);
-
-  // Při zavření browseru ho odstraň z mapy
-  browser.on('disconnected', () => {
-    console.log(`🔌 Headless browser pro účet ${accountId} (${account.username}) byl zavrén`);
-    removeBrowser(accountId);
-  });
-
-  return browserData;
-}
 
 app.use(express.json());
 app.use(express.static('public'));
@@ -734,17 +587,37 @@ app.post('/api/support/send', async (req, res) => {
     // Retry loop
     while (attempt < maxAttempts) {
       attempt++;
-      let browserData = null;
+      let context = null;
+      let browserKey = null;
 
       try {
         console.log(`[${account.username}] Pokus ${attempt}/${maxAttempts} - odesílám podporu`);
 
-        // Automaticky získat nebo otevřít browser (headless pokud není aktivní)
-        browserData = await getOrOpenBrowser(accountId);
+        // Použij sdílený browser pool (jako hlavní moduly)
+        ({ context, browserKey } = await browserPool.createContext(accountId));
+        const page = await context.newPage();
+
+        // Naviguj na hru
+        const domain = db.getDomainForAccount(account);
+        await page.goto(`https://${account.world}.${domain}/game.php`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000
+        });
+        await page.waitForTimeout(1500);
+
+        // Zkontroluj přihlášení
+        const isLoggedIn = await page.evaluate(() => {
+          return document.querySelector('#menu_row') !== null;
+        });
+
+        if (!isLoggedIn) {
+          await browserPool.closeContext(context, browserKey);
+          throw new Error('Cookies jsou neplatné nebo vypršely');
+        }
 
         // Dynamicky importovat SupportSender
         const { default: SupportSender } = await import('./modules/supportSender.js');
-        const supportSender = new SupportSender(browserData.page, db, accountId);
+        const supportSender = new SupportSender(page, db, accountId);
 
         // Odeslat podporu (více jednotek najednou)
         const result = await supportSender.sendMultipleUnits(
@@ -756,16 +629,8 @@ app.post('/api/support/send', async (req, res) => {
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
         console.log(`✅ [${account.username}] Podpora odeslána za ${duration}s (pokus ${attempt}/${maxAttempts})`);
 
-        // Zavřít browser po úspěšném odeslání
-        if (browserData && browserData.browser) {
-          try {
-            await browserData.browser.close();
-            removeBrowser(accountId);
-            console.log(`🔒 [${account.username}] Browser uzavřen po odeslání podpory`);
-          } catch (e) {
-            console.error(`⚠️  [${account.username}] Chyba při zavírání browseru:`, e.message);
-          }
-        }
+        // Zavřít context (browser zůstane sdílený)
+        await browserPool.closeContext(context, browserKey);
 
         return res.json({
           success: true,
@@ -778,15 +643,9 @@ app.post('/api/support/send', async (req, res) => {
         lastError = error;
         console.error(`❌ [${account.username}] Pokus ${attempt}/${maxAttempts} selhal:`, error.message);
 
-        // Zavřít browser i při chybě (aby se nehromadily)
-        if (browserData && browserData.browser) {
-          try {
-            await browserData.browser.close();
-            removeBrowser(accountId);
-            console.log(`🔒 [${account.username}] Browser uzavřen po chybě`);
-          } catch (e) {
-            // Ignorovat chyby při zavírání
-          }
+        // Zavřít context i při chybě
+        if (context && browserKey) {
+          await browserPool.closeContext(context, browserKey);
         }
 
         // Pokud je to chyba cookies, nepokračuj v retry
@@ -850,32 +709,35 @@ app.post('/api/units/refresh', async (req, res) => {
 
       // Zpracuj skupinu paralelně
       const batchPromises = batch.map(async (accountId) => {
-        let browserData = null;
+        let context = null;
+        let browserKey = null;
         try {
           const account = db.getAccount(accountId);
           if (!account) {
             return { accountId, success: false, error: 'Účet nenalezen' };
           }
 
-          // Automaticky získat nebo otevřít browser (headless pokud není aktivní)
-          browserData = await getOrOpenBrowser(accountId);
+          // Použij sdílený browser pool (jako hlavní moduly)
+          ({ context, browserKey } = await browserPool.createContext(accountId));
+          const page = await context.newPage();
+
+          // Naviguj na hru
+          const domain = db.getDomainForAccount(account);
+          await page.goto(`https://${account.world}.${domain}/game.php`, {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+          });
+          await page.waitForTimeout(1500);
 
           // Dynamicky importovat SupportModule
           const { default: SupportModule } = await import('./modules/support.js');
-          const supportModule = new SupportModule(browserData.page, db, accountId);
+          const supportModule = new SupportModule(page, db, accountId);
 
           // Získat jednotky
           await supportModule.getAllUnitsInfo();
 
-          // Zavřít browser po kontrole jednotek
-          if (browserData && browserData.browser) {
-            try {
-              await browserData.browser.close();
-              removeBrowser(accountId);
-            } catch (e) {
-              // Ignorovat chyby při zavírání
-            }
-          }
+          // Zavřít context (browser zůstane sdílený)
+          await browserPool.closeContext(context, browserKey);
 
           return {
             accountId,
@@ -886,14 +748,9 @@ app.post('/api/units/refresh', async (req, res) => {
         } catch (error) {
           console.error(`   ❌ [Účet ${accountId}] Chyba: ${error.message}`);
 
-          // Zavřít browser i při chybě
-          if (browserData && browserData.browser) {
-            try {
-              await browserData.browser.close();
-              removeBrowser(accountId);
-            } catch (e) {
-              // Ignorovat chyby při zavírání
-            }
+          // Zavřít context i při chybě
+          if (context && browserKey) {
+            await browserPool.closeContext(context, browserKey);
           }
 
           return {
