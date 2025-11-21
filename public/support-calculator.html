@@ -1001,6 +1001,10 @@
 
                 showMessage('Odesílám podporu...', 'info');
 
+                // Prodleva 2-4 sekundy před odesláním
+                const delay = 2000 + Math.random() * 2000; // 2-4s
+                await new Promise(resolve => setTimeout(resolve, delay));
+
                 const response = await fetch('/api/support/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1058,25 +1062,29 @@
                 return;
             }
 
-            showMessage(`Odesílám ${supportToSend.length} podpor po skupinách 5ti účtů...`, 'info');
+            showMessage(`Odesílám ${supportToSend.length} podpor po skupinách 2 účtů...`, 'info');
 
             let successCount = 0;
             let errorCount = 0;
             const successfulAccounts = [];
             const failedAccounts = [];
 
-            // Posílat po skupinách 5ti účtů
-            const batchSize = 5;
+            // Posílat po skupinách 2 účtů
+            const batchSize = 2;
             for (let i = 0; i < supportToSend.length; i += batchSize) {
                 const batch = supportToSend.slice(i, i + batchSize);
 
                 console.log(`📦 Skupina ${Math.floor(i / batchSize) + 1}/${Math.ceil(supportToSend.length / batchSize)}: Odesílám ${batch.length} podpor...`);
 
-                // Zpracuj skupinu paralelně (všech 5 najednou)
+                // Zpracuj skupinu paralelně (všech 2 najednou)
                 const batchPromises = batch.map(async (result, batchIndex) => {
                     const globalIndex = i + batchIndex;
 
                     try {
+                        // Prodleva 2-4 sekundy před odesláním
+                        const delay = 2000 + Math.random() * 2000; // 2-4s
+                        await new Promise(resolve => setTimeout(resolve, delay));
+
                         const response = await fetch('/api/support/send', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -1129,6 +1137,12 @@
 
                 // Zobrazit progress
                 showMessage(`Odesláno ${i + batch.length}/${supportToSend.length} (${successCount} OK, ${errorCount} chyb)`, 'info');
+
+                // Prodleva 3-5 sekund mezi skupinami
+                if (i + batchSize < supportToSend.length) {
+                    const groupDelay = 3000 + Math.random() * 2000; // 3-5s
+                    await new Promise(resolve => setTimeout(resolve, groupDelay));
+                }
             }
 
             // ZLEPŠENÝ LOG - vypsat výsledky

@@ -818,8 +818,8 @@ app.post('/api/units/refresh', async (req, res) => {
       accounts: []
     };
 
-    // Zpracuj po skupinách 10ti účtů
-    const batchSize = 10;
+    // Zpracuj po skupinách 2 účtů
+    const batchSize = 2;
     for (let i = 0; i < accountIds.length; i += batchSize) {
       const batch = accountIds.slice(i, i + batchSize);
 
