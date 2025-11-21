@@ -185,9 +185,11 @@ class Automator {
       this.db.updateAccountPause(account.id, false);
       console.log(`▶️  [${account.username}] Účet automaticky aktivován`);
 
-      // Zpracuj další z fronty (s malou pauzou)
+      // Zpracuj další z fronty OKAMŽITĚ (bez delay)
       console.log(`🔄 [${account.username}] Zpracovávám frontu (čeká: ${this.loginQueue.length} účtů)`);
-      setTimeout(() => this.processLoginQueue(), 1000);
+      this.processLoginQueue().catch(err => {
+        console.error(`❌ Chyba při zpracování fronty po cleanup:`, err);
+      });
     };
 
     try {
@@ -209,9 +211,24 @@ class Automator {
           cleanup();
         });
 
-        // 🆕 FAILSAFE: Kontroluj každé 2s jestli je browser stále připojený (pro manuální zavření)
-        const checkInterval = setInterval(() => {
-          if (!browser.isConnected()) {
+        // 🆕 FAILSAFE: Kontroluj každou sekundu jestli je browser stále připojený (pro manuální zavření)
+        const checkInterval = setInterval(async () => {
+          let isAlive = false;
+
+          try {
+            // Zkus získat browser stav - force detection
+            isAlive = browser.isConnected();
+
+            // Extra check - zkus získat pages (force error pokud je browser mrtvý)
+            if (isAlive) {
+              await browser.pages();
+            }
+          } catch (error) {
+            // Pokud selže, browser je mrtvý
+            isAlive = false;
+          }
+
+          if (!isAlive) {
             clearInterval(checkInterval);
 
             // Pokud není v openBrowsers, už byl zpracován
@@ -220,7 +237,7 @@ class Automator {
               cleanup();
             }
           }
-        }, 2000);
+        }, 1000);
 
         // Vyčisti interval když se browser zavře normálně
         browser.once('disconnected', () => {
@@ -271,7 +288,7 @@ class Automator {
     console.log('🤖 Spouštím Event-Driven automatizaci - ANTI-CAPTCHA & ANTI-BAN REŽIM');
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🛡️  Aktivní ochrana: Human behavior, WebSocket timing, Fingerprinting');
-    console.log('🚫 ANTI-BAN: Max 2 visible browsery, auto-pause při selhání přihlášení');
+    console.log('🚫 ANTI-BAN: Max 5 visible browserů, auto-pause při selhání přihlášení');
     console.log('🔄 Aktivní smyčky (ANTI-CAPTCHA režim):');
     console.log('   [P1] Kontroly útoků: po 10 účtech (10s pauzy), cyklus každých 5 min');
     console.log('   [P1] Build: každých 30s po 5 účtech (±15s random, 12-18min při chybě)');
@@ -286,6 +303,22 @@ class Automator {
 
     this.isRunning = true;
 
+    // 🆕 WATCHDOG: Kontroluj každých 5s jestli fronta má běžet ale neběží
+    const queueWatchdog = setInterval(() => {
+      if (!this.isRunning) {
+        clearInterval(queueWatchdog);
+        return;
+      }
+
+      // Pokud jsou účty ve frontě ale žádný browser se neotevírá
+      if (this.loginQueue.length > 0 && this.activeVisibleBrowsers < this.maxVisibleBrowsers) {
+        console.log(`🔍 [WATCHDOG] Fronta má ${this.loginQueue.length} účtů, ale pouze ${this.activeVisibleBrowsers}/${this.maxVisibleBrowsers} browserů - spouštím frontu`);
+        this.processLoginQueue().catch(err => {
+          console.error('❌ [WATCHDOG] Chyba při zpracování fronty:', err);
+        });
+      }
+    }, 5000);
+
     // Spusť všechny smyčky paralelně
     await Promise.all([
       this.checksLoop(),       // P1: Kontroly útoků
@@ -298,6 +331,9 @@ class Automator {
       this.dailyRewardsLoop(), // P6: ZAPNUTO - 2x denně
       this.statsMonitor()      // Monitoring
     ]);
+
+    // Zastaví watchdog když se aplikace vypne
+    clearInterval(queueWatchdog);
   }
 
   /**
