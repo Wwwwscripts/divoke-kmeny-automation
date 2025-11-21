@@ -149,13 +149,15 @@ class NotificationsModule {
       // Fetchujeme detaily POUZE pro nové útoky (které ještě nemáme v DB)
       const newCommandIds = basicInfo.commandIds.filter(item => !existingCommandIds.has(item.commandId));
 
-      // Omezíme počet fetchovaných útoků najednou (max 5 aby se nepřetížil server)
-      const commandIdsToFetch = newCommandIds.slice(0, 5);
+      // BEZPEČNOSTNÍ OMEZENÍ: Max 1 útok per kontrolu (každých 5 min)
+      // I když je 10 nových útoků, fetchujeme jen 1 → za 50 minut máme všechny detaily
+      // To je mnohem bezpečnější než 10 requestů najednou
+      const commandIdsToFetch = newCommandIds.slice(0, 1);
 
       const newAttacks = [];
 
-      // Fetchujeme pouze pokud počet STOUPL nebo máme nové commandId
-      if (currentCount > lastAttackCount && commandIdsToFetch.length > 0) {
+      // Fetchujeme pouze pokud máme nové commandId (bez ohledu na počet)
+      if (commandIdsToFetch.length > 0) {
         for (let i = 0; i < commandIdsToFetch.length; i++) {
           const { commandId, arrivalTimestamp } = commandIdsToFetch[i];
 
