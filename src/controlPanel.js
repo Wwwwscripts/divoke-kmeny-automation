@@ -690,11 +690,49 @@ app.post('/api/support/send', async (req, res) => {
           parseInt(targetY)
         );
 
-        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-        console.log(`✅ [${account.username}] Podpora odeslána za ${duration}s (pokus ${attempt}/${maxAttempts})`);
-
         // Zavřít context (browser zůstane sdílený)
         await browserPool.closeContext(context, browserKey);
+
+        // KONTROLA CAPTCHA
+        if (result && result.captchaDetected) {
+          console.log(`⚠️  [${account.username}] CAPTCHA detekována během odesílání podpory`);
+
+          // Pausni účet
+          db.updateAccountPause(accountId, true);
+          console.log(`⏸️  [${account.username}] Účet pausnut kvůli captcha`);
+
+          // Otevři viditelný browser (pokud už není otevřený)
+          if (!visibleBrowsers.has(accountId)) {
+            console.log(`🖥️  [${account.username}] Otevírám browser pro vyřešení captcha...`);
+
+            try {
+              const browserInfo = await browserManager.testConnection(accountId, false);
+              if (browserInfo) {
+                visibleBrowsers.set(accountId, browserInfo);
+
+                // Sleduj zavření browseru
+                browserInfo.browser.on('disconnected', () => {
+                  visibleBrowsers.delete(accountId);
+                  db.updateAccountPause(accountId, false);
+                  console.log(`✅ [${account.username}] Browser zavřen - účet aktivován`);
+                });
+              }
+            } catch (browserError) {
+              console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, browserError.message);
+            }
+          }
+
+          return res.status(403).json({
+            error: 'Captcha detekována',
+            captchaDetected: true,
+            message: 'Otevírám browser pro vyřešení captcha',
+            accountId,
+            username: account.username
+          });
+        }
+
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`✅ [${account.username}] Podpora odeslána za ${duration}s (pokus ${attempt}/${maxAttempts})`);
 
         return res.json({
           success: true,
