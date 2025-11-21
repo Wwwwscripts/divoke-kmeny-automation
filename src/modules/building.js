@@ -699,6 +699,14 @@ class BuildingModule {
         return 0;
       }
 
+      // Zavřít všechny otevřené dialogy před pokusem o otevření quest dialogu
+      await this.page.evaluate(() => {
+        const popups = document.querySelectorAll('.popup_box_close');
+        popups.forEach(btn => btn.click());
+      });
+
+      await humanDelay(300, 500);
+
       // Pokus o kliknutí s krátkým timeoutem (3s místo 30s)
       try {
         await this.page.click('#new_quest', { timeout: 3000 });
