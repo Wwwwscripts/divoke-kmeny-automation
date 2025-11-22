@@ -289,6 +289,10 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
       }
     }
 
+    // ✅ PAUSNI ÚČET PŘED OTEVŘENÍM BROWSERU (prevence duplicitního běhu smyček)
+    db.updateAccountPause(accountId, true);
+    console.log(`⏸️  [${account.username}] Účet pausnut - otevírám browser`);
+
     // Otevři browser přímo
     console.log(`🖥️  [Control Panel] Otevírám visible browser pro účet ${accountId}`);
 
@@ -301,7 +305,10 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
       // Sleduj zavření browseru
       browser.on('disconnected', () => {
         visibleBrowsers.delete(accountId);
-        console.log(`🔒 [Control Panel] Browser pro účet ${accountId} zavřen`);
+
+        // ✅ UNPAUSNI ÚČET PŘI ZAVŘENÍ (smyčky pokračují)
+        db.updateAccountPause(accountId, false);
+        console.log(`✅ [${account.username}] Browser zavřen - účet aktivován`);
       });
 
       res.json({
@@ -309,12 +316,26 @@ app.post('/api/accounts/:id/open-browser', async (req, res) => {
         message: 'Browser opened successfully'
       });
     } else {
+      // ❌ Browser se nepodařilo otevřít - unpausni účet
+      db.updateAccountPause(accountId, false);
+      console.log(`⚠️  [${account.username}] Nepodařilo se otevřít browser - účet aktivován`);
+
       res.status(500).json({
         success: false,
         error: 'Failed to open browser'
       });
     }
   } catch (error) {
+    // ❌ Chyba - unpausni účet (cleanup)
+    try {
+      const accountId = parseInt(req.params.id);
+      if (accountId) {
+        db.updateAccountPause(accountId, false);
+        console.log(`⚠️  [ID:${accountId}] Chyba při otevírání browseru - účet aktivován`);
+      }
+    } catch (cleanupError) {
+      console.error('Chyba při cleanup:', cleanupError.message);
+    }
     res.status(500).json({ error: error.message });
   }
 });
