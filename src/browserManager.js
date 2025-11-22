@@ -395,25 +395,16 @@ class BrowserManager {
     // Spusť watch loop na pozadí
     (async () => {
       while (!shouldStop) {
-        await new Promise(resolve => setTimeout(resolve, checkInterval));
-
-        if (shouldStop) break;
-
         // Kontrola timeoutu (10 minut)
         const elapsed = Date.now() - startTime;
         if (elapsed > maxWaitTime) {
-          console.log(`⏱️  [${account.username}] Timeout (10 min) - zavírám browser`);
-          // NEUKLÁDÁME cookies - nevíme jestli se přihlásil!
           await safeCloseBrowser('timeout');
           break;
         }
 
-        // Periodické ukládání cookies ODSTRANĚNO - ukládá se POUZE při úspěšném přihlášení
-
         try {
           // Kontrola jestli page ještě existuje
           if (page.isClosed()) {
-            console.log(`⚠️  [${account.username}] Page zavřen - zastavuji sledování`);
             shouldStop = true;
             break;
           }
@@ -446,14 +437,8 @@ class BrowserManager {
             };
           });
 
-          // Debug log každých 30s (každých 6 iterací po 5s)
-          const iterationCount = Math.floor((Date.now() - startTime) / checkInterval);
-          if (iterationCount % 6 === 0) {
-            console.log(`🔍 [${account.username}] Kontrola přihlášení (${Math.floor((Date.now() - startTime) / 1000)}s): přihlášen=${loginStatus.isLoggedIn}, form=${loginStatus.hasLoginForm}, url=${loginStatus.url}`);
-          }
-
           if (loginStatus.isLoggedIn) {
-            console.log(`✅ [${account.username}] Přihlášení detekováno! (URL: ${loginStatus.url})`);
+            console.log(`✅ [${account.username}] Přihlášení detekováno!`);
             await safeSaveCookies('přihlášení úspěšné');
             await safeCloseBrowser('přihlášení dokončeno');
             break;
@@ -467,23 +452,22 @@ class BrowserManager {
           if (errorMsg.includes('navigation') ||
               errorMsg.includes('Execution context') ||
               errorMsg.includes('detached')) {
-            console.log(`⏳ [${account.username}] Navigace detekována, pokračuji ve sledování...`);
             // Počkej 2s a pokračuj
             await new Promise(resolve => setTimeout(resolve, 2000));
             continue;
           }
 
           // Jiná kritická chyba - zastav sledování
-          console.log(`⚠️  [${account.username}] Chyba při kontrole přihlášení - zastavuji sledování`);
-          console.log(`    Důvod: ${error.message}`);
           shouldStop = true;
           break;
         }
+
+        // Pauza mezi kontrolami (POUZE pokud loop pokračuje)
+        if (!shouldStop) {
+          await new Promise(resolve => setTimeout(resolve, checkInterval));
+        }
       }
     })().catch(async (err) => {
-      console.error(`❌ [${account.username}] Kritická chyba v login watcher:`, err.message);
-      // NEUKLÁDÁME cookies při chybě - nevíme jestli se přihlásil!
-      // Cookies se uloží jen při úspěšném přihlášení nebo zavření browseru uživatelem
       shouldStop = true;
     });
   }
