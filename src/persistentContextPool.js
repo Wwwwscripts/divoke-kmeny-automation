@@ -250,19 +250,32 @@ class PersistentContextPool {
   }
 
   /**
-   * Parse proxy string
+   * Parse proxy string (podpora pro username:password@host:port)
    */
   parseProxy(proxyString) {
     if (!proxyString) return null;
 
-    const match = proxyString.match(/^(https?):\/\/([^:]+):(\d+)$/);
-    if (!match) {
-      throw new Error(`Neplatný formát proxy: ${proxyString}`);
+    let proxy = {};
+
+    // Pokud nemá protokol, přidej http://
+    if (!proxyString.startsWith('http://') && !proxyString.startsWith('https://')) {
+      proxyString = 'http://' + proxyString;
     }
 
-    return {
-      server: proxyString
-    };
+    try {
+      const url = new URL(proxyString);
+
+      proxy.server = `${url.protocol}//${url.hostname}:${url.port}`;
+
+      if (url.username && url.password) {
+        proxy.username = url.username;
+        proxy.password = url.password;
+      }
+
+      return proxy;
+    } catch (error) {
+      throw new Error(`Neplatný formát proxy: ${proxyString}`);
+    }
   }
 
   /**
