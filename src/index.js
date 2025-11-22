@@ -1434,30 +1434,43 @@ class Automator {
       // Robustnější detekce přihlášení
       const loginStatus = await page.evaluate(() => {
         // Detekce PŘIHLÁŠENÍ - hledej více elementů
-        const loggedInIndicators = [
-          document.querySelector('#menu_row'),           // Hlavní menu
-          document.querySelector('#topContainer'),       // Top kontejner
-          document.querySelector('.village-name'),       // Název vesnice
-          document.querySelector('#header_info'),        // Header info
-          document.querySelector('.quickbar')            // Quickbar
-        ];
-        const hasLoggedInElement = loggedInIndicators.some(el => el !== null);
+        const loggedInIndicators = {
+          menu_row: document.querySelector('#menu_row'),
+          topContainer: document.querySelector('#topContainer'),
+          villageName: document.querySelector('.village-name'),
+          headerInfo: document.querySelector('#header_info'),
+          quickbar: document.querySelector('.quickbar')
+        };
+        const hasLoggedInElement = Object.values(loggedInIndicators).some(el => el !== null);
 
         // Detekce NEPŘIHLÁŠENÍ - hledej login formulář
-        const loginIndicators = [
-          document.querySelector('input[name="user"]'),      // Login input
-          document.querySelector('input[name="password"]'),  // Password input
-          document.querySelector('#login_form'),             // Login formulář
-          document.querySelector('.login-container')         // Login kontejner
-        ];
-        const hasLoginForm = loginIndicators.some(el => el !== null);
+        const loginIndicators = {
+          userInput: document.querySelector('input[name="user"]'),
+          passwordInput: document.querySelector('input[name="password"]'),
+          loginForm: document.querySelector('#login_form'),
+          loginContainer: document.querySelector('.login-container')
+        };
+        const hasLoginForm = Object.values(loginIndicators).some(el => el !== null);
 
         return {
           isLoggedIn: hasLoggedInElement && !hasLoginForm,
           hasLoginForm: hasLoginForm,
-          hasGameElements: hasLoggedInElement
+          hasGameElements: hasLoggedInElement,
+          // 🆕 DEBUG: Které elementy byly nalezeny
+          foundLoggedInElements: Object.keys(loggedInIndicators).filter(k => loggedInIndicators[k] !== null),
+          foundLoginElements: Object.keys(loginIndicators).filter(k => loginIndicators[k] !== null)
         };
       });
+
+      // 🆕 DEBUG: Loguj detekční detaily pokud není jasné
+      if (!loginStatus.isLoggedIn && !loginStatus.hasLoginForm) {
+        console.log(`🔍 [${account.username}] Login detekce:`, JSON.stringify({
+          hasGameElements: loginStatus.hasGameElements,
+          hasLoginForm: loginStatus.hasLoginForm,
+          foundLoggedIn: loginStatus.foundLoggedInElements,
+          foundLogin: loginStatus.foundLoginElements
+        }));
+      }
 
       if (loginStatus.hasLoginForm) {
         return false;
