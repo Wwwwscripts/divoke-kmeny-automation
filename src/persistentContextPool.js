@@ -205,6 +205,27 @@ class PersistentContextPool {
     // 🆕 SDÍLENÝ userDataDir! Cookies jsou společné pro hidden & visible browser
     console.log(`🔐 [${account.username}] Persistent context vytvořen (userDataDir: ${userDataDir.split('/').pop()})`);
 
+    // 💾 NAČTI cookies z JSON souboru pokud existuje (ze visible browseru)
+    const { existsSync: checkExists, readFileSync: readFile } = await import('fs');
+    const cookiesPath = join(userDataDir, 'playwright-cookies.json');
+    if (checkExists(cookiesPath)) {
+      try {
+        const cookiesJson = readFile(cookiesPath, 'utf8');
+        const cookies = JSON.parse(cookiesJson);
+        await context.addCookies(cookies);
+        const czAuthCookie = cookies.find(c => c.name === 'cz_auth');
+        if (czAuthCookie) {
+          console.log(`✅ [${account.username}] Načteno ${cookies.length} cookies z playwright-cookies.json (včetně cz_auth)`);
+        } else {
+          console.log(`📥 [${account.username}] Načteno ${cookies.length} cookies, ale cz_auth chybí!`);
+        }
+      } catch (cookieLoadError) {
+        console.log(`⚠️  [${account.username}] Nelze načíst cookies z JSON: ${cookieLoadError.message}`);
+      }
+    } else {
+      console.log(`ℹ️  [${account.username}] playwright-cookies.json neexistuje (nové přihlášení potřeba)`);
+    }
+
     // Získej nebo vytvoř page (persistent context může mít default page)
     let pages = context.pages();
     let page = pages.length > 0 ? pages[0] : await context.newPage();

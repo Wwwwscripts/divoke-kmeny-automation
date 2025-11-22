@@ -363,22 +363,30 @@ class Automator {
 
           console.log(`🧹 [${account.username}] Spouštím cleanup...`);
 
-          // 🔍 DEBUG: Zkontroluj cz_auth cookie PŘED zavřením visible browseru
+          // 💾 KRITICKÉ: Ulož cookies PŘED zavřením visible browseru!
           try {
             const browserInfo = this.openBrowsers.get(account.id);
             if (browserInfo && browserInfo.context) {
               const cookies = await browserInfo.context.cookies();
               const czAuthCookie = cookies.find(c => c.name === 'cz_auth');
+
               if (czAuthCookie) {
                 console.log(`✅ [${account.username}] cz_auth cookie nalezen! (${czAuthCookie.value.substring(0, 20)}...)`);
                 console.log(`🔍 [${account.username}] Cookie domain: ${czAuthCookie.domain}, expires: ${czAuthCookie.expires}`);
+
+                // 💾 ULOŽ cookies do JSON souboru pro hidden browser!
+                const { writeFileSync } = await import('fs');
+                const { join: pathJoin } = await import('path');
+                const cookiesPath = pathJoin(this.browserPool.getUserDataDir(account.id), 'playwright-cookies.json');
+                writeFileSync(cookiesPath, JSON.stringify(cookies, null, 2));
+                console.log(`💾 [${account.username}] Uloženo ${cookies.length} cookies do playwright-cookies.json`);
               } else {
                 console.log(`❌ [${account.username}] cz_auth cookie NENALEZEN! (celkem cookies: ${cookies.length})`);
                 console.log(`🔍 [${account.username}] Dostupné cookies: ${cookies.map(c => c.name).join(', ')}`);
               }
             }
           } catch (cookieError) {
-            console.log(`⚠️  [${account.username}] Nelze přečíst cookies: ${cookieError.message}`);
+            console.log(`⚠️  [${account.username}] Nelze přečíst/uložit cookies: ${cookieError.message}`);
           }
 
           this.openBrowsers.delete(account.id);
