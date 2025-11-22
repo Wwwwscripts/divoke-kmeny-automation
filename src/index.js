@@ -446,8 +446,8 @@ class Automator {
       this.unitsLoop(),        // P6: Kontrola jednotek
       this.scavengeLoop(),     // P2: ZAPNUTO - každých 30 min
       this.recruitLoop(),      // P3: ZAPNUTO
-      this.researchLoop(),     // P4: ZAPNUTO - každých 6h
-      this.paladinLoop(),      // P5: ZAPNUTO - každých 6h
+      // this.researchLoop(),     // P4: VYPNUTO - test přihlašování
+      // this.paladinLoop(),      // P5: VYPNUTO - test přihlašování
       this.dailyRewardsLoop(), // P6: ZAPNUTO - 2x denně
       this.statsMonitor()      // Monitoring
     ]);
