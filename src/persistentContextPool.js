@@ -161,9 +161,21 @@ class PersistentContextPool {
       })();
     `);
 
-    // 🆕 PERSISTENT MODE: NEPOUŽÍVEJ cookies z DB!
-    // Browser si session pamatuje sám → žádné "zastaralé cookies"
-    console.log(`🔐 [${account.username}] Persistent context vytvořen (session žije v browseru)`);
+    // 🆕 BOOTSTRAP: Load cookies ONCE from DB, then never save back
+    // Session lives in browser memory from this point forward
+    if (account.cookies && account.cookies !== 'null') {
+      try {
+        let cookies = JSON.parse(account.cookies);
+        if (Array.isArray(cookies) && cookies.length > 0) {
+          await context.addCookies(cookies);
+          console.log(`🔐 [${account.username}] Bootstrap: Loaded ${cookies.length} cookies from DB (one-time only)`);
+        }
+      } catch (error) {
+        console.error(`❌ [${account.username}] Failed to load bootstrap cookies:`, error.message);
+      }
+    }
+
+    console.log(`🔐 [${account.username}] Persistent context vytvořen (session žije v browseru, cookies se nikdy neuloží zpět)`);
 
     // Vytvoř page
     const page = await context.newPage();
