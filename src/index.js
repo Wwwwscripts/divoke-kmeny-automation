@@ -508,7 +508,15 @@ class Automator {
       const allAccounts = this.db.getAllActiveAccounts();
 
       // Filtruj účty s CAPTCHA - ty se zpracovávají pouze ve visible browseru
-      const accounts = allAccounts.filter(account => !this.captchaDetected.has(account.id));
+      const accounts = allAccounts.filter(account => {
+        // 🛡️ ANTI-BAN: Skip pausnuté účty (refreshni z DB)
+        const currentAccount = this.db.getAccount(account.id);
+        if (currentAccount && currentAccount.paused) {
+          return false;
+        }
+
+        return !this.captchaDetected.has(account.id);
+      });
 
       if (accounts.length === 0) {
         await new Promise(resolve => setTimeout(resolve, 30000));
@@ -569,6 +577,12 @@ class Automator {
 
       // Filtruj pouze účty, které mají build enabled a vypršelý timer
       const accountsToProcess = accounts.filter(account => {
+        // 🛡️ ANTI-BAN: Skip pausnuté účty (refreshni z DB)
+        const currentAccount = this.db.getAccount(account.id);
+        if (currentAccount && currentAccount.paused) {
+          return false;
+        }
+
         // Skip účty s CAPTCHA
         if (this.captchaDetected.has(account.id)) {
           return false;
@@ -638,6 +652,12 @@ class Automator {
 
       // Filtruj pouze účty, které mají scavenge enabled a vypršelý timer
       const accountsToProcess = accounts.filter(account => {
+        // 🛡️ ANTI-BAN: Skip pausnuté účty (refreshni z DB)
+        const currentAccount = this.db.getAccount(account.id);
+        if (currentAccount && currentAccount.paused) {
+          return false;
+        }
+
         // Skip účty s CAPTCHA
         if (this.captchaDetected.has(account.id)) {
           return false;
@@ -713,6 +733,12 @@ class Automator {
 
       // Filtruj pouze účty, které mají recruit enabled
       const accountsToProcess = allAccounts.filter(account => {
+        // 🛡️ ANTI-BAN: Skip pausnuté účty (refreshni z DB)
+        const currentAccount = this.db.getAccount(account.id);
+        if (currentAccount && currentAccount.paused) {
+          return false;
+        }
+
         // Skip účty s CAPTCHA
         if (this.captchaDetected.has(account.id)) {
           return false;
@@ -786,6 +812,12 @@ class Automator {
 
       // Filtruj pouze účty, které mají research enabled a vypršelý timer
       const accountsToProcess = accounts.filter(account => {
+        // 🛡️ ANTI-BAN: Skip pausnuté účty (refreshni z DB)
+        const currentAccount = this.db.getAccount(account.id);
+        if (currentAccount && currentAccount.paused) {
+          return false;
+        }
+
         // Skip účty s CAPTCHA
         if (this.captchaDetected.has(account.id)) {
           return false;
@@ -855,6 +887,12 @@ class Automator {
 
       // Filtruj pouze účty s vypršelým timerem
       const accountsToProcess = accounts.filter(account => {
+        // 🛡️ ANTI-BAN: Skip pausnuté účty (refreshni z DB)
+        const currentAccount = this.db.getAccount(account.id);
+        if (currentAccount && currentAccount.paused) {
+          return false;
+        }
+
         // Skip účty s CAPTCHA
         if (this.captchaDetected.has(account.id)) {
           return false;
@@ -916,7 +954,15 @@ class Automator {
       const allAccounts = this.db.getAllActiveAccounts();
 
       // Filtruj účty s CAPTCHA - ty se zpracovávají pouze ve visible browseru
-      const accounts = allAccounts.filter(account => !this.captchaDetected.has(account.id));
+      const accounts = allAccounts.filter(account => {
+        // 🛡️ ANTI-BAN: Skip pausnuté účty (refreshni z DB)
+        const currentAccount = this.db.getAccount(account.id);
+        if (currentAccount && currentAccount.paused) {
+          return false;
+        }
+
+        return !this.captchaDetected.has(account.id);
+      });
 
       // Zpracuj po 2 účtech
       for (let i = 0; i < accounts.length; i += 2) {
@@ -1010,6 +1056,12 @@ class Automator {
 
       // Filtruj pouze účty, které mají denní odměny povoleny na jejich světě
       const accountsToProcess = accounts.filter(account => {
+        // 🛡️ ANTI-BAN: Skip pausnuté účty (refreshni z DB)
+        const currentAccount = this.db.getAccount(account.id);
+        if (currentAccount && currentAccount.paused) {
+          return false;
+        }
+
         // Skip účty s CAPTCHA
         if (this.captchaDetected.has(account.id)) {
           return false;

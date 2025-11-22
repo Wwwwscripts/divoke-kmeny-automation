@@ -182,7 +182,7 @@ class PersistentContextPool {
         const cookiesJson = readFile(cookiesPath, 'utf8');
         const cookies = JSON.parse(cookiesJson);
         await context.addCookies(cookies);
-        console.log(`✅ [${account.username}] Načteno ${cookies.length} cookies z uložené session`);
+        // ✅ Cookies načteny tiše (verbose log odstraněn)
       } catch (cookieLoadError) {
         console.log(`⚠️  [${account.username}] Nelze načíst cookies: ${cookieLoadError.message}`);
       }
