@@ -3,7 +3,7 @@ import { existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import DatabaseManager from './database.js';
 import BrowserManager from './browserManager.js';
-import SharedBrowserPool from './sharedBrowserPool.js';
+import PersistentContextPool from './persistentContextPool.js';
 import WorkerPool from './workerPool.js';
 import AccountInfoModule from './modules/accountInfo.js';
 import RecruitModule from './modules/recruit.js';
@@ -36,8 +36,8 @@ import { detectAnyChallenge, detectBan } from './utils/antiBot.js';
 class Automator {
   constructor() {
     this.db = new DatabaseManager();
-    this.browserManager = new BrowserManager(this.db);
-    this.browserPool = new SharedBrowserPool(this.db);
+    this.browserPool = new PersistentContextPool(this.db); // 🆕 Persistent contexts
+    this.browserManager = new BrowserManager(this.db, this.browserPool); // 🆕 Sdílený userDataDir
     this.workerPool = new WorkerPool(100); // Max 100 procesů
     this.isRunning = false;
     this.accountWaitTimes = {}; // Per-account per-module timing
@@ -356,9 +356,31 @@ class Automator {
         console.log(`🖥️  [${account.username}] Browser otevřen - čeká na přihlášení`);
 
         // Cleanup funkce při zavření
-        const cleanup = () => {
+        const cleanup = async () => {
           if (!this.openBrowsers.has(account.id)) {
             return; // Už byl vyčištěn
+          }
+
+          // 💾 Ulož cookies PŘED zavřením visible browseru!
+          try {
+            const browserInfo = this.openBrowsers.get(account.id);
+            if (browserInfo && browserInfo.context) {
+              const cookies = await browserInfo.context.cookies();
+              const czAuthCookie = cookies.find(c => c.name === 'cz_auth');
+
+              if (czAuthCookie) {
+                // 💾 ULOŽ cookies do JSON souboru pro hidden browser!
+                const { writeFileSync } = await import('fs');
+                const { join: pathJoin } = await import('path');
+                const cookiesPath = pathJoin(this.browserPool.getUserDataDir(account.id), 'playwright-cookies.json');
+                writeFileSync(cookiesPath, JSON.stringify(cookies, null, 2));
+                console.log(`💾 [${account.username}] Session uložena (${cookies.length} cookies)`);
+              } else {
+                console.log(`⚠️  [${account.username}] cz_auth cookie nenalezen - možná nebyl přihlášen`);
+              }
+            }
+          } catch (cookieError) {
+            console.log(`⚠️  [${account.username}] Nelze uložit session: ${cookieError.message}`);
           }
 
           this.openBrowsers.delete(account.id);
@@ -366,9 +388,21 @@ class Automator {
           this.captchaDetected.delete(account.id);
           this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
 
+          // Restart hidden persistent context aby načetl nové cookies
+          if (this.browserPool && this.browserPool.contexts && this.browserPool.contexts.has(account.id)) {
+            const ctx = this.browserPool.contexts.get(account.id);
+            if (ctx && ctx.context && !ctx.context._closed) {
+              await ctx.context.close().catch(() => {});
+            }
+            this.browserPool.contexts.delete(account.id);
+          }
+
+          // Počkej 10s aby se cookies uložily na disk
+          await new Promise(resolve => setTimeout(resolve, 10000));
+
           // AUTO-UNPAUSE po zavření
           this.db.updateAccountPause(account.id, false);
-          console.log(`✅ [${account.username}] Browser zavřen - účet aktivován`);
+          console.log(`✅ [${account.username}] Browser zavřen - účet pokračuje`);
         };
 
         // Sleduj zavření browseru
@@ -409,6 +443,7 @@ class Automator {
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🛡️  Aktivní ochrana: Human behavior, WebSocket timing, Fingerprinting');
     console.log('🚫 ANTI-BAN: Max 5 visible browserů, auto-pause při selhání přihlášení');
+    console.log('🆕 PERSISTENT MODE: Sessions žijí v browseru, žádné cookies v DB!');
     console.log('🔄 Aktivní smyčky (ANTI-CAPTCHA režim):');
     console.log('   [P1] Kontroly útoků: po 10 účtech (10s pauzy), cyklus každých 5 min');
     console.log('   [P1] Build: každých 30s po 5 účtech (±15s random, 12-18min při chybě)');
@@ -446,8 +481,8 @@ class Automator {
       this.unitsLoop(),        // P6: Kontrola jednotek
       this.scavengeLoop(),     // P2: ZAPNUTO - každých 30 min
       this.recruitLoop(),      // P3: ZAPNUTO
-      this.researchLoop(),     // P4: ZAPNUTO - každých 6h
-      this.paladinLoop(),      // P5: ZAPNUTO - každých 6h
+      // this.researchLoop(),     // P4: VYPNUTO - test přihlašování
+      // this.paladinLoop(),      // P5: VYPNUTO - test přihlašování
       this.dailyRewardsLoop(), // P6: ZAPNUTO - 2x denně
       this.statsMonitor()      // Monitoring
     ]);
@@ -1031,7 +1066,7 @@ class Automator {
   }
 
   /**
-   * Monitoring - vypíše statistiky každých 5 minut
+   * Monitoring - vypíše statistiky každých 5 minut + health check
    */
   async statsMonitor() {
     while (this.isRunning) {
@@ -1040,12 +1075,12 @@ class Automator {
 
       await new Promise(resolve => setTimeout(resolve, 5 * 60 * 1000)); // 5 minut
 
-      const browserStats = this.browserPool.getStats();
+      const poolStats = this.browserPool.getStats();
       const workerStats = this.workerPool.getStats();
 
-      // Loguj pouze pokud jsou nějaké aktivní úlohy
-      if (workerStats.active > 0 || workerStats.queued > 0) {
-        console.log(`📊 Stats | Workers: ${workerStats.active}/${workerStats.total} | Queue: ${workerStats.queued} | Browsers: ${browserStats.browsers}/${browserStats.contexts}`);
+      // 🆕 PERSISTENT MODE: Loguj persistent contexts (každý context = vlastní browser s userDataDir)
+      if (workerStats.active > 0 || workerStats.queued > 0 || poolStats.contexts > 0) {
+        console.log(`📊 Stats | Workers: ${workerStats.active}/${workerStats.total} | Queue: ${workerStats.queued} | Persistent: ${poolStats.contexts} contexts (userDataDir)`);
       }
     }
   }
@@ -1054,25 +1089,26 @@ class Automator {
    * Zpracuj kontroly (útoky/CAPTCHA)
    */
   async processChecks(account) {
-    let browser, context, browserKey;
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
 
     try {
-      // Vytvoř context (sdílený browser)
-      ({ browser, context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
+      // 🆕 Získej persistent context (zůstává živý mezi tasky)
+      const { page } = await this.browserPool.getContext(account.id);
 
       // Přihlásit se
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        // Zavři headless browser
-        await this.browserPool.closeContext(context, browserKey);
+        // 🆕 NEPOUŠTĚJ context - zůstane živý pro retry
+        this.browserPool.releaseContext(account.id);
         // Zpracuj selhání přihlášení
         await this.handleFailedLogin(account);
         return;
       }
 
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
+      // 🆕 ŽÁDNÉ saveCookies - browser si session pamatuje sám!
 
       // Sbírej statistiky s vlastním intervalem
       const infoKey = `accountInfo_${account.id}`;
@@ -1091,7 +1127,7 @@ class Automator {
       // OKAMŽITĚ ZASTAVIT pokud byla detekována captcha
       if (attacksDetected && attacksDetected.captchaDetected) {
         console.log(`⚠️  [${account.username}] CAPTCHA detekována - pausuji účet`);
-        await this.browserPool.closeContext(context, browserKey);
+        this.browserPool.releaseContext(account.id);
         await this.handleFailedLogin(account);
         return;
       }
@@ -1118,7 +1154,7 @@ class Automator {
             // Pokud byla detekována captcha během fetchování
             if (fetchResult && fetchResult.captchaDetected) {
               console.log(`⚠️  [${account.username}] CAPTCHA detekována během fetchování - pausuji účet`);
-              await this.browserPool.closeContext(context, browserKey);
+              this.browserPool.releaseContext(account.id);
               await this.handleFailedLogin(account);
               return;
             }
@@ -1132,8 +1168,8 @@ class Automator {
       if (isConquered) {
         console.log(`🚨 [${account.username}] VESNICE DOBYTA!`);
 
-        // Zavři headless browser
-        await this.browserPool.closeContext(context, browserKey);
+        // 🆕 Pušť context (zůstane živý)
+        this.browserPool.releaseContext(account.id);
 
         // Označ účet jako dobytý v databázi
         this.db.updateAccountInfo(account.id, {
@@ -1172,13 +1208,12 @@ class Automator {
         return;
       }
 
-      // Zavři context (browser zůstane běžet)
-      await this.browserPool.closeContext(context, browserKey);
+      // 🆕 Pušť context zpět do poolu (zůstane živý)
+      this.browserPool.releaseContext(account.id);
 
     } catch (error) {
-      if (context && browserKey) {
-        await this.browserPool.closeContext(context, browserKey);
-      }
+      // 🆕 I při chybě context zůstává živý
+      this.browserPool.releaseContext(account.id);
       throw error; // Re-throw pro správné logování v Promise.allSettled
     }
   }
@@ -1187,21 +1222,20 @@ class Automator {
    * Zpracuj výstavbu
    */
   async processBuilding(account, settings) {
-    let context, browserKey;
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
 
     try {
-      ({ context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
+      const { page } = await this.browserPool.getContext(account.id);
 
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        await this.browserPool.closeContext(context, browserKey);
+        this.browserPool.releaseContext(account.id);
         await this.handleFailedLogin(account);
         return;
       }
-
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
 
       const buildingModule = new BuildingModule(page, this.db, account.id);
       const buildResult = await buildingModule.startBuilding(settings.template);
@@ -1218,10 +1252,10 @@ class Automator {
         this.accountWaitTimes[`building_${account.id}`] = Date.now() + 10 * 60 * 1000; // 10 min fallback
       }
 
-      await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
 
     } catch (error) {
-      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
       throw error; // Re-throw pro správné logování v Promise.allSettled
     }
   }
@@ -1230,21 +1264,20 @@ class Automator {
    * Zpracuj sběr (scavenge)
    */
   async processScavenge(account) {
-    let context, browserKey;
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
 
     try {
-      ({ context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
+      const { page } = await this.browserPool.getContext(account.id);
 
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        await this.browserPool.closeContext(context, browserKey);
+        this.browserPool.releaseContext(account.id);
         await this.handleFailedLogin(account);
         return;
       }
-
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
 
       const scavengeModule = new ScavengeModule(page, this.db, account.id);
       const scavengeResult = await scavengeModule.execute();
@@ -1256,11 +1289,11 @@ class Automator {
         this.accountWaitTimes[`scavenge_${account.id}`] = Date.now() + this.intervals.scavenge;
       }
 
-      await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při sběru:`, error.message);
-      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
     }
   }
 
@@ -1268,21 +1301,20 @@ class Automator {
    * Zpracuj rekrutování
    */
   async processRecruit(account, settings) {
-    let context, browserKey;
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
 
     try {
-      ({ context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
+      const { page } = await this.browserPool.getContext(account.id);
 
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        await this.browserPool.closeContext(context, browserKey);
+        this.browserPool.releaseContext(account.id);
         await this.handleFailedLogin(account);
         return;
       }
-
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
 
       const recruitModule = new RecruitModule(page, this.db, account.id);
       // collectUnitsInfo() již není potřeba - jednotky sbírá SupportModule v checksLoop()
@@ -1296,11 +1328,11 @@ class Automator {
         this.accountWaitTimes[`recruit_${account.id}`] = Date.now() + this.intervals.recruit;
       }
 
-      await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při rekrutování:`, error.message);
-      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
     }
   }
 
@@ -1308,21 +1340,20 @@ class Automator {
    * Zpracuj výzkum
    */
   async processResearch(account, settings) {
-    let context, browserKey;
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
 
     try {
-      ({ context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
+      const { page } = await this.browserPool.getContext(account.id);
 
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        await this.browserPool.closeContext(context, browserKey);
+        this.browserPool.releaseContext(account.id);
         await this.handleFailedLogin(account);
         return;
       }
-
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
 
       const researchModule = new ResearchModule(page, this.db, account.id);
       const researchResult = await researchModule.autoResearch();
@@ -1336,11 +1367,11 @@ class Automator {
         this.accountWaitTimes[`research_${account.id}`] = Date.now() + this.intervals.research;
       }
 
-      await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při výzkumu:`, error.message);
-      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
     }
   }
 
@@ -1348,31 +1379,30 @@ class Automator {
    * Zpracuj kontrolu jednotek
    */
   async processUnits(account) {
-    let context, browserKey;
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
 
     try {
-      ({ context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
+      const { page } = await this.browserPool.getContext(account.id);
 
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
         console.log(`      ❌ [${account.username}] Přihlášení selhalo`);
-        await this.browserPool.closeContext(context, browserKey);
+        this.browserPool.releaseContext(account.id);
         await this.handleFailedLogin(account);
         return;
       }
 
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
-
       const supportModule = new SupportModule(page, this.db, account.id);
       await supportModule.getAllUnitsInfo();
 
-      await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
 
     } catch (error) {
       console.error(`      ❌ [${account.username}] Chyba při kontrole jednotek: ${error.message}`);
-      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
       throw error; // Re-throw pro správné logování v Promise.allSettled
     }
   }
@@ -1381,21 +1411,20 @@ class Automator {
    * Zpracuj denní odměny
    */
   async processDailyRewards(account) {
-    let context, browserKey;
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
 
     try {
-      ({ context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
+      const { page } = await this.browserPool.getContext(account.id);
 
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        await this.browserPool.closeContext(context, browserKey);
+        this.browserPool.releaseContext(account.id);
         await this.handleFailedLogin(account);
         return;
       }
-
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
 
       const dailyRewardsModule = new DailyRewardsModule(page, this.db, account.id);
       const result = await dailyRewardsModule.execute();
@@ -1407,11 +1436,11 @@ class Automator {
       // Nastav wait time na další den (24 hodin)
       this.accountWaitTimes[`dailyRewards_${account.id}`] = Date.now();
 
-      await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
 
     } catch (error) {
       logger.error(`Chyba při výběru denních odměn: ${error.message}`, account.username);
-      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
     }
   }
 
@@ -1419,21 +1448,20 @@ class Automator {
    * Zpracuj paladina
    */
   async processPaladin(account) {
-    let context, browserKey;
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
 
     try {
-      ({ context, browserKey } = await this.browserPool.createContext(account.id));
-      const page = await context.newPage();
+      const { page } = await this.browserPool.getContext(account.id);
 
       const loginSuccess = await this.loginToGame(page, account);
       if (!loginSuccess) {
-        await this.browserPool.closeContext(context, browserKey);
+        this.browserPool.releaseContext(account.id);
         await this.handleFailedLogin(account);
         return;
       }
-
-      // Ulož cookies po úspěšném přihlášení (server může obnovit session)
-      await this.browserPool.saveCookies(context, account.id);
 
       const paladinModule = new PaladinModule(page, this.db, account.id);
       const paladinResult = await paladinModule.execute();
@@ -1447,11 +1475,11 @@ class Automator {
         this.accountWaitTimes[`paladin_${account.id}`] = Date.now() + this.intervals.paladin;
       }
 
-      await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
 
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při zpracování paladina:`, error.message);
-      if (context && browserKey) await this.browserPool.closeContext(context, browserKey);
+      this.browserPool.releaseContext(account.id);
     }
   }
 
@@ -1480,30 +1508,43 @@ class Automator {
       // Robustnější detekce přihlášení
       const loginStatus = await page.evaluate(() => {
         // Detekce PŘIHLÁŠENÍ - hledej více elementů
-        const loggedInIndicators = [
-          document.querySelector('#menu_row'),           // Hlavní menu
-          document.querySelector('#topContainer'),       // Top kontejner
-          document.querySelector('.village-name'),       // Název vesnice
-          document.querySelector('#header_info'),        // Header info
-          document.querySelector('.quickbar')            // Quickbar
-        ];
-        const hasLoggedInElement = loggedInIndicators.some(el => el !== null);
+        const loggedInIndicators = {
+          menu_row: document.querySelector('#menu_row'),
+          topContainer: document.querySelector('#topContainer'),
+          villageName: document.querySelector('.village-name'),
+          headerInfo: document.querySelector('#header_info'),
+          quickbar: document.querySelector('.quickbar')
+        };
+        const hasLoggedInElement = Object.values(loggedInIndicators).some(el => el !== null);
 
         // Detekce NEPŘIHLÁŠENÍ - hledej login formulář
-        const loginIndicators = [
-          document.querySelector('input[name="user"]'),      // Login input
-          document.querySelector('input[name="password"]'),  // Password input
-          document.querySelector('#login_form'),             // Login formulář
-          document.querySelector('.login-container')         // Login kontejner
-        ];
-        const hasLoginForm = loginIndicators.some(el => el !== null);
+        const loginIndicators = {
+          userInput: document.querySelector('input[name="user"]'),
+          passwordInput: document.querySelector('input[name="password"]'),
+          loginForm: document.querySelector('#login_form'),
+          loginContainer: document.querySelector('.login-container')
+        };
+        const hasLoginForm = Object.values(loginIndicators).some(el => el !== null);
 
         return {
           isLoggedIn: hasLoggedInElement && !hasLoginForm,
           hasLoginForm: hasLoginForm,
-          hasGameElements: hasLoggedInElement
+          hasGameElements: hasLoggedInElement,
+          // 🆕 DEBUG: Které elementy byly nalezeny
+          foundLoggedInElements: Object.keys(loggedInIndicators).filter(k => loggedInIndicators[k] !== null),
+          foundLoginElements: Object.keys(loginIndicators).filter(k => loginIndicators[k] !== null)
         };
       });
+
+      // 🆕 DEBUG: Loguj detekční detaily pokud není jasné
+      if (!loginStatus.isLoggedIn && !loginStatus.hasLoginForm) {
+        console.log(`🔍 [${account.username}] Login detekce:`, JSON.stringify({
+          hasGameElements: loginStatus.hasGameElements,
+          hasLoginForm: loginStatus.hasLoginForm,
+          foundLoggedIn: loginStatus.foundLoggedInElements,
+          foundLogin: loginStatus.foundLoginElements
+        }));
+      }
 
       if (loginStatus.hasLoginForm) {
         return false;
@@ -1578,9 +1619,9 @@ class Automator {
       console.log(`   Vymazáno ${clearedCount} čekajících úloh`);
     }
 
-    // 3. Zavři všechny headless browsery (bez ukládání cookies!)
-    console.log('\n📍 Krok 3/4: Zavírám headless browsery...');
-    console.log('ℹ️  Cookies se NEUKLÁDAJÍ - ukládá se pouze při manuálním přihlášení');
+    // 3. Zavři všechny persistent contexts a browsery
+    console.log('\n📍 Krok 3/4: Zavírám persistent contexts...');
+    console.log('ℹ️  🆕 PERSISTENT MODE: Sessions žijí v browseru, ne v DB');
     try {
       await this.browserPool.closeAll();
     } catch (error) {
