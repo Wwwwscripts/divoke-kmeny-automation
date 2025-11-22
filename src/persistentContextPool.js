@@ -75,34 +75,6 @@ class PersistentContextPool {
     // UserDataDir pro tento účet (sdílený mezi hidden & visible)
     const userDataDir = join(this.baseDataDir, `account-${accountId}`);
 
-    // 🔍 DEBUG: Zkontroluj jestli existují cookies v userDataDir
-    const { existsSync, readdirSync } = await import('fs');
-    const dirExists = existsSync(userDataDir);
-    if (dirExists) {
-      try {
-        const files = readdirSync(userDataDir);
-        const hasCookies = files.some(f => f.includes('Cookie') || f.includes('cookie'));
-        // 🔍 DEBUG: Vypiš názvy všech souborů
-        console.log(`🔍 [${account.username}] userDataDir: ${userDataDir}`);
-        console.log(`🔍 [${account.username}] Soubory root (${files.length}): ${files.join(', ')}`);
-
-        // 🔍 KRITICKÉ: Cookies jsou v Default/ podsložce!
-        const defaultDir = join(userDataDir, 'Default');
-        if (existsSync(defaultDir)) {
-          const defaultFiles = readdirSync(defaultDir);
-          const hasCookiesInDefault = defaultFiles.some(f => f === 'Cookies' || f === 'Network');
-          console.log(`🔍 [${account.username}] Soubory Default/ (${defaultFiles.length}): ${defaultFiles.slice(0, 20).join(', ')}${defaultFiles.length > 20 ? '...' : ''}`);
-          console.log(`🔍 [${account.username}] Cookies v Default/: ${hasCookiesInDefault ? '✅' : '❌'}`);
-        } else {
-          console.log(`🔍 [${account.username}] Default/ složka NEEXISTUJE!`);
-        }
-      } catch (e) {
-        console.log(`🔍 [${account.username}] userDataDir existuje, ale nelze přečíst: ${e.message}`);
-      }
-    } else {
-      console.log(`🔍 [${account.username}] userDataDir NEEXISTUJE (nový účet)`);
-    }
-
     // Launch options pro persistent context
     const launchOptions = {
       headless: true,
@@ -202,9 +174,6 @@ class PersistentContextPool {
       })();
     `);
 
-    // 🆕 SDÍLENÝ userDataDir! Cookies jsou společné pro hidden & visible browser
-    console.log(`🔐 [${account.username}] Persistent context vytvořen (userDataDir: ${userDataDir.split('/').pop()})`);
-
     // 💾 NAČTI cookies z JSON souboru pokud existuje (ze visible browseru)
     const { existsSync: checkExists, readFileSync: readFile } = await import('fs');
     const cookiesPath = join(userDataDir, 'playwright-cookies.json');
@@ -213,17 +182,10 @@ class PersistentContextPool {
         const cookiesJson = readFile(cookiesPath, 'utf8');
         const cookies = JSON.parse(cookiesJson);
         await context.addCookies(cookies);
-        const czAuthCookie = cookies.find(c => c.name === 'cz_auth');
-        if (czAuthCookie) {
-          console.log(`✅ [${account.username}] Načteno ${cookies.length} cookies z playwright-cookies.json (včetně cz_auth)`);
-        } else {
-          console.log(`📥 [${account.username}] Načteno ${cookies.length} cookies, ale cz_auth chybí!`);
-        }
+        console.log(`✅ [${account.username}] Načteno ${cookies.length} cookies z uložené session`);
       } catch (cookieLoadError) {
-        console.log(`⚠️  [${account.username}] Nelze načíst cookies z JSON: ${cookieLoadError.message}`);
+        console.log(`⚠️  [${account.username}] Nelze načíst cookies: ${cookieLoadError.message}`);
       }
-    } else {
-      console.log(`ℹ️  [${account.username}] playwright-cookies.json neexistuje (nové přihlášení potřeba)`);
     }
 
     // Získej nebo vytvoř page (persistent context může mít default page)

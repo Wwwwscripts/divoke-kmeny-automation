@@ -361,9 +361,7 @@ class Automator {
             return; // Už byl vyčištěn
           }
 
-          console.log(`🧹 [${account.username}] Spouštím cleanup...`);
-
-          // 💾 KRITICKÉ: Ulož cookies PŘED zavřením visible browseru!
+          // 💾 Ulož cookies PŘED zavřením visible browseru!
           try {
             const browserInfo = this.openBrowsers.get(account.id);
             if (browserInfo && browserInfo.context) {
@@ -371,22 +369,18 @@ class Automator {
               const czAuthCookie = cookies.find(c => c.name === 'cz_auth');
 
               if (czAuthCookie) {
-                console.log(`✅ [${account.username}] cz_auth cookie nalezen! (${czAuthCookie.value.substring(0, 20)}...)`);
-                console.log(`🔍 [${account.username}] Cookie domain: ${czAuthCookie.domain}, expires: ${czAuthCookie.expires}`);
-
                 // 💾 ULOŽ cookies do JSON souboru pro hidden browser!
                 const { writeFileSync } = await import('fs');
                 const { join: pathJoin } = await import('path');
                 const cookiesPath = pathJoin(this.browserPool.getUserDataDir(account.id), 'playwright-cookies.json');
                 writeFileSync(cookiesPath, JSON.stringify(cookies, null, 2));
-                console.log(`💾 [${account.username}] Uloženo ${cookies.length} cookies do playwright-cookies.json`);
+                console.log(`💾 [${account.username}] Session uložena (${cookies.length} cookies)`);
               } else {
-                console.log(`❌ [${account.username}] cz_auth cookie NENALEZEN! (celkem cookies: ${cookies.length})`);
-                console.log(`🔍 [${account.username}] Dostupné cookies: ${cookies.map(c => c.name).join(', ')}`);
+                console.log(`⚠️  [${account.username}] cz_auth cookie nenalezen - možná nebyl přihlášen`);
               }
             }
           } catch (cookieError) {
-            console.log(`⚠️  [${account.username}] Nelze přečíst/uložit cookies: ${cookieError.message}`);
+            console.log(`⚠️  [${account.username}] Nelze uložit session: ${cookieError.message}`);
           }
 
           this.openBrowsers.delete(account.id);
@@ -394,50 +388,21 @@ class Automator {
           this.captchaDetected.delete(account.id);
           this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
 
-          // 🆕 RESTART hidden persistent context aby načetl nové cookies z userDataDir!
+          // Restart hidden persistent context aby načetl nové cookies
           if (this.browserPool && this.browserPool.contexts && this.browserPool.contexts.has(account.id)) {
             const ctx = this.browserPool.contexts.get(account.id);
-            const userDataDir = ctx.userDataDir;
-            console.log(`📂 [${account.username}] userDataDir: ${userDataDir}`);
-
-            // Zavři context (příští použití vytvoří NOVÝ s čerstvými cookies)
             if (ctx && ctx.context && !ctx.context._closed) {
-              await ctx.context.close().catch(() => {}); // Ignoruj chyby při zavírání
+              await ctx.context.close().catch(() => {});
             }
             this.browserPool.contexts.delete(account.id);
-            console.log(`🔄 [${account.username}] Persistent context zavřen`);
           }
 
-          // ⏰ KRITICKÉ: Počkej 10 sekund aby se cookies zapsaly na disk a Chromium uvolnil lock!
-          console.log(`⏰ [${account.username}] Čekám 10s na flush cookies a uvolnění profile lock...`);
+          // Počkej 10s aby se cookies uložily na disk
           await new Promise(resolve => setTimeout(resolve, 10000));
-
-          // 🔍 DEBUG: Zkontroluj lock files v userDataDir
-          const { readdirSync: readDir } = await import('fs');
-          const { join: pathJoin } = await import('path');
-          const userDataDir = this.browserPool ? this.browserPool.getUserDataDir(account.id) : null;
-          if (userDataDir) {
-            try {
-              const files = readDir(userDataDir);
-              const lockFiles = files.filter(f => f.toLowerCase().includes('lock'));
-              if (lockFiles.length > 0) {
-                console.log(`🔒 [${account.username}] Lock files v root: ${lockFiles.join(', ')}`);
-              }
-              // Zkontroluj i Default/ složku
-              const defaultDir = pathJoin(userDataDir, 'Default');
-              const defaultFiles = readDir(defaultDir);
-              const defaultLockFiles = defaultFiles.filter(f => f.toLowerCase().includes('lock'));
-              if (defaultLockFiles.length > 0) {
-                console.log(`🔒 [${account.username}] Lock files v Default/: ${defaultLockFiles.join(', ')}`);
-              }
-            } catch (e) {
-              // Ignore
-            }
-          }
 
           // AUTO-UNPAUSE po zavření
           this.db.updateAccountPause(account.id, false);
-          console.log(`✅ [${account.username}] Browser zavřen - účet aktivován`);
+          console.log(`✅ [${account.username}] Browser zavřen - účet pokračuje`);
         };
 
         // Sleduj zavření browseru
@@ -1523,16 +1488,6 @@ class Automator {
    */
   async loginToGame(page, account) {
     try {
-      // 🔍 DEBUG: Zkontroluj cz_auth cookie PŘED navigací
-      const context = page.context();
-      const cookies = await context.cookies();
-      const czAuthCookie = cookies.find(c => c.name === 'cz_auth');
-      if (czAuthCookie) {
-        console.log(`🔍 [${account.username}] cz_auth cookie existuje před navigací (${czAuthCookie.value.substring(0, 20)}...)`);
-      } else {
-        console.log(`🔍 [${account.username}] cz_auth cookie NEEXISTUJE před navigací (celkem ${cookies.length} cookies)`);
-      }
-
       const domain = this.getWorldDomain(account.world);
       await page.goto(`https://${account.world}.${domain}/game.php`, {
         waitUntil: 'networkidle', // Čeká na kompletní načtení včetně network requestů
