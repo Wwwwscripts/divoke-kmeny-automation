@@ -1504,25 +1504,20 @@ class Automator {
   async loginToGame(page, account) {
     try {
       const domain = this.getWorldDomain(account.world);
-      await page.goto(`https://${account.world}.${domain}/game.php`, {
-        waitUntil: 'networkidle', // Čeká na kompletní načtení včetně network requestů
+      const { humanDelay } = await import('./utils/randomize.js');
+
+      // 🆕 Krok 1: Jdi na /page/play/{world} (vstupní stránka)
+      await page.goto(`https://www.${domain}/page/play/${account.world}`, {
+        waitUntil: 'domcontentloaded',
         timeout: 45000
       });
 
-      // Počkej na stabilizaci stránky (2-4s random)
-      const { humanDelay } = await import('./utils/randomize.js');
-      await humanDelay(2000, 4000);
+      // Počkej na stabilizaci stránky
+      await humanDelay(1000, 2000);
 
-      // Zkontroluj, jestli není přesměrováno na create_village.php (dobytí vesnice)
-      const currentUrl = page.url();
-      if (currentUrl.includes('create_village.php')) {
-        console.log('⚠️  Detekováno přesměrování na create_village.php - vesnice dobyta, ale uživatel je přihlášen');
-        return true; // Technicky je přihlášen, jen má dobyto vesnici
-      }
-
-      // Robustnější detekce přihlášení
-      const loginStatus = await page.evaluate(() => {
-        // Detekce PŘIHLÁŠENÍ - hledej více elementů
+      // 🆕 Krok 2: Detekuj jestli je přihlášený NEBO je na výběru světa
+      const pageStatus = await page.evaluate(() => {
+        // Detekce PŘIHLÁŠENÍ (je už ve hře)
         const loggedInIndicators = {
           menu_row: document.querySelector('#menu_row'),
           topContainer: document.querySelector('#topContainer'),
@@ -1532,7 +1527,120 @@ class Automator {
         };
         const hasLoggedInElement = Object.values(loggedInIndicators).some(el => el !== null);
 
-        // Detekce NEPŘIHLÁŠENÍ - hledej login formulář
+        // Detekce LOGIN FORMULÁŘE (nepřihlášený)
+        const loginIndicators = {
+          userInput: document.querySelector('input[name="user"]'),
+          passwordInput: document.querySelector('input[name="password"]'),
+          loginForm: document.querySelector('#login_form'),
+          loginContainer: document.querySelector('.login-container')
+        };
+        const hasLoginForm = Object.values(loginIndicators).some(el => el !== null);
+
+        // Detekce VÝBĚR SVĚTA (přihlášený na účtu, ale ne ve světě)
+        // Hledej tlačítko/link pro vstup do světa
+        const worldSelectors = [
+          'a[href*="/game.php"]',                    // Link na game.php
+          'button:has-text("Hrát")',                 // Tlačítko "Hrát"
+          'button:has-text("Play")',                 // Tlačítko "Play" (EN)
+          'a:has-text("Hrát")',                      // Link "Hrát"
+          '.world-action a',                         // Link ve world action
+          '.server_select_button a',                 // Server select button
+        ];
+
+        let worldButton = null;
+        for (const selector of worldSelectors) {
+          try {
+            const el = document.querySelector(selector);
+            if (el) {
+              worldButton = el;
+              break;
+            }
+          } catch (e) {
+            // Skip invalid selectors (like :has-text which is not standard CSS)
+          }
+        }
+
+        // Fallback: najdi jakýkoliv link který obsahuje world ID v href
+        if (!worldButton) {
+          const allLinks = Array.from(document.querySelectorAll('a'));
+          worldButton = allLinks.find(link =>
+            link.href && link.href.includes('/game.php')
+          );
+        }
+
+        return {
+          isLoggedIn: hasLoggedInElement && !hasLoginForm,
+          hasLoginForm: hasLoginForm,
+          hasWorldButton: worldButton !== null,
+          worldButtonSelector: worldButton ? worldButton.tagName + (worldButton.className ? '.' + worldButton.className.split(' ').join('.') : '') : null
+        };
+      });
+
+      // 🆕 Krok 3: Pokud je tlačítko výběru světa, klikni na něj
+      if (pageStatus.hasWorldButton && !pageStatus.isLoggedIn && !pageStatus.hasLoginForm) {
+        console.log(`🎮 [${account.username}] Nacházím se na výběru světa - klikám na svět...`);
+
+        try {
+          // Zkus několik selektorů
+          const selectors = [
+            `a[href*="${account.world}.${domain}/game.php"]`,  // Přesný link na svět
+            `a[href*="/game.php"]`,                             // Jakýkoliv game.php link
+          ];
+
+          let clicked = false;
+          for (const selector of selectors) {
+            try {
+              const element = await page.$(selector);
+              if (element) {
+                await element.click();
+                clicked = true;
+                console.log(`✅ [${account.username}] Kliknuto na svět pomocí: ${selector}`);
+                break;
+              }
+            } catch (e) {
+              // Pokračuj dalším selektorem
+            }
+          }
+
+          if (!clicked) {
+            console.log(`⚠️  [${account.username}] Nepodařilo se najít tlačítko pro vstup do světa`);
+            return false;
+          }
+
+          // Počkej na navigaci na herní server
+          await page.waitForURL(`**/${account.world}.${domain}/**`, { timeout: 10000 });
+          await humanDelay(1000, 2000);
+
+        } catch (clickError) {
+          console.log(`⚠️  [${account.username}] Chyba při klikání na svět: ${clickError.message}`);
+          return false;
+        }
+      } else if (pageStatus.hasLoginForm) {
+        // Login formulář - není přihlášený vůbec
+        console.log(`🔑 [${account.username}] Detekován login formulář - není přihlášený`);
+        return false;
+      }
+
+      // 🆕 Krok 4: Zkontroluj že jsme ve hře (game.php)
+      const currentUrl = page.url();
+
+      // Zkontroluj, jestli není přesměrováno na create_village.php (dobytí vesnice)
+      if (currentUrl.includes('create_village.php')) {
+        console.log('⚠️  Detekováno přesměrování na create_village.php - vesnice dobyta, ale uživatel je přihlášen');
+        return true; // Technicky je přihlášen, jen má dobyto vesnici
+      }
+
+      // Robustnější detekce přihlášení ve hře
+      const loginStatus = await page.evaluate(() => {
+        const loggedInIndicators = {
+          menu_row: document.querySelector('#menu_row'),
+          topContainer: document.querySelector('#topContainer'),
+          villageName: document.querySelector('.village-name'),
+          headerInfo: document.querySelector('#header_info'),
+          quickbar: document.querySelector('.quickbar')
+        };
+        const hasLoggedInElement = Object.values(loggedInIndicators).some(el => el !== null);
+
         const loginIndicators = {
           userInput: document.querySelector('input[name="user"]'),
           passwordInput: document.querySelector('input[name="password"]'),
@@ -1545,15 +1653,15 @@ class Automator {
           isLoggedIn: hasLoggedInElement && !hasLoginForm,
           hasLoginForm: hasLoginForm,
           hasGameElements: hasLoggedInElement,
-          // 🆕 DEBUG: Které elementy byly nalezeny
           foundLoggedInElements: Object.keys(loggedInIndicators).filter(k => loggedInIndicators[k] !== null),
           foundLoginElements: Object.keys(loginIndicators).filter(k => loginIndicators[k] !== null)
         };
       });
 
-      // 🆕 DEBUG: Loguj detekční detaily pokud není jasné
+      // DEBUG: Loguj detekční detaily pokud není jasné
       if (!loginStatus.isLoggedIn && !loginStatus.hasLoginForm) {
         console.log(`🔍 [${account.username}] Login detekce:`, JSON.stringify({
+          url: currentUrl,
           hasGameElements: loginStatus.hasGameElements,
           hasLoginForm: loginStatus.hasLoginForm,
           foundLoggedIn: loginStatus.foundLoggedInElements,
