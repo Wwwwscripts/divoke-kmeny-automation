@@ -154,61 +154,53 @@ class BrowserManager {
     const locale = domain.includes('divoke-kmene.sk') ? 'sk-SK' : 'cs-CZ';
     const timezoneId = domain.includes('divoke-kmene.sk') ? 'Europe/Bratislava' : 'Europe/Prague';
 
-    const contextOptions = {
-      viewport: null, // Fullscreen mode pro viditelný browser
+    // 🆕 Použij STEJNÝ userDataDir jako hidden browser!
+    const userDataDir = this.persistentContextPool
+      ? this.persistentContextPool.getUserDataDir(accountId)
+      : null;
+
+    // Launch options pro visible browser
+    const launchOptions = {
+      headless: false,  // VŽDY visible
+      viewport: null, // Fullscreen mode
       userAgent: fingerprint.userAgent,
       locale,
       timezoneId,
       ignoreHTTPSErrors: true,
-    };
-
-    if (account.proxy) {
-      const proxy = this.parseProxy(account.proxy);
-      contextOptions.proxy = proxy;
-      console.log(`🔐 Používám proxy: ${proxy.server}`);
-    }
-
-    const browser = await chromium.launch({
-      headless: false,
       args: [
         '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage',
         '--no-sandbox',
         '--start-maximized'
       ]
-    });
+    };
 
-    const context = await browser.newContext(contextOptions);
+    if (account.proxy) {
+      const proxy = this.parseProxy(account.proxy);
+      launchOptions.proxy = proxy;
+      console.log(`🔐 Používám proxy: ${proxy.server}`);
+    }
+
+    // 🆕 Launch s userDataDir (sdílený s hidden browserem)
+    const context = userDataDir
+      ? await chromium.launchPersistentContext(userDataDir, launchOptions)
+      : await chromium.launch({ headless: false, args: launchOptions.args }).then(b => b.newContext());
+
+    const browser = context.browser();
 
     // Přidej stealth script s unikátním fingerprintem
     const stealthScript = createStealthScript(fingerprint);
     await context.addInitScript(stealthScript);
 
-    if (account.cookies && account.cookies !== 'null') {
-      try {
-        let cookies = JSON.parse(account.cookies);
-        // Zajistit že cookies jsou pole (Playwright vyžaduje array)
-        if (!Array.isArray(cookies)) {
-          // Pokud jsou cookies null nebo undefined, přeskoč
-          if (cookies === null || cookies === undefined) {
-            console.warn(`⚠️  Cookies pro ${account.username} jsou null/undefined - přeskakuji`);
-          } else {
-            console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
-            cookies = Object.values(cookies);
-            await context.addCookies(cookies);
-            // Cookies načteny - tichý log
-          }
-        } else {
-          await context.addCookies(cookies);
-          // Cookies načteny - tichý log
-        }
-      } catch (error) {
-        console.error('❌ Chyba při načítání cookies:', error.message);
-      }
+    // 🆕 ŽÁDNÉ cookies z DB! Cookies jsou v userDataDir (sdílené s hidden)
+    if (userDataDir) {
+      console.log(`🔗 Sdílený userDataDir: ${userDataDir.split('/').pop()} (hidden ↔️ visible)`);
     }
 
     try {
-      const page = await context.newPage();
+      // Získej nebo vytvoř page (persistent context může mít default page)
+      let pages = context.pages();
+      let page = pages.length > 0 ? pages[0] : await context.newPage();
 
       // Setup WebSocket interceptor pro human-like timing
       await setupWebSocketInterceptor(page, {
@@ -220,17 +212,7 @@ class BrowserManager {
       });
 
       if (account.world) {
-        // Vyčisti localStorage/sessionStorage před načtením
-        console.log(`🧹 Čistím storage pro: ${account.username}`);
-        await page.goto(`https://${account.world}.${domain}/`, {
-          waitUntil: 'domcontentloaded',
-          timeout: 30000
-        });
-        await page.evaluate(() => {
-          localStorage.clear();
-          sessionStorage.clear();
-        });
-
+        // 🆕 NEČISTÍME storage! userDataDir má správné cookies a localStorage
         // Použij targetUrl pokud je zadaná, jinak game.php
         const finalUrl = targetUrl || '/game.php';
         console.log(`🌐 Načítám svět: ${account.world} (${domain}, ${locale}) - URL: ${finalUrl}`);
@@ -291,15 +273,15 @@ class BrowserManager {
         });
       }
 
-      // Spusť sledování přihlášení POUZE pokud je autoSaveAndClose = true
+      // 🆕 Cookies se ukládají automaticky do userDataDir!
       if (autoSaveAndClose) {
         console.log('🖥️  Prohlížeč otevřen - přihlaste se');
-        console.log('💾 Systém automaticky uloží cookies a zavře okno po přihlášení');
+        console.log('💾 Cookies se ukládají automaticky do userDataDir (sdílené s hidden)');
         this.startLoginWatcher(browser, context, page, account);
       } else {
         console.log('🖥️  Prohlížeč otevřen pro manuální kontrolu');
         console.log('⚠️  Browser se NEZAVŘE automaticky - zavřete ho ručně');
-        console.log('⚠️  Cookies se NEULOŽÍ automaticky - pouze po úspěšném přihlášení');
+        console.log('💾 Cookies se ukládají automaticky do userDataDir');
       }
 
       // Vrať browser, context, page pro sledování zavření
@@ -322,19 +304,11 @@ class BrowserManager {
     let shouldStop = false;
     const startTime = Date.now();
 
-    // Funkce pro bezpečné uložení cookies
+    // 🆕 Cookies se ukládají automaticky do userDataDir - tato funkce je deprecated
     const safeSaveCookies = async (reason = '') => {
-      try {
-        const cookies = await context.cookies();
-        if (cookies && cookies.length > 0) {
-          this.db.updateCookies(account.id, cookies);
-          console.log(`💾 [${account.username}] Cookies uloženy (${cookies.length} cookies)${reason ? ` - ${reason}` : ''}`);
-          return true;
-        }
-      } catch (error) {
-        console.error(`⚠️  [${account.username}] Nepodařilo se uložit cookies:`, error.message);
-      }
-      return false;
+      // No-op: Cookies jsou automaticky v userDataDir (sdílené mezi hidden/visible)
+      console.log(`💾 [${account.username}] Cookies automaticky v userDataDir${reason ? ` - ${reason}` : ''}`);
+      return true;
     };
 
     // Funkce pro bezpečné zavření browseru
