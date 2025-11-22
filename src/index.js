@@ -224,12 +224,7 @@ class Automator {
     };
 
     try {
-      // Smaž neplatné cookies
-      const accountData = this.db.getAccount(account.id);
-      if (accountData && accountData.cookies && accountData.cookies !== 'null') {
-        this.db.updateCookies(account.id, null);
-      }
-
+      // 🆕 ŽÁDNÉ cookies - session je v userDataDir!
       const browserInfo = await this.browserManager.testConnection(account.id, true); // true = auto-close po přihlášení
 
       if (browserInfo) {
@@ -361,44 +356,12 @@ class Automator {
             return; // Už byl vyčištěn
           }
 
-          // 💾 Ulož cookies PŘED zavřením visible browseru!
-          try {
-            const browserInfo = this.openBrowsers.get(account.id);
-            if (browserInfo && browserInfo.context) {
-              const cookies = await browserInfo.context.cookies();
-              const czAuthCookie = cookies.find(c => c.name === 'cz_auth');
-
-              if (czAuthCookie) {
-                // 💾 ULOŽ cookies do JSON souboru pro hidden browser!
-                const { writeFileSync } = await import('fs');
-                const { join: pathJoin } = await import('path');
-                const cookiesPath = pathJoin(this.browserPool.getUserDataDir(account.id), 'playwright-cookies.json');
-                writeFileSync(cookiesPath, JSON.stringify(cookies, null, 2));
-                console.log(`💾 [${account.username}] Session uložena (${cookies.length} cookies)`);
-              } else {
-                console.log(`⚠️  [${account.username}] cz_auth cookie nenalezen - možná nebyl přihlášen`);
-              }
-            }
-          } catch (cookieError) {
-            console.log(`⚠️  [${account.username}] Nelze uložit session: ${cookieError.message}`);
-          }
+          // 🆕 ŽÁDNÉ ukládání cookies - session je v userDataDir automaticky!
 
           this.openBrowsers.delete(account.id);
           this.openingBrowsers.delete(account.id);
           this.captchaDetected.delete(account.id);
           this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
-
-          // Restart hidden persistent context aby načetl nové cookies
-          if (this.browserPool && this.browserPool.contexts && this.browserPool.contexts.has(account.id)) {
-            const ctx = this.browserPool.contexts.get(account.id);
-            if (ctx && ctx.context && !ctx.context._closed) {
-              await ctx.context.close().catch(() => {});
-            }
-            this.browserPool.contexts.delete(account.id);
-          }
-
-          // Počkej 10s aby se cookies uložily na disk
-          await new Promise(resolve => setTimeout(resolve, 10000));
 
           // AUTO-UNPAUSE po zavření
           this.db.updateAccountPause(account.id, false);
@@ -439,11 +402,11 @@ class Automator {
    */
   async start() {
     console.log('='.repeat(70));
-    console.log('🤖 Spouštím Event-Driven automatizaci - ANTI-CAPTCHA & ANTI-BAN REŽIM');
+    console.log('🤖 Spouštím Event-Driven automatizaci - VISIBLE BROWSER MODE');
     console.log('⚡ Worker Pool: Max 100 procesů');
     console.log('🛡️  Aktivní ochrana: Human behavior, WebSocket timing, Fingerprinting');
-    console.log('🚫 ANTI-BAN: Max 5 visible browserů, auto-pause při selhání přihlášení');
-    console.log('🆕 PERSISTENT MODE: Sessions žijí v browseru, žádné cookies v DB!');
+    console.log('🆕 VISIBLE MODE: Každý účet má vlastní viditelný prohlížeč!');
+    console.log('💾 Session ukládání: UserDataDir (persistent), ŽÁDNÉ cookies v DB!');
     console.log('🔄 Aktivní smyčky (ANTI-CAPTCHA režim):');
     console.log('   [P1] Kontroly útoků: po 10 účtech (10s pauzy), cyklus každých 5 min');
     console.log('   [P1] Build: každých 30s po 5 účtech (±15s random, 12-18min při chybě)');

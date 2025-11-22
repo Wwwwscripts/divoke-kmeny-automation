@@ -4,17 +4,19 @@ import { mkdirSync } from 'fs';
 import { join } from 'path';
 
 /**
- * 🚀 PERSISTENT CONTEXT POOL - Sdílený userDataDir mezi hidden & visible
+ * 🚀 PERSISTENT CONTEXT POOL - Visible browsery pro každý účet
  *
- * Každý účet má vlastní userDataDir který sdílí mezi:
- * - Hidden browser (headless persistent context)
- * - Visible browser (když selže login/CAPTCHA)
+ * Každý účet má vlastní VISIBLE persistent browser s userDataDir:
+ * - VŽDY visible (headless: false)
+ * - Persistent session (userDataDir na disku)
+ * - Automatické ukládání cookies a localStorage
  *
  * Výhody:
- * ✅ Cookies a localStorage sdílené mezi hidden/visible
- * ✅ ŽÁDNÉ cookies v DB!
- * ✅ Když uživatel přihlásí visible → hidden má ty stejné cookies
- * ✅ Anti-ban (méně přihlašování = méně CAPTCHA)
+ * ✅ ŽÁDNÉ ukládání cookies do DB!
+ * ✅ Každý účet má vlastní okno prohlížeče
+ * ✅ Můžete přepínat mezi účty kliknutím na okno
+ * ✅ Session přežije restart aplikace
+ * ✅ Anti-ban (jednoduchý browser fingerprint, realistické chování)
  */
 class PersistentContextPool {
   constructor(db) {
@@ -75,17 +77,18 @@ class PersistentContextPool {
     // UserDataDir pro tento účet (sdílený mezi hidden & visible)
     const userDataDir = join(this.baseDataDir, `account-${accountId}`);
 
-    // Launch options pro persistent context
+    // Launch options pro persistent context - VŽDY VISIBLE
     const launchOptions = {
-      headless: true,
-      viewport: fingerprint.viewport,
+      headless: false,  // 🆕 VŽDY VISIBLE - každý účet má svůj viditelný prohlížeč
+      viewport: null,    // 🆕 Fullscreen mode
       userAgent: fingerprint.userAgent,
       locale: 'cs-CZ',
       timezoneId: 'Europe/Prague',
       args: [
         '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage',
-        '--no-sandbox'
+        '--no-sandbox',
+        '--start-maximized'  // 🆕 Maximalizované okno
       ]
     };
 
@@ -95,24 +98,10 @@ class PersistentContextPool {
       launchOptions.proxy = proxy;
     }
 
-    // 🆕 Launch persistent context (browser s trvalým úložištěm)
+    // 🆕 Launch persistent context (browser s trvalým úložištěm) - VISIBLE!
     const context = await chromium.launchPersistentContext(userDataDir, launchOptions);
 
-    // 🚀 ÚSPORA DAT: Blokuj nepotřebné resources
-    const blockResources = process.env.BLOCK_RESOURCES !== 'false';
-    if (blockResources) {
-      await context.route('**/*', (route) => {
-        const request = route.request();
-        const resourceType = request.resourceType();
-        const blockedTypes = ['image', 'media', 'font'];
-
-        if (blockedTypes.includes(resourceType)) {
-          route.abort();
-        } else {
-          route.continue();
-        }
-      });
-    }
+    // 🆕 ŽÁDNÉ blokování resources - visible browsery potřebují zobrazit vše
 
     // Přidej stealth script
     const stealthScript = createStealthScript(fingerprint);
@@ -174,19 +163,7 @@ class PersistentContextPool {
       })();
     `);
 
-    // 💾 NAČTI cookies z JSON souboru pokud existuje (ze visible browseru)
-    const { existsSync: checkExists, readFileSync: readFile } = await import('fs');
-    const cookiesPath = join(userDataDir, 'playwright-cookies.json');
-    if (checkExists(cookiesPath)) {
-      try {
-        const cookiesJson = readFile(cookiesPath, 'utf8');
-        const cookies = JSON.parse(cookiesJson);
-        await context.addCookies(cookies);
-        // ✅ Cookies načteny tiše (verbose log odstraněn)
-      } catch (cookieLoadError) {
-        console.log(`⚠️  [${account.username}] Nelze načíst cookies: ${cookieLoadError.message}`);
-      }
-    }
+    // 🆕 ŽÁDNÉ cookies! UserDataDir si pamatuje session automaticky
 
     // Získej nebo vytvoř page (persistent context může mít default page)
     let pages = context.pages();

@@ -981,6 +981,97 @@ app.delete('/api/templates/:type/:id', (req, res) => {
   }
 });
 
+// 🆕 Focus na browser účtu (přepnutí na okno)
+app.post('/api/accounts/:id/focus-browser', async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    const account = db.getAccount(accountId);
+
+    if (!account) {
+      return res.status(404).json({ error: 'Účet nenalezen' });
+    }
+
+    // Zkontroluj jestli existuje browser v visible browserech
+    const browserInfo = visibleBrowsers.get(accountId);
+
+    if (!browserInfo) {
+      // Browser není otevřený - otevři ho
+      console.log(`🖥️  [${account.username}] Browser není otevřený - otevírám...`);
+
+      const newBrowserInfo = await browserManager.testConnection(accountId, false);
+
+      if (newBrowserInfo) {
+        const { browser } = newBrowserInfo;
+        visibleBrowsers.set(accountId, newBrowserInfo);
+
+        // Sleduj zavření browseru
+        browser.on('disconnected', () => {
+          visibleBrowsers.delete(accountId);
+          console.log(`🔒 [${account.username}] Browser zavřen`);
+        });
+
+        return res.json({
+          success: true,
+          message: 'Browser byl otevřen'
+        });
+      } else {
+        return res.status(500).json({
+          success: false,
+          error: 'Nepodařilo se otevřít browser'
+        });
+      }
+    }
+
+    // Browser je otevřený - aktivuj ho přes bringToFront()
+    try {
+      const { page } = browserInfo;
+
+      if (page && !page.isClosed()) {
+        await page.bringToFront();
+        console.log(`✅ [${account.username}] Browser aktivován`);
+
+        return res.json({
+          success: true,
+          message: 'Browser byl aktivován'
+        });
+      } else {
+        // Page je zavřený - odeber z mapy a otevři nový
+        visibleBrowsers.delete(accountId);
+
+        const newBrowserInfo = await browserManager.testConnection(accountId, false);
+
+        if (newBrowserInfo) {
+          const { browser } = newBrowserInfo;
+          visibleBrowsers.set(accountId, newBrowserInfo);
+
+          browser.on('disconnected', () => {
+            visibleBrowsers.delete(accountId);
+            console.log(`🔒 [${account.username}] Browser zavřen`);
+          });
+
+          return res.json({
+            success: true,
+            message: 'Browser byl otevřen (předchozí byl zavřen)'
+          });
+        } else {
+          return res.status(500).json({
+            success: false,
+            error: 'Nepodařilo se otevřít browser'
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`❌ [${account.username}] Chyba při aktivaci browseru:`, error.message);
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Graceful shutdown endpoint
 app.post('/api/shutdown', (req, res) => {
   try {
