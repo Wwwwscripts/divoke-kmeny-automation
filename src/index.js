@@ -42,14 +42,7 @@ class Automator {
     this.isRunning = false;
     this.accountWaitTimes = {}; // Per-account per-module timing
     this.captchaDetected = new Set(); // Účty s detekovanou CAPTCHA (aby se nespamovalo)
-    this.openBrowsers = new Map(); // Tracking otevřených visible browserů (accountId => browser)
-    this.openingBrowsers = new Set(); // Tracking účtů pro které se právě otevírá browser (race condition protection)
-
-    // 🆕 ANTI-BAN: Fronta pro přihlášení + limit visible browserů
-    this.loginQueue = []; // Fronta účtů čekajících na přihlášení
-    this.maxVisibleBrowsers = 5; // Max 5 visible browserů najednou
-    this.activeVisibleBrowsers = 0; // Počítadlo aktivních visible browserů
-    this.isProcessingQueue = false; // Mutex pro zpracování fronty (prevence duplicit)
+    this.manualBrowsers = new Map(); // Tracking ručně otevřených browserů (pro CAPTCHA/dobytí)
 
     // Intervaly pro smyčky - ZVÝŠENO pro snížení captcha rizika
     this.intervals = {
@@ -119,249 +112,38 @@ class Automator {
     return false;
   }
 
-  /**
-   * Zkontroluje jestli je browser pro daný účet opravdu ještě otevřený a připojený
-   * @returns {boolean} true pokud je browser aktivní, false pokud ne
-   */
-  isBrowserActive(accountId) {
-    const browserInfo = this.openBrowsers.get(accountId);
-    if (!browserInfo) return false;
-
-    // Zkontroluj jestli je browser stále připojený a page není zavřený
-    const isConnected = browserInfo.browser && browserInfo.browser.isConnected();
-    const pageValid = browserInfo.page && !browserInfo.page.isClosed();
-
-    if (!isConnected || !pageValid) {
-      this.openBrowsers.delete(accountId);
-      return false;
-    }
-
-    return true;
-  }
 
   /**
-   * 🆕 ANTI-BAN: Zpracuje frontu přihlášení (max 5 visible browserů najednou)
-   */
-  async processLoginQueue() {
-    // 🛡️ MUTEX: Pokud už fronta běží, nepouštěj další instance
-    if (this.isProcessingQueue) {
-      console.log('⏸️  Fronta již běží - přeskakuji duplicitní volání');
-      return;
-    }
-
-    // 🔒 Zamkni frontu
-    this.isProcessingQueue = true;
-
-    try {
-      // Zpracuj všechny účty co můžeš (dokud je místo)
-      while (this.activeVisibleBrowsers < this.maxVisibleBrowsers && this.loginQueue.length > 0) {
-        // Vezmi další účet z fronty
-        const account = this.loginQueue.shift();
-
-        // Zkontroluj jestli už není browser otevřený
-        if (this.isBrowserActive(account.id) || this.openingBrowsers.has(account.id)) {
-          console.log(`⏭️  [${account.username}] Přeskakuji - browser již otevřen/otevírá se`);
-          continue; // Zkus další z fronty
-        }
-
-        console.log(`🔑 [${account.username}] Otevírám browser pro přihlášení (${this.activeVisibleBrowsers + 1}/${this.maxVisibleBrowsers})`);
-
-        // Označ že se browser otevírá
-        this.openingBrowsers.add(account.id);
-        this.activeVisibleBrowsers++;
-
-        // Otevři browser asynchronně (nepočkej na dokončení, pokračuj další)
-        this.openBrowserForAccount(account).catch(err => {
-          console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, err.message);
-
-          // Cleanup při chybě
-          this.openBrowsers.delete(account.id);
-          this.openingBrowsers.delete(account.id);
-          this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
-
-          // Zkus zpracovat další z fronty
-          this.isProcessingQueue = false;
-          this.processLoginQueue().catch(e => console.error('❌ Chyba při retry fronty:', e));
-        });
-      }
-    } finally {
-      // 🔓 Odemkni frontu
-      this.isProcessingQueue = false;
-    }
-  }
-
-  /**
-   * 🆕 Otevře browser pro konkrétní účet
-   */
-  async openBrowserForAccount(account) {
-    // 🆕 Cleanup funkce která se zavolá při jakémkoliv zavření
-    const cleanup = () => {
-      // Kontrola jestli už nebyl vyčištěn
-      if (!this.openBrowsers.has(account.id) && !this.openingBrowsers.has(account.id)) {
-        console.log(`⚠️  [${account.username}] Cleanup již byl zavolán - přeskakuji`);
-        return; // Už byl vyčištěn
-      }
-
-      this.openBrowsers.delete(account.id);
-      this.openingBrowsers.delete(account.id);
-      this.captchaDetected.delete(account.id);
-
-      // Sníž počítadlo (ale nikdy ne pod 0)
-      const oldCount = this.activeVisibleBrowsers;
-      this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
-
-      console.log(`✅ [${account.username}] Browser zavřen (${oldCount} → ${this.activeVisibleBrowsers}/${this.maxVisibleBrowsers})`);
-
-      // 🆕 AUTO-UNPAUSE: Účet se automaticky unpausne po zavření browseru
-      this.db.updateAccountPause(account.id, false);
-      console.log(`▶️  [${account.username}] Účet automaticky aktivován`);
-
-      // Zpracuj další z fronty
-      console.log(`🔄 [${account.username}] Zpracovávám frontu (čeká: ${this.loginQueue.length} účtů)`);
-      this.processLoginQueue().catch(err => {
-        console.error(`❌ Chyba při zpracování fronty po cleanup:`, err);
-      });
-    };
-
-    try {
-      // 🆕 ŽÁDNÉ cookies - session je v userDataDir!
-      const browserInfo = await this.browserManager.testConnection(account.id, true); // true = auto-close po přihlášení
-
-      if (browserInfo) {
-        const { browser, page } = browserInfo;
-        this.openBrowsers.set(account.id, browserInfo);
-
-        // Sleduj zavření browseru (event)
-        browser.on('disconnected', () => {
-          console.log(`📡 [${account.username}] Browser disconnected event fired`);
-          cleanup();
-        });
-
-        // Sleduj zavření page (pro případ že browser zůstane ale page se zavře)
-        if (page) {
-          page.on('close', () => {
-            console.log(`📄 [${account.username}] Page closed event fired`);
-            cleanup();
-          });
-        }
-
-        // 🆕 FAILSAFE: Kontroluj každých 500ms jestli je browser stále připojený (AGRESIVNÍ detekce)
-        let checkCounter = 0;
-        const checkInterval = setInterval(async () => {
-          checkCounter++;
-          let isAlive = true;
-
-          try {
-            // Check 1: Browser connected?
-            if (!browser.isConnected()) {
-              console.log(`🔍 [${account.username}] Check ${checkCounter}: browser.isConnected() = false`);
-              isAlive = false;
-            }
-
-            // Check 2: Page closed?
-            if (isAlive && page && page.isClosed()) {
-              console.log(`🔍 [${account.username}] Check ${checkCounter}: page.isClosed() = true`);
-              isAlive = false;
-            }
-
-            // Check 3: Can we get pages? (force detection)
-            if (isAlive) {
-              try {
-                await browser.pages();
-              } catch (pagesError) {
-                console.log(`🔍 [${account.username}] Check ${checkCounter}: browser.pages() failed - ${pagesError.message}`);
-                isAlive = false;
-              }
-            }
-
-            // Check 4: Can we get targets?
-            if (isAlive) {
-              try {
-                const targets = await browser.targets();
-                if (targets.length === 0) {
-                  console.log(`🔍 [${account.username}] Check ${checkCounter}: No targets found`);
-                  isAlive = false;
-                }
-              } catch (targetsError) {
-                console.log(`🔍 [${account.username}] Check ${checkCounter}: browser.targets() failed - ${targetsError.message}`);
-                isAlive = false;
-              }
-            }
-          } catch (error) {
-            console.log(`🔍 [${account.username}] Check ${checkCounter}: Unexpected error - ${error.message}`);
-            isAlive = false;
-          }
-
-          if (!isAlive) {
-            clearInterval(checkInterval);
-
-            // Pokud není v openBrowsers, už byl zpracován
-            if (this.openBrowsers.has(account.id)) {
-              console.log(`🔍 [${account.username}] Browser zavřen ručně (detekováno intervalem po ${checkCounter} checks)`);
-              cleanup();
-            }
-          }
-        }, 500); // Každých 500ms!
-
-        // Vyčisti interval když se browser zavře normálně
-        browser.once('disconnected', () => {
-          clearInterval(checkInterval);
-        });
-
-        if (page) {
-          page.once('close', () => {
-            clearInterval(checkInterval);
-          });
-        }
-      }
-    } catch (error) {
-      console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, error.message);
-      cleanup(); // Zavolej cleanup i při chybě
-    }
-  }
-
-  /**
-   * 🆕 ANTI-BAN: Zpracuj selhání přihlášení - pausni účet a otevři browser
-   * Browser zůstane otevřený dokud se uživatel ručně nepřihlásí
+   * Zpracuj selhání přihlášení - otevři browser pro ruční řešení
    */
   async handleFailedLogin(account) {
-    // Zkontroluj jestli už není browser otevřený nebo se otevírá
-    if (this.isBrowserActive(account.id) || this.openingBrowsers.has(account.id)) {
-      console.log(`⏭️  [${account.username}] Browser již otevřen/otevírá se - přeskakuji`);
+    // Zkontroluj jestli už není browser otevřený
+    if (this.manualBrowsers.has(account.id)) {
+      console.log(`⏭️  [${account.username}] Browser již otevřen - přeskakuji`);
       return;
     }
 
-    console.log(`⏸️  [${account.username}] Přihlášení selhalo - pausuji účet a otevírám browser`);
+    console.log(`⚠️  [${account.username}] Přihlášení selhalo - otevírám browser pro ruční řešení`);
 
-    // 🆕 AUTO-PAUSE: Pausni účet (smyčky ho přeskočí)
+    // Pausni účet (smyčky ho přeskočí)
     this.db.updateAccountPause(account.id, true);
 
-    // Označ že se browser otevírá (zabráníme duplicitním otevíráním)
-    this.openingBrowsers.add(account.id);
-    this.activeVisibleBrowsers++;
-
     try {
-      // Otevři browser BEZ auto-close (zůstane otevřený dokud uživatel nepřihlásí)
+      // Otevři browser BEZ auto-close
       const browserInfo = await this.browserManager.testConnection(account.id, false);
 
       if (browserInfo) {
         const { browser, page } = browserInfo;
-        this.openBrowsers.set(account.id, browserInfo);
+        this.manualBrowsers.set(account.id, browserInfo);
 
-        console.log(`🖥️  [${account.username}] Browser otevřen - čeká na přihlášení`);
+        console.log(`🖥️  [${account.username}] Browser otevřen - vyřešte prosím přihlášení/CAPTCHA ručně`);
 
-        // Cleanup funkce při zavření
+        // Cleanup při zavření
         const cleanup = async () => {
-          if (!this.openBrowsers.has(account.id)) {
-            return; // Už byl vyčištěn
-          }
+          if (!this.manualBrowsers.has(account.id)) return;
 
-          // 🆕 ŽÁDNÉ ukládání cookies - session je v userDataDir automaticky!
-
-          this.openBrowsers.delete(account.id);
-          this.openingBrowsers.delete(account.id);
+          this.manualBrowsers.delete(account.id);
           this.captchaDetected.delete(account.id);
-          this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
 
           // AUTO-UNPAUSE po zavření
           this.db.updateAccountPause(account.id, false);
@@ -369,31 +151,11 @@ class Automator {
         };
 
         // Sleduj zavření browseru
-        browser.on('disconnected', () => {
-          console.log(`📡 [${account.username}] Browser disconnected`);
-          cleanup();
-        });
-
-        // Sleduj zavření page
-        if (page) {
-          page.on('close', () => {
-            console.log(`📄 [${account.username}] Page closed`);
-            cleanup();
-          });
-        }
-      } else {
-        throw new Error('Nepodařilo se otevřít browser');
+        browser.on('disconnected', cleanup);
+        if (page) page.on('close', cleanup);
       }
     } catch (error) {
       console.error(`❌ [${account.username}] Chyba při otevírání browseru:`, error.message);
-      // Cleanup při chybě
-      this.openingBrowsers.delete(account.id);
-      this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
-    } finally {
-      // Odstraň z openingBrowsers po úspěšném otevření
-      if (this.openBrowsers.has(account.id)) {
-        this.openingBrowsers.delete(account.id);
-      }
     }
   }
 
@@ -421,37 +183,18 @@ class Automator {
 
     this.isRunning = true;
 
-    // 🆕 WATCHDOG: Kontroluj každých 5s jestli fronta má běžet ale neběží
-    const queueWatchdog = setInterval(() => {
-      if (!this.isRunning) {
-        clearInterval(queueWatchdog);
-        return;
-      }
-
-      // Pokud jsou účty ve frontě ale žádný browser se neotevírá
-      if (this.loginQueue.length > 0 && this.activeVisibleBrowsers < this.maxVisibleBrowsers) {
-        console.log(`🔍 [WATCHDOG] Fronta má ${this.loginQueue.length} účtů, ale pouze ${this.activeVisibleBrowsers}/${this.maxVisibleBrowsers} browserů - spouštím frontu`);
-        this.processLoginQueue().catch(err => {
-          console.error('❌ [WATCHDOG] Chyba při zpracování fronty:', err);
-        });
-      }
-    }, 5000);
-
     // Spusť všechny smyčky paralelně
     await Promise.all([
       this.checksLoop(),       // P1: Kontroly útoků
       this.buildingLoop(),     // P1: Výstavba
       this.unitsLoop(),        // P6: Kontrola jednotek
-      this.scavengeLoop(),     // P2: ZAPNUTO - každých 30 min
-      this.recruitLoop(),      // P3: ZAPNUTO
-      // this.researchLoop(),     // P4: VYPNUTO - test přihlašování
-      // this.paladinLoop(),      // P5: VYPNUTO - test přihlašování
-      this.dailyRewardsLoop(), // P6: ZAPNUTO - 2x denně
+      this.scavengeLoop(),     // P2: Sběr
+      this.recruitLoop(),      // P3: Rekrutování
+      // this.researchLoop(),     // P4: Výzkum
+      // this.paladinLoop(),      // P5: Paladin
+      this.dailyRewardsLoop(), // P6: Denní odměny - 2x denně
       this.statsMonitor()      // Monitoring
     ]);
-
-    // Zastaví watchdog když se aplikace vypne
-    clearInterval(queueWatchdog);
   }
 
   /**
@@ -1616,9 +1359,84 @@ class Automator {
           return false;
         }
       } else if (pageStatus.hasLoginForm) {
-        // Login formulář - není přihlášený vůbec
-        console.log(`🔑 [${account.username}] Detekován login formulář - není přihlášený`);
-        return false;
+        // Login formulář - automaticky vyplň a odešli
+        console.log(`🔑 [${account.username}] Detekován login formulář - vyplňuji a odesílám...`);
+
+        try {
+          // Vyplň formulář
+          const fillResult = await page.evaluate(({ username, password }) => {
+            const usernameInput =
+              document.querySelector('input[name="username"]') ||
+              document.querySelector('input[name="user"]') ||
+              document.querySelector('input[type="text"]');
+
+            const passwordInput =
+              document.querySelector('input[name="password"]') ||
+              document.querySelector('input[type="password"]');
+
+            const submitButton =
+              document.querySelector('button[type="submit"]') ||
+              document.querySelector('input[type="submit"]') ||
+              document.querySelector('button:has-text("Přihlásit")') ||
+              document.querySelector('button:has-text("Login")') ||
+              document.querySelector('.btn-login') ||
+              Array.from(document.querySelectorAll('button')).find(b =>
+                b.textContent.includes('Přihlásit') || b.textContent.includes('Login')
+              );
+
+            if (!usernameInput || !passwordInput) {
+              return { success: false, reason: 'inputs_not_found' };
+            }
+
+            // Vyplň údaje
+            usernameInput.value = username;
+            passwordInput.value = password;
+
+            // Trigger events
+            usernameInput.dispatchEvent(new Event('input', { bubbles: true }));
+            passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
+            usernameInput.dispatchEvent(new Event('change', { bubbles: true }));
+            passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+            if (submitButton) {
+              submitButton.click();
+              return { success: true, reason: 'submitted' };
+            }
+
+            return { success: true, reason: 'filled_no_button' };
+          }, { username: account.username, password: account.password });
+
+          if (fillResult.success) {
+            console.log(`✅ [${account.username}] Formulář vyplněn a odeslán`);
+
+            // Počkej na navigaci (přihlášení)
+            await humanDelay(2000, 3000);
+
+            // Zkontroluj znovu jestli jsme přihlášeni
+            const loginCheck = await page.evaluate(() => {
+              const loggedInIndicators = [
+                document.querySelector('#menu_row'),
+                document.querySelector('#topContainer'),
+                document.querySelector('.village-name')
+              ];
+              return loggedInIndicators.some(el => el !== null);
+            });
+
+            if (!loginCheck) {
+              console.log(`⚠️  [${account.username}] Přihlášení selhalo i po vyplnění formuláře`);
+              return false;
+            }
+
+            console.log(`✅ [${account.username}] Přihlášení úspěšné!`);
+            // Pokračuj normálně (klikni na svět pokud je potřeba)
+          } else {
+            console.log(`⚠️  [${account.username}] Nepodařilo se vyplnit formulář: ${fillResult.reason}`);
+            return false;
+          }
+        } catch (fillError) {
+          console.log(`⚠️  [${account.username}] Chyba při vyplňování formuláře: ${fillError.message}`);
+          return false;
+        }
       }
 
       // 🆕 Krok 4: Zkontroluj že jsme ve hře (game.php)

@@ -218,11 +218,21 @@ class PersistentContextPool {
   }
 
   /**
-   * Vrátí context zpět do poolu (NEDĚLÁ NIC - context zůstává živý)
+   * Vrátí context zpět do poolu a ZAVŘE ho (session zůstane v userDataDir)
    */
-  releaseContext(accountId) {
-    // Context zůstává živý pro další použití
-    // Cookies jsou uložené v userDataDir (sdílené s visible browserem)
+  async releaseContext(accountId) {
+    // 🆕 ZAVŘI browser po dokončení - session zůstává v userDataDir
+    const ctx = this.contexts.get(accountId);
+
+    if (ctx && ctx.context && !ctx.context._closed) {
+      try {
+        await ctx.context.close();
+        this.contexts.delete(accountId);
+        console.log(`✅ [ID:${accountId}] Browser zavřen (session uložena v userDataDir)`);
+      } catch (error) {
+        console.error(`❌ [ID:${accountId}] Chyba při zavírání browseru:`, error.message);
+      }
+    }
   }
 
   /**
