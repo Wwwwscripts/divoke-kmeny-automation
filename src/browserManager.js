@@ -328,6 +328,7 @@ class BrowserManager {
       if (autoSaveAndClose) {
         console.log('🖥️  Prohlížeč otevřen - přihlaste se');
         console.log('💾 Systém automaticky uloží cookies a zavře okno po přihlášení');
+        console.log(`🔍 [${account.username}] Spouštím sledování přihlášení...`);
         this.startLoginWatcher(browser, context, page, account);
       } else {
         console.log('🖥️  Prohlížeč otevřen pro manuální kontrolu');
@@ -444,13 +445,14 @@ class BrowserManager {
             };
           });
 
-          // Debug log každých 30s (každých 6 iterací po 5s)
+          // Debug log každých 10s (každých 2 iterace po 5s)
           const iterationCount = Math.floor((Date.now() - startTime) / checkInterval);
-          if (iterationCount % 6 === 0) {
-            console.log(`🔍 [${account.username}] Kontrola přihlášení (${Math.floor((Date.now() - startTime) / 1000)}s): přihlášen=${loginStatus.isLoggedIn}, form=${loginStatus.hasLoginForm}, url=${loginStatus.url}`);
+          if (iterationCount % 2 === 0) {
+            console.log(`🔍 [${account.username}] Kontrola přihlášení (${Math.floor((Date.now() - startTime) / 1000)}s): přihlášen=${loginStatus.isLoggedIn}, form=${loginStatus.hasLoginForm}`);
           }
 
           if (loginStatus.isLoggedIn) {
+            console.log(`✅ [${account.username}] Přihlášení detekováno! Ukládám cookies a zavírám browser...`);
             await safeSaveCookies('přihlášení úspěšné');
             await safeCloseBrowser('přihlášení dokončeno');
             break;
