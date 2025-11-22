@@ -161,21 +161,9 @@ class PersistentContextPool {
       })();
     `);
 
-    // 🆕 BOOTSTRAP: Load cookies ONCE from DB, then never save back
-    // Session lives in browser memory from this point forward
-    if (account.cookies && account.cookies !== 'null') {
-      try {
-        let cookies = JSON.parse(account.cookies);
-        if (Array.isArray(cookies) && cookies.length > 0) {
-          await context.addCookies(cookies);
-          console.log(`🔐 [${account.username}] Bootstrap: Loaded ${cookies.length} cookies from DB (one-time only)`);
-        }
-      } catch (error) {
-        console.error(`❌ [${account.username}] Failed to load bootstrap cookies:`, error.message);
-      }
-    }
-
-    console.log(`🔐 [${account.username}] Persistent context vytvořen (session žije v browseru, cookies se nikdy neuloží zpět)`);
+    // 🆕 ŽÁDNÉ COOKIES! Persistent contexts jsou jen cache pro visible browsery
+    // Když persistent context selže login → otevře se visible browser (handleFailedLogin)
+    console.log(`🔐 [${account.username}] Persistent context vytvořen (bez cookies, fallback na visible browser)`);
 
     // Vytvoř page
     const page = await context.newPage();
