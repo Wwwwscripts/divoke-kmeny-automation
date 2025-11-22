@@ -239,6 +239,43 @@ app.put('/api/accounts/:id/scavenge', async (req, res) => {
   }
 });
 
+// Endpoint pro kontrolu statusu účtu (přihlášení, captcha)
+app.get('/api/accounts/:id/status', async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    const account = db.getAccount(accountId);
+
+    if (!account) {
+      return res.status(404).json({ error: 'Účet nenalezen' });
+    }
+
+    // Kontrola cookies
+    if (!account.cookies || account.cookies === 'null') {
+      return res.json({
+        status: 'needs-login',
+        message: 'Účet nemá uložené cookies - nutné přihlášení'
+      });
+    }
+
+    // Kontrola zda je pausnutý (možná kvůli captcha)
+    if (account.paused && account.pause_note && account.pause_note.includes('captcha')) {
+      return res.json({
+        status: 'captcha',
+        message: 'Detekována captcha - vyžaduje manuální řešení'
+      });
+    }
+
+    // Pokud má cookies a není pausnutý, předpokládáme že je OK
+    return res.json({
+      status: 'ok',
+      message: 'Účet připraven'
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/accounts/:id/open-browser', async (req, res) => {
   try {
     const accountId = parseInt(req.params.id);
