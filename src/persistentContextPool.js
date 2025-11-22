@@ -1,27 +1,35 @@
 import { chromium } from 'playwright';
 import { generateFingerprint, createStealthScript } from './utils/fingerprint.js';
+import { mkdirSync } from 'fs';
+import { join } from 'path';
 
 /**
- * 🚀 PERSISTENT CONTEXT POOL - Anti-CAPTCHA Architecture
+ * 🚀 PERSISTENT CONTEXT POOL - Sdílený userDataDir mezi hidden & visible
  *
- * Každý účet má 1 živý context po celou dobu běhu aplikace.
- * Sessions žijí v browseru, NE v databázi → žádné "zastaralé cookies".
+ * Každý účet má vlastní userDataDir který sdílí mezi:
+ * - Hidden browser (headless persistent context)
+ * - Visible browser (když selže login/CAPTCHA)
  *
  * Výhody:
- * ✅ Session nikdy nevyprší (browser si ji drží)
- * ✅ ŽÁDNÉ cookies DB → žádný risk špatných cookies
- * ✅ Rychlejší (context se recykluje, ne vytváří)
+ * ✅ Cookies a localStorage sdílené mezi hidden/visible
+ * ✅ ŽÁDNÉ cookies v DB!
+ * ✅ Když uživatel přihlásí visible → hidden má ty stejné cookies
  * ✅ Anti-ban (méně přihlašování = méně CAPTCHA)
  */
 class PersistentContextPool {
   constructor(db) {
     this.db = db;
 
-    // accountId => { browser, context, page, accountId, browserKey }
+    // accountId => { context (browser instance), page, accountId, userDataDir }
     this.contexts = new Map();
 
-    // browserKey (proxy) => browser instance
-    this.browsers = new Map();
+    // Vytvoř base directory pro user data
+    this.baseDataDir = process.env.USER_DATA_DIR || '/tmp/divoke-kmeny';
+    try {
+      mkdirSync(this.baseDataDir, { recursive: true });
+    } catch (error) {
+      // Directory už existuje, ok
+    }
   }
 
   /**
@@ -47,7 +55,7 @@ class PersistentContextPool {
   }
 
   /**
-   * Vytvoří nový persistent context pro účet
+   * Vytvoří nový persistent context pro účet (s userDataDir)
    */
   async createPersistentContext(accountId) {
     const account = this.db.getAccount(accountId);
@@ -64,26 +72,31 @@ class PersistentContextPool {
       console.log(`🎨 [${account.username}] Vygenerován nový fingerprint`);
     }
 
-    // Použij fingerprint pro context options
-    const contextOptions = {
+    // UserDataDir pro tento účet (sdílený mezi hidden & visible)
+    const userDataDir = join(this.baseDataDir, `account-${accountId}`);
+
+    // Launch options pro persistent context
+    const launchOptions = {
+      headless: true,
       viewport: fingerprint.viewport,
       userAgent: fingerprint.userAgent,
       locale: 'cs-CZ',
       timezoneId: 'Europe/Prague',
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--no-sandbox'
+      ]
     };
 
     // Přidej proxy, pokud existuje
     if (account.proxy) {
       const proxy = this.parseProxy(account.proxy);
-      contextOptions.proxy = proxy;
+      launchOptions.proxy = proxy;
     }
 
-    // Získej sdílený browser (podle proxy)
-    const browserKey = account.proxy || 'default';
-    const browser = await this.getBrowser(account.proxy);
-
-    // Vytvoř nový context
-    const context = await browser.newContext(contextOptions);
+    // 🆕 Launch persistent context (browser s trvalým úložištěm)
+    const context = await chromium.launchPersistentContext(userDataDir, launchOptions);
 
     // 🚀 ÚSPORA DAT: Blokuj nepotřebné resources
     const blockResources = process.env.BLOCK_RESOURCES !== 'false';
@@ -161,20 +174,19 @@ class PersistentContextPool {
       })();
     `);
 
-    // 🆕 ŽÁDNÉ COOKIES! Persistent contexts jsou jen cache pro visible browsery
-    // Když persistent context selže login → otevře se visible browser (handleFailedLogin)
-    console.log(`🔐 [${account.username}] Persistent context vytvořen (bez cookies, fallback na visible browser)`);
+    // 🆕 SDÍLENÝ userDataDir! Cookies jsou společné pro hidden & visible browser
+    console.log(`🔐 [${account.username}] Persistent context vytvořen (userDataDir: ${userDataDir.split('/').pop()})`);
 
-    // Vytvoř page
-    const page = await context.newPage();
+    // Získej nebo vytvoř page (persistent context může mít default page)
+    let pages = context.pages();
+    let page = pages.length > 0 ? pages[0] : await context.newPage();
 
     // Uložit do poolu
     const ctxData = {
-      browser,
-      context,
+      context,  // BrowserContext instance (má vlastní browser)
       page,
       accountId,
-      browserKey,
+      userDataDir,
       createdAt: Date.now()
     };
 
@@ -184,15 +196,23 @@ class PersistentContextPool {
   }
 
   /**
+   * Vrátí userDataDir pro účet (pro sdílení s visible browserem)
+   */
+  getUserDataDir(accountId) {
+    return join(this.baseDataDir, `account-${accountId}`);
+  }
+
+  /**
    * Zkontroluje jestli je context stále živý
    */
   async isContextAlive(ctx) {
     try {
-      if (!ctx.browser || !ctx.browser.isConnected()) {
+      if (!ctx.context || ctx.context._closed) {
         return false;
       }
 
-      if (!ctx.context || ctx.context._closed) {
+      const browser = ctx.context.browser();
+      if (!browser || !browser.isConnected()) {
         return false;
       }
 
@@ -201,7 +221,7 @@ class PersistentContextPool {
       }
 
       // Zkus získat pages (force check)
-      await ctx.browser.pages();
+      await ctx.context.pages();
 
       return true;
     } catch (error) {
@@ -214,39 +234,7 @@ class PersistentContextPool {
    */
   releaseContext(accountId) {
     // Context zůstává živý pro další použití
-    // ŽÁDNÉ close(), ŽÁDNÉ saveCookies()
-  }
-
-  /**
-   * Získá nebo vytvoří browser instanci
-   */
-  async getBrowser(proxy) {
-    const key = proxy || 'default';
-
-    if (this.browsers.has(key)) {
-      const browser = this.browsers.get(key);
-      if (browser.isConnected()) {
-        return browser;
-      }
-      this.browsers.delete(key);
-    }
-
-    // Vytvoř nový browser
-    const launchOptions = {
-      headless: true,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--disable-dev-shm-usage',
-        '--no-sandbox'
-      ]
-    };
-
-    const browser = await chromium.launch(launchOptions);
-    this.browsers.set(key, browser);
-
-    console.log(`🚀 Browser vytvořen pro proxy: ${key}`);
-
-    return browser;
+    // Cookies jsou uložené v userDataDir (sdílené s visible browserem)
   }
 
   /**
@@ -283,25 +271,21 @@ class PersistentContextPool {
    */
   getStats() {
     return {
-      contexts: this.contexts.size,
-      browsers: this.browsers.size
+      contexts: this.contexts.size
     };
   }
 
   /**
-   * Zavře všechny contexty a browsery (při shutdown)
+   * Zavře všechny contexty (při shutdown)
    */
   async closeAll() {
-    console.log(`🧹 Zavírám ${this.contexts.size} persistent contexts...`);
+    console.log(`🧹 Zavírám ${this.contexts.size} persistent contexts (s userDataDir)...`);
 
-    // Zavři všechny contexts
+    // Zavři všechny contexts (každý má vlastní browser)
     for (const [accountId, ctx] of this.contexts.entries()) {
       try {
-        if (ctx.page && !ctx.page.isClosed()) {
-          await ctx.page.close();
-        }
         if (ctx.context && !ctx.context._closed) {
-          await ctx.context.close();
+          await ctx.context.close();  // Zavře i browser
         }
       } catch (error) {
         console.error(`❌ Chyba při zavírání contextu pro účet ${accountId}:`, error.message);
@@ -309,21 +293,7 @@ class PersistentContextPool {
     }
 
     this.contexts.clear();
-
-    // Zavři všechny browsery
-    console.log(`🧹 Zavírám ${this.browsers.size} browserů...`);
-    for (const [key, browser] of this.browsers.entries()) {
-      try {
-        if (browser.isConnected()) {
-          await browser.close();
-        }
-      } catch (error) {
-        console.error(`❌ Chyba při zavírání browseru ${key}:`, error.message);
-      }
-    }
-
-    this.browsers.clear();
-    console.log('✅ Persistent context pool vyčištěn');
+    console.log('✅ Persistent context pool vyčištěn (userDataDir zůstávají na disku)');
   }
 }
 

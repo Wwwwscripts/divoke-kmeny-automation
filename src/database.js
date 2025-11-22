@@ -227,16 +227,16 @@ class DatabaseManager {
     return data.accounts.filter(a => a.active === 1 && !a.paused).slice(0, 10);
   }
 
-  // Aktualizovat cookies pro účet
+  // 🆕 DEPRECATED: Cookies jsou v userDataDir, ne v DB
   updateCookies(accountId, cookies) {
+    // No-op: Cookies jsou automaticky v userDataDir (sdílené mezi hidden/visible)
+    // Updatuji pouze last_login pro tracking
     const data = this._loadAccounts();
     const account = data.accounts.find(a => a.id === accountId);
 
     if (account) {
-      account.cookies = JSON.stringify(cookies);
       account.last_login = new Date().toISOString();
       this._saveAccounts(data);
-      // Cookies se ukládají potichu (po každé operaci)
     }
   }
 

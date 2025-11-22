@@ -36,8 +36,8 @@ import { detectAnyChallenge, detectBan } from './utils/antiBot.js';
 class Automator {
   constructor() {
     this.db = new DatabaseManager();
-    this.browserManager = new BrowserManager(this.db);
     this.browserPool = new PersistentContextPool(this.db); // 🆕 Persistent contexts
+    this.browserManager = new BrowserManager(this.db, this.browserPool); // 🆕 Sdílený userDataDir
     this.workerPool = new WorkerPool(100); // Max 100 procesů
     this.isRunning = false;
     this.accountWaitTimes = {}; // Per-account per-module timing
@@ -1044,9 +1044,9 @@ class Automator {
       const poolStats = this.browserPool.getStats();
       const workerStats = this.workerPool.getStats();
 
-      // 🆕 PERSISTENT MODE: Loguj persistent contexts
+      // 🆕 PERSISTENT MODE: Loguj persistent contexts (každý context = vlastní browser s userDataDir)
       if (workerStats.active > 0 || workerStats.queued > 0 || poolStats.contexts > 0) {
-        console.log(`📊 Stats | Workers: ${workerStats.active}/${workerStats.total} | Queue: ${workerStats.queued} | Persistent: ${poolStats.contexts} contexts / ${poolStats.browsers} browsers`);
+        console.log(`📊 Stats | Workers: ${workerStats.active}/${workerStats.total} | Queue: ${workerStats.queued} | Persistent: ${poolStats.contexts} contexts (userDataDir)`);
       }
     }
   }

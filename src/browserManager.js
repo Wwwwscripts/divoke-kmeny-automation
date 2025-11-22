@@ -4,8 +4,9 @@ import { generateFingerprint, createStealthScript } from './utils/fingerprint.js
 import { setupWebSocketInterceptor } from './utils/webSocketBehavior.js';
 
 class BrowserManager {
-  constructor(db = null) {
+  constructor(db = null, persistentContextPool = null) {
     this.db = db || new DatabaseManager();
+    this.persistentContextPool = persistentContextPool;
   }
 
   async createContext(accountId) {
@@ -15,7 +16,7 @@ class BrowserManager {
       throw new Error(`Účet s ID ${accountId} nebyl nalezen`);
     }
 
-    console.log(`🚀 Spouštím prohlížeč pro účet: ${account.username}`);
+    console.log(`🖥️  Spouštím viditelný prohlížeč pro účet: ${account.username}`);
 
     // Získej nebo vygeneruj fingerprint pro účet
     let fingerprint = this.db.getFingerprint(accountId);
@@ -25,39 +26,35 @@ class BrowserManager {
       console.log(`🎨 Vygenerován nový fingerprint pro účet ${account.username}`);
     }
 
-    // Použij fingerprint pro context options
-    const contextOptions = {
+    // 🆕 Použij STEJNÝ userDataDir jako hidden browser!
+    const userDataDir = this.persistentContextPool
+      ? this.persistentContextPool.getUserDataDir(accountId)
+      : null;
+
+    // Launch options pro visible browser
+    const launchOptions = {
+      headless: false,  // VŽDY visible
       viewport: fingerprint.viewport,
       userAgent: fingerprint.userAgent,
       locale: 'cs-CZ',
       timezoneId: 'Europe/Prague',
-    };
-
-    if (account.proxy) {
-      const proxy = this.parseProxy(account.proxy);
-      contextOptions.proxy = proxy;
-      console.log(`🔐 Používám proxy: ${proxy.server}`);
-    }
-
-    const needsManualLogin = !account.cookies || account.cookies === 'null';
-    const headless = !needsManualLogin;
-
-    if (needsManualLogin) {
-      console.log('🖥️  Otevírám viditelný prohlížeč (první přihlášení)');
-    } else {
-      console.log('👻 Spouštím v tichém režimu (headless)');
-    }
-
-    const browser = await chromium.launch({
-      headless: headless,
       args: [
         '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage',
         '--no-sandbox'
       ]
-    });
+    };
 
-    const context = await browser.newContext(contextOptions);
+    if (account.proxy) {
+      const proxy = this.parseProxy(account.proxy);
+      launchOptions.proxy = proxy;
+      console.log(`🔐 Používám proxy: ${proxy.server}`);
+    }
+
+    // 🆕 Launch s userDataDir (sdílený s hidden browserem)
+    const context = userDataDir
+      ? await chromium.launchPersistentContext(userDataDir, launchOptions)
+      : await chromium.launch(launchOptions).then(b => b.newContext());
 
     // Přidej stealth script s konkrétním fingerprintem
     const stealthScript = createStealthScript(fingerprint);
@@ -71,7 +68,7 @@ class BrowserManager {
           autoHumanize: true,
           minDelay: 500,
           maxDelay: 2000,
-          enableIdleBehavior: false, // Vypnuto pro headless (zbytečné)
+          enableIdleBehavior: false,
           logActions: false
         });
       } catch (error) {
@@ -79,30 +76,13 @@ class BrowserManager {
       }
     });
 
-    if (account.cookies && account.cookies !== 'null') {
-      try {
-        let cookies = JSON.parse(account.cookies);
-        // Zajistit že cookies jsou pole (Playwright vyžaduje array)
-        if (!Array.isArray(cookies)) {
-          // Pokud jsou cookies null nebo undefined, přeskoč
-          if (cookies === null || cookies === undefined) {
-            console.warn(`⚠️  Cookies pro ${account.username} jsou null/undefined - přeskakuji`);
-          } else {
-            console.warn(`⚠️  Cookies pro ${account.username} nejsou pole, konvertuji...`);
-            cookies = Object.values(cookies);
-            await context.addCookies(cookies);
-            // Cookies načteny - tichý log
-          }
-        } else {
-          await context.addCookies(cookies);
-          // Cookies načteny - tichý log
-        }
-      } catch (error) {
-        console.error('❌ Chyba při načítání cookies:', error.message);
-      }
+    // 🆕 ŽÁDNÉ cookies z DB! Cookies jsou v userDataDir (sdílené s hidden)
+    if (userDataDir) {
+      console.log(`🔗 Sdílený userDataDir: ${userDataDir.split('/').pop()} (hidden ↔️ visible)`);
     }
 
-    return { browser, context, account };
+    // Context je BrowserContext (launchPersistentContext) - nemá .browser
+    return { browser: context.browser(), context, account };
   }
 
   parseProxy(proxyString) {
@@ -130,23 +110,10 @@ class BrowserManager {
   }
 
   /**
-   * Uloží cookies pro účet (volá se pouze při manuálním přihlášení)
+   * 🆕 DEPRECATED: Cookies se ukládají automaticky do userDataDir
    */
   async saveCookies(context, accountId) {
-    try {
-      const cookies = await context.cookies();
-
-      if (!cookies || cookies.length === 0) {
-        console.log(`⚠️  [ID:${accountId}] Žádné cookies k uložení`);
-        return;
-      }
-
-      this.db.updateCookies(accountId, cookies);
-      // Cookies uloženy - tichý log (příliš časté)
-
-    } catch (error) {
-      console.error(`❌ [ID:${accountId}] Chyba při ukládání cookies:`, error.message);
-    }
+    // No-op: Cookies jsou automaticky v userDataDir (sdílené mezi hidden/visible)
   }
 
   async close(browser, context) {
