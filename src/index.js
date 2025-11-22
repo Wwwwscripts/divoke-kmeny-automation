@@ -362,6 +362,25 @@ class Automator {
           }
 
           console.log(`🧹 [${account.username}] Spouštím cleanup...`);
+
+          // 🔍 DEBUG: Zkontroluj cz_auth cookie PŘED zavřením visible browseru
+          try {
+            const browserInfo = this.openBrowsers.get(account.id);
+            if (browserInfo && browserInfo.context) {
+              const cookies = await browserInfo.context.cookies();
+              const czAuthCookie = cookies.find(c => c.name === 'cz_auth');
+              if (czAuthCookie) {
+                console.log(`✅ [${account.username}] cz_auth cookie nalezen! (${czAuthCookie.value.substring(0, 20)}...)`);
+                console.log(`🔍 [${account.username}] Cookie domain: ${czAuthCookie.domain}, expires: ${czAuthCookie.expires}`);
+              } else {
+                console.log(`❌ [${account.username}] cz_auth cookie NENALEZEN! (celkem cookies: ${cookies.length})`);
+                console.log(`🔍 [${account.username}] Dostupné cookies: ${cookies.map(c => c.name).join(', ')}`);
+              }
+            }
+          } catch (cookieError) {
+            console.log(`⚠️  [${account.username}] Nelze přečíst cookies: ${cookieError.message}`);
+          }
+
           this.openBrowsers.delete(account.id);
           this.openingBrowsers.delete(account.id);
           this.captchaDetected.delete(account.id);
@@ -1473,6 +1492,16 @@ class Automator {
    */
   async loginToGame(page, account) {
     try {
+      // 🔍 DEBUG: Zkontroluj cz_auth cookie PŘED navigací
+      const context = page.context();
+      const cookies = await context.cookies();
+      const czAuthCookie = cookies.find(c => c.name === 'cz_auth');
+      if (czAuthCookie) {
+        console.log(`🔍 [${account.username}] cz_auth cookie existuje před navigací (${czAuthCookie.value.substring(0, 20)}...)`);
+      } else {
+        console.log(`🔍 [${account.username}] cz_auth cookie NEEXISTUJE před navigací (celkem ${cookies.length} cookies)`);
+      }
+
       const domain = this.getWorldDomain(account.world);
       await page.goto(`https://${account.world}.${domain}/game.php`, {
         waitUntil: 'networkidle', // Čeká na kompletní načtení včetně network requestů
