@@ -1055,6 +1055,11 @@ class Automator {
    * Zpracuj kontroly (útoky/CAPTCHA)
    */
   async processChecks(account) {
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
+
     try {
       // 🆕 Získej persistent context (zůstává živý mezi tasky)
       const { page } = await this.browserPool.getContext(account.id);
@@ -1183,6 +1188,11 @@ class Automator {
    * Zpracuj výstavbu
    */
   async processBuilding(account, settings) {
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
+
     try {
       const { page } = await this.browserPool.getContext(account.id);
 
@@ -1220,6 +1230,11 @@ class Automator {
    * Zpracuj sběr (scavenge)
    */
   async processScavenge(account) {
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
+
     try {
       const { page } = await this.browserPool.getContext(account.id);
 
@@ -1252,6 +1267,11 @@ class Automator {
    * Zpracuj rekrutování
    */
   async processRecruit(account, settings) {
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
+
     try {
       const { page } = await this.browserPool.getContext(account.id);
 
@@ -1286,6 +1306,11 @@ class Automator {
    * Zpracuj výzkum
    */
   async processResearch(account, settings) {
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
+
     try {
       const { page } = await this.browserPool.getContext(account.id);
 
@@ -1320,6 +1345,11 @@ class Automator {
    * Zpracuj kontrolu jednotek
    */
   async processUnits(account) {
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
+
     try {
       const { page } = await this.browserPool.getContext(account.id);
 
@@ -1347,6 +1377,11 @@ class Automator {
    * Zpracuj denní odměny
    */
   async processDailyRewards(account) {
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
+
     try {
       const { page } = await this.browserPool.getContext(account.id);
 
@@ -1379,6 +1414,11 @@ class Automator {
    * Zpracuj paladina
    */
   async processPaladin(account) {
+    // 🆕 Skip pokud je visible browser otevřený (čeká na manuální přihlášení)
+    if (this.isBrowserActive(account.id)) {
+      return; // Tiše skipni - uživatel se přihlašuje
+    }
+
     try {
       const { page } = await this.browserPool.getContext(account.id);
 
