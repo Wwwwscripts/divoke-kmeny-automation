@@ -366,6 +366,17 @@ class Automator {
           this.captchaDetected.delete(account.id);
           this.activeVisibleBrowsers = Math.max(0, this.activeVisibleBrowsers - 1);
 
+          // 🆕 RESTART hidden persistent context aby načetl nové cookies z userDataDir!
+          if (this.browserPool && this.browserPool.contexts && this.browserPool.contexts.has(account.id)) {
+            const ctx = this.browserPool.contexts.get(account.id);
+            // Zavři context (příští použití vytvoří NOVÝ s čerstvými cookies)
+            if (ctx && ctx.context && !ctx.context._closed) {
+              ctx.context.close().catch(() => {}); // Ignoruj chyby při zavírání
+            }
+            this.browserPool.contexts.delete(account.id);
+            console.log(`🔄 [${account.username}] Persistent context restartován pro načtení nových cookies`);
+          }
+
           // AUTO-UNPAUSE po zavření
           this.db.updateAccountPause(account.id, false);
           console.log(`✅ [${account.username}] Browser zavřen - účet aktivován`);
