@@ -361,7 +361,6 @@ class BrowserManager {
         const cookies = await context.cookies();
         if (cookies && cookies.length > 0) {
           this.db.updateCookies(account.id, cookies);
-          console.log(`💾 [${account.username}] Cookies uloženy (${cookies.length} cookies)${reason ? ` - ${reason}` : ''}`);
           return true;
         }
       } catch (error) {
@@ -375,7 +374,6 @@ class BrowserManager {
       try {
         if (!shouldStop) {
           shouldStop = true;
-          console.log(`🔒 [${account.username}] Zavírám browser${reason ? ` - ${reason}` : ''}`);
           await browser.close();
         }
       } catch (error) {
@@ -453,7 +451,6 @@ class BrowserManager {
           }
 
           if (loginStatus.isLoggedIn) {
-            console.log(`✅ [${account.username}] Přihlášení detekováno! (URL: ${loginStatus.url})`);
             await safeSaveCookies('přihlášení úspěšné');
             await safeCloseBrowser('přihlášení dokončeno');
             break;

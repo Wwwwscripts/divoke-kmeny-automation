@@ -346,8 +346,8 @@ class Automator {
     this.activeVisibleBrowsers++;
 
     try {
-      // Otevři browser BEZ auto-close (zůstane otevřený dokud uživatel nepřihlásí)
-      const browserInfo = await this.browserManager.testConnection(account.id, false);
+      // Otevři browser s auto-close (automaticky se zavře po přihlášení)
+      const browserInfo = await this.browserManager.testConnection(account.id, true);
 
       if (browserInfo) {
         const { browser, page } = browserInfo;
