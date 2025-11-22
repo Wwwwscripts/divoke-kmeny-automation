@@ -82,7 +82,10 @@ class PersistentContextPool {
       try {
         const files = readdirSync(userDataDir);
         const hasCookies = files.some(f => f.includes('Cookie') || f.includes('cookie'));
-        console.log(`🔍 [${account.username}] userDataDir existuje, soubory: ${files.length}, cookies: ${hasCookies ? '✅' : '❌'}`);
+        // 🔍 DEBUG: Vypiš názvy všech souborů
+        console.log(`🔍 [${account.username}] userDataDir: ${userDataDir}`);
+        console.log(`🔍 [${account.username}] Soubory (${files.length}): ${files.join(', ')}`);
+        console.log(`🔍 [${account.username}] Cookies: ${hasCookies ? '✅' : '❌'}`);
       } catch (e) {
         console.log(`🔍 [${account.username}] userDataDir existuje, ale nelze přečíst: ${e.message}`);
       }
