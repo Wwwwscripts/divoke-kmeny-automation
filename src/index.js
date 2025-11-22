@@ -400,9 +400,32 @@ class Automator {
             console.log(`🔄 [${account.username}] Persistent context zavřen`);
           }
 
-          // ⏰ KRITICKÉ: Počkej 3 sekundy aby se cookies zapsaly na disk!
-          console.log(`⏰ [${account.username}] Čekám 3s na flush cookies...`);
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          // ⏰ KRITICKÉ: Počkej 10 sekund aby se cookies zapsaly na disk a Chromium uvolnil lock!
+          console.log(`⏰ [${account.username}] Čekám 10s na flush cookies a uvolnění profile lock...`);
+          await new Promise(resolve => setTimeout(resolve, 10000));
+
+          // 🔍 DEBUG: Zkontroluj lock files v userDataDir
+          const { readdirSync: readDir } = await import('fs');
+          const { join: pathJoin } = await import('path');
+          const userDataDir = this.browserPool ? this.browserPool.getUserDataDir(account.id) : null;
+          if (userDataDir) {
+            try {
+              const files = readDir(userDataDir);
+              const lockFiles = files.filter(f => f.toLowerCase().includes('lock'));
+              if (lockFiles.length > 0) {
+                console.log(`🔒 [${account.username}] Lock files v root: ${lockFiles.join(', ')}`);
+              }
+              // Zkontroluj i Default/ složku
+              const defaultDir = pathJoin(userDataDir, 'Default');
+              const defaultFiles = readDir(defaultDir);
+              const defaultLockFiles = defaultFiles.filter(f => f.toLowerCase().includes('lock'));
+              if (defaultLockFiles.length > 0) {
+                console.log(`🔒 [${account.username}] Lock files v Default/: ${defaultLockFiles.join(', ')}`);
+              }
+            } catch (e) {
+              // Ignore
+            }
+          }
 
           // AUTO-UNPAUSE po zavření
           this.db.updateAccountPause(account.id, false);
