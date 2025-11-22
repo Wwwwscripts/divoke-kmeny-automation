@@ -17,7 +17,7 @@ class BuildingModule {
     // 🆕 Paměť pro zamezení opakovaného stavění
     this.lastWarehouseAttempt = 0;
     this.lastFarmAttempt = 0;
-    this.attemptCooldown = 10 * 60 * 1000; // 10 minut cooldown
+    this.attemptCooldown = 30 * 60 * 1000; // 10 minut cooldown
   }
 
   /**
