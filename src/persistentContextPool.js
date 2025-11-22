@@ -84,8 +84,18 @@ class PersistentContextPool {
         const hasCookies = files.some(f => f.includes('Cookie') || f.includes('cookie'));
         // 🔍 DEBUG: Vypiš názvy všech souborů
         console.log(`🔍 [${account.username}] userDataDir: ${userDataDir}`);
-        console.log(`🔍 [${account.username}] Soubory (${files.length}): ${files.join(', ')}`);
-        console.log(`🔍 [${account.username}] Cookies: ${hasCookies ? '✅' : '❌'}`);
+        console.log(`🔍 [${account.username}] Soubory root (${files.length}): ${files.join(', ')}`);
+
+        // 🔍 KRITICKÉ: Cookies jsou v Default/ podsložce!
+        const defaultDir = join(userDataDir, 'Default');
+        if (existsSync(defaultDir)) {
+          const defaultFiles = readdirSync(defaultDir);
+          const hasCookiesInDefault = defaultFiles.some(f => f === 'Cookies' || f === 'Network');
+          console.log(`🔍 [${account.username}] Soubory Default/ (${defaultFiles.length}): ${defaultFiles.slice(0, 20).join(', ')}${defaultFiles.length > 20 ? '...' : ''}`);
+          console.log(`🔍 [${account.username}] Cookies v Default/: ${hasCookiesInDefault ? '✅' : '❌'}`);
+        } else {
+          console.log(`🔍 [${account.username}] Default/ složka NEEXISTUJE!`);
+        }
       } catch (e) {
         console.log(`🔍 [${account.username}] userDataDir existuje, ale nelze přečíst: ${e.message}`);
       }
