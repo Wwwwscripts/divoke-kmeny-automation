@@ -75,6 +75,21 @@ class PersistentContextPool {
     // UserDataDir pro tento účet (sdílený mezi hidden & visible)
     const userDataDir = join(this.baseDataDir, `account-${accountId}`);
 
+    // 🔍 DEBUG: Zkontroluj jestli existují cookies v userDataDir
+    const { existsSync, readdirSync } = await import('fs');
+    const dirExists = existsSync(userDataDir);
+    if (dirExists) {
+      try {
+        const files = readdirSync(userDataDir);
+        const hasCookies = files.some(f => f.includes('Cookie') || f.includes('cookie'));
+        console.log(`🔍 [${account.username}] userDataDir existuje, soubory: ${files.length}, cookies: ${hasCookies ? '✅' : '❌'}`);
+      } catch (e) {
+        console.log(`🔍 [${account.username}] userDataDir existuje, ale nelze přečíst: ${e.message}`);
+      }
+    } else {
+      console.log(`🔍 [${account.username}] userDataDir NEEXISTUJE (nový účet)`);
+    }
+
     // Launch options pro persistent context
     const launchOptions = {
       headless: true,

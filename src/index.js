@@ -356,11 +356,12 @@ class Automator {
         console.log(`🖥️  [${account.username}] Browser otevřen - čeká na přihlášení`);
 
         // Cleanup funkce při zavření
-        const cleanup = () => {
+        const cleanup = async () => {
           if (!this.openBrowsers.has(account.id)) {
             return; // Už byl vyčištěn
           }
 
+          console.log(`🧹 [${account.username}] Spouštím cleanup...`);
           this.openBrowsers.delete(account.id);
           this.openingBrowsers.delete(account.id);
           this.captchaDetected.delete(account.id);
@@ -369,13 +370,20 @@ class Automator {
           // 🆕 RESTART hidden persistent context aby načetl nové cookies z userDataDir!
           if (this.browserPool && this.browserPool.contexts && this.browserPool.contexts.has(account.id)) {
             const ctx = this.browserPool.contexts.get(account.id);
+            const userDataDir = ctx.userDataDir;
+            console.log(`📂 [${account.username}] userDataDir: ${userDataDir}`);
+
             // Zavři context (příští použití vytvoří NOVÝ s čerstvými cookies)
             if (ctx && ctx.context && !ctx.context._closed) {
-              ctx.context.close().catch(() => {}); // Ignoruj chyby při zavírání
+              await ctx.context.close().catch(() => {}); // Ignoruj chyby při zavírání
             }
             this.browserPool.contexts.delete(account.id);
-            console.log(`🔄 [${account.username}] Persistent context restartován pro načtení nových cookies`);
+            console.log(`🔄 [${account.username}] Persistent context zavřen`);
           }
+
+          // ⏰ KRITICKÉ: Počkej 3 sekundy aby se cookies zapsaly na disk!
+          console.log(`⏰ [${account.username}] Čekám 3s na flush cookies...`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
 
           // AUTO-UNPAUSE po zavření
           this.db.updateAccountPause(account.id, false);

@@ -213,10 +213,12 @@ class BrowserManager {
 
       if (account.world) {
         // 🆕 NEČISTÍME storage! userDataDir má správné cookies a localStorage
-        // Použij targetUrl pokud je zadaná, jinak game.php
-        const finalUrl = targetUrl || '/game.php';
-        console.log(`🌐 Načítám svět: ${account.world} (${domain}, ${locale}) - URL: ${finalUrl}`);
-        await page.goto(`https://${account.world}.${domain}${finalUrl}`, {
+        // Použij targetUrl pokud je zadaná, jinak /page/play/{world} (vstupní stránka)
+        const finalUrl = targetUrl || `/page/play/${account.world}`;
+        const baseUrl = finalUrl.startsWith('/page/play/') ? `www.${domain}` : `${account.world}.${domain}`;
+        const fullUrl = `https://${baseUrl}${finalUrl}`;
+        console.log(`🌐 Načítám svět: ${account.world} (${domain}, ${locale}) - URL: ${fullUrl}`);
+        await page.goto(fullUrl, {
           waitUntil: 'networkidle',
           timeout: 45000
         });
